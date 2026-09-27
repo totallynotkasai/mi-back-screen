@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Back Screen</string>
+    <string name="title">Back screen</string>
+    <string name="subtitle">Show your own image or GIF on the rear display</string>
+    <string name="no_image">No image chosen</string>
+    <string name="choose_image">Choose image or GIF</string>
+    <string name="show_on_back_screen">Show on back screen</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="state_off_xiaomi">Off · Xiaomi back screen</string>
+    <string name="shizuku_title">Shizuku</string>
+    <string name="shizuku_ready">Connected</string>
+    <string name="shizuku_not_running">Not running. Start it from your computer, then come back.</string>
+    <string name="shizuku_not_allowed">Running, but this app isn\'t allowed yet. If the button below is blocked, open Shizuku → Authorized apps and switch Back Screen on.</string>
+    <string name="allow_access">Allow access</string>
+    <string name="show_details">Show details</string>
+    <string name="hide_details">Hide details</string>
+    <string name="need_image">Choose an image first</string>
+    <string name="need_shizuku">Shizuku isn\'t ready</string>
+    <string name="avoid_camera_title">Keep clear of the camera</string>
+    <string name="avoid_camera_summary">Fit the image beside the camera instead of partly behind it</string>
+    <string name="tile_label">Back screen wallpaper</string>
+    <string name="widget_description">Turn your back screen wallpaper on or off</string>
+</resources>

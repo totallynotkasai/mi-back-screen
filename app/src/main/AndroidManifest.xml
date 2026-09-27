@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        The only permissions this app requests. Both are "normal" install-time permissions:
+        no prompt, no access to your data. They let a small service keep the wallpaper on
+        the back screen while the app is closed. There is NO internet permission.
+        (Shizuku access is separate and is approved by you inside the Shizuku app.)
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <application
+        android:name=".App"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.BackScreen">
+
+        <!--
+            Xiaomi's opt-in for showing activities on the rear display (found in the open source
+            MiRearScreenSwitcher app). Lets RearWallpaperActivity be launched straight there.
+        -->
+        <meta-data
+            android:name="miui.rear.policy"
+            android:value="1" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Exported only so the Shizuku shell process can launch it. It shows nothing on the
+            main screen and closes itself unless this app's service asked for it.
+        -->
+        <activity
+            android:name=".RearWallpaperActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.backscreen.wallpaper.rear"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen">
+            <!--
+                HyperOS reads this as an integer: 1 allows launching straight onto the rear
+                display, but only while the phone is unlocked (when locked it only allows its
+                own built-in list of apps). KeeperService falls back to launch-and-move then.
+            -->
+            <meta-data
+                android:name="miui.rear.policy"
+                android:value="1" />
+        </activity>
+
+        <service
+            android:name=".KeeperService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a user-chosen image on the phone's rear display" />
+        </service>
+
+        <!-- Home screen on/off widget. -->
+        <receiver
+            android:name=".ToggleWidget"
+            android:exported="true"
+            android:label="@string/title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/toggle_widget_info" />
+        </receiver>
+
+        <!-- Quick Settings on/off tile. -->
+        <service
+            android:name=".ToggleTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- Lets the Shizuku app hand this app its connection. -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+    </application>
+</manifest>

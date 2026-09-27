@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Back Screen · Rear display wallpaper for Xiaomi 17 Pro Max</title>
+<meta name="description" content="Show your own image or GIF on the Xiaomi 17 Pro Max rear display. Free, open source, no internet permission.">
+<meta property="og:title" content="Back Screen">
+<meta property="og:description" content="Your own image or GIF on the Xiaomi 17 Pro Max rear display.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23D3E3FD'/%3E%3Crect x='18' y='10' width='28' height='44' rx='6' fill='none' stroke='%230B57D0' stroke-width='4'/%3E%3Crect x='23' y='28' width='18' height='20' rx='3' fill='%230B57D0'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f8f9ff;
+    --surface: #ffffff;
+    --surface-2: #eef2fb;
+    --text: #1a1c21;
+    --muted: #4a5060;
+    --primary: #0b57d0;
+    --on-primary: #ffffff;
+    --primary-container: #d3e3fd;
+    --on-primary-container: #041e49;
+    --border: #dce2ef;
+    --phone: #1d1f24;
+    --phone-edge: #3a3d45;
+    --shadow: 0 20px 50px -20px rgba(11, 30, 73, .35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1116;
+      --surface: #171a21;
+      --surface-2: #1e222b;
+      --text: #e3e5ec;
+      --muted: #a4aabb;
+      --primary: #a8c7fa;
+      --on-primary: #062e6f;
+      --primary-container: #0842a0;
+      --on-primary-container: #d3e3fd;
+      --border: #2a2f3a;
+      --phone: #0a0b0e;
+      --phone-edge: #2c2f37;
+      --shadow: 0 20px 60px -20px rgba(0, 0, 0, .8);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--primary); }
+  code, kbd {
+    font-family: "Google Sans Code", ui-monospace, Consolas, monospace;
+    font-size: .9em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .1em .4em;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  /* Nav */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); text-decoration: none; }
+  .brand-icon { width: 32px; height: 32px; border-radius: 9px; background: var(--primary-container); display: grid; place-items: center; }
+  .brand-icon svg { width: 18px; height: 18px; color: var(--on-primary-container); }
+  nav .links { display: flex; gap: 22px; }
+  nav .links a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 15px; }
+  nav .links a:hover { color: var(--text); }
+
+  /* Hero */
+  .hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: center; padding: 40px 0 72px; }
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--on-primary-container); background: var(--primary-container); padding: 4px 12px; border-radius: 999px; }
+  h1 { font-size: clamp(2.3rem, 5vw, 3.6rem); line-height: 1.08; letter-spacing: -.03em; margin: 18px 0 16px; }
+  .lede { font-size: 1.15rem; color: var(--muted); max-width: 34ch; margin: 0 0 28px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 999px; font-weight: 600; text-decoration: none; font-size: 15px; transition: transform .15s, box-shadow .15s; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn svg { width: 18px; height: 18px; }
+  .btn-primary { background: var(--primary); color: var(--on-primary); box-shadow: 0 6px 18px -6px var(--primary); }
+  .btn-tonal { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  .meta { margin-top: 14px; font-size: 13px; color: var(--muted); }
+
+  /* Phone mockup (back of phone) */
+  .phone-stage { display: grid; place-items: center; }
+  .phone {
+    position: relative; width: 260px; aspect-ratio: 9 / 19.5;
+    background: linear-gradient(160deg, var(--phone-edge), var(--phone) 40%);
+    border-radius: 44px; padding: 14px;
+    box-shadow: var(--shadow), inset 0 0 0 2px var(--phone-edge);
+    transform: rotate(-4deg);
+  }
+  .rear {
+    position: relative; height: 38%;
+    border-radius: 28px; overflow: hidden;
+    background: #000;
+    display: grid; grid-template-columns: 40% 60%;
+  }
+  .cams { display: grid; grid-template-rows: repeat(3, 1fr); padding: 10px 0 10px 10px; gap: 6px; background: #0b0c10; }
+  .cam { border-radius: 50%; aspect-ratio: 1; width: 70%; justify-self: center; align-self: center;
+         background: radial-gradient(circle at 35% 35%, #3c4b6b 0 12%, #0a0d15 30%, #1b1f29 62%, #333844 64%, #111 72%); }
+  .screen { position: relative; margin: 8px; border-radius: 16px; overflow: hidden; }
+  .wall { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; }
+  .wall.on { opacity: 1; }
+  .w1 { background: radial-gradient(circle at 30% 25%, #ffcf8b, transparent 45%), radial-gradient(circle at 70% 80%, #ff6a88, transparent 55%), linear-gradient(160deg, #3a1c71, #d76d77 60%, #ffaf7b); }
+  .w2 { background: radial-gradient(circle at 60% 30%, #9be7ff, transparent 40%), linear-gradient(200deg, #0f2027, #203a43 50%, #2c5364); }
+  .w2::after { content: ""; position: absolute; left: 20%; right: 20%; bottom: 18%; height: 30%; border-radius: 50% 50% 0 0; background: #0b1d24; box-shadow: -30px 10px 0 -6px #0e252e, 30px 12px 0 -8px #0e252e; }
+  .w3 { background: conic-gradient(from 90deg at 50% 50%, #0b57d0, #6ba4ff, #d3e3fd, #6ba4ff, #0b57d0); animation: spin 8s linear infinite; }
+  @keyframes spin { to { filter: hue-rotate(360deg); } }
+  .gif-tag { position: absolute; right: 7px; bottom: 7px; font: 700 9px/1 Inter, sans-serif; letter-spacing: .06em; background: rgba(0,0,0,.55); color: #fff; padding: 3px 5px; border-radius: 4px; opacity: 0; transition: opacity .4s; }
+  .gif-tag.on { opacity: 1; }
+  .logo-strip { position: absolute; left: 0; right: 0; bottom: 18%; text-align: center; color: var(--phone-edge); font-weight: 700; letter-spacing: .3em; font-size: 11px; }
+
+  /* Sections */
+  section { padding: 72px 0; border-top: 1px solid var(--border); }
+  h2 { font-size: clamp(1.7rem, 3.4vw, 2.3rem); letter-spacing: -.02em; margin: 0 0 12px; line-height: 1.15; }
+  .section-lede { color: var(--muted); max-width: 60ch; margin: 0 0 40px; }
+
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; }
+  .card h3 { margin: 14px 0 6px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--primary-container); color: var(--on-primary-container); }
+  .ico svg { width: 22px; height: 22px; }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  .steps li { counter-increment: step; position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 24px 22px 76px; }
+  .steps li::before { content: counter(step); position: absolute; left: 22px; top: 20px; width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-weight: 700; }
+  .steps h3 { margin: 0 0 4px; font-size: 1.05rem; }
+  .steps p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .req { list-style: none; padding: 0; margin: 0; }
+  .req li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 15px; }
+  .req li:last-child { border-bottom: 0; }
+  .req b { min-width: 110px; }
+  .req span { color: var(--muted); }
+
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 0 22px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 600; padding: 18px 0; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--muted); font-size: 1.3em; line-height: 1; }
+  details[open] summary::after { content: "–"; }
+  details p { margin: 0 0 18px; color: var(--muted); font-size: 15px; }
+
+  footer { border-top: 1px solid var(--border); padding: 32px 0 48px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; padding-top: 16px; gap: 56px; }
+    .features, .split { grid-template-columns: 1fr; }
+    nav .links { display: none; }
+  }
+  @media (max-width: 480px) {
+    .wrap { padding: 0 16px; }
+    .steps li { padding-left: 66px; }
+    .steps li::before { left: 16px; }
+    .phone { width: 220px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .w3 { animation: none; }
+    .wall { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <nav>
+    <a class="brand" href="#">
+      <span class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="2" width="12" height="20" rx="3"/><rect x="9" y="10" width="6" height="7" rx="1" fill="currentColor"/></svg></span>
+      Back Screen
+    </a>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#setup">Setup</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/totallynotkasai/back-screen-wallpaper">GitHub</a>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <div>
+      <span class="eyebrow">For the Xiaomi 17 Pro Max</span>
+      <h1>Your own wallpaper on the back screen.</h1>
+      <p class="lede">Pick any image or animated GIF and keep it on the rear display. No ads, no account, no internet permission.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/totallynotkasai/back-screen-wallpaper/releases/latest/download/BackScreen.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 5-5m-5 5-5-5M5 20h14"/></svg>
+          Download APK
+        </a>
+        <a class="btn btn-tonal" href="https://github.com/totallynotkasai/back-screen-wallpaper">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          View source
+        </a>
+      </div>
+      <p class="meta">Version 1.2 · Android 13+ · Requires <a href="https://shizuku.rikka.app/">Shizuku</a></p>
+    </div>
+
+    <div class="phone-stage" aria-hidden="true">
+      <div class="phone">
+        <div class="rear">
+          <div class="cams"><div class="cam"></div><div class="cam"></div><div class="cam"></div></div>
+          <div class="screen">
+            <div class="wall w1 on"></div>
+            <div class="wall w2"></div>
+            <div class="wall w3"></div>
+            <span class="gif-tag">GIF</span>
+          </div>
+        </div>
+        <div class="logo-strip">XIAOMI</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="features">
+    <div class="wrap">
+      <h2>Small app, one job.</h2>
+      <p class="section-lede">HyperOS only lets you choose from Xiaomi's own rear-screen styles. Back Screen puts whatever you like there instead, and keeps it there.</p>
+      <div class="features">
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></div>
+          <h3>Images and GIFs</h3>
+          <p>Choose a photo or an animated GIF with the system photo picker. GIFs loop forever.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg></div>
+          <h3>Camera-aware preview</h3>
+          <p>The preview matches the shape of the rear display. Optionally fit the image beside the camera instead of behind it.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg></div>
+          <h3>Quick toggle</h3>
+          <p>Turn it on or off from a Quick Settings tile or a Material You home-screen widget.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div>
+          <h3>Stays put</h3>
+          <p>A small background service re-applies your wallpaper whenever the rear display wakes or HyperOS tries to take it back.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h3>Private by design</h3>
+          <p>No internet permission and no storage permission. Only the file you pick is shared with the app.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7M21 12a9 9 0 0 1-15 6.7"/><path d="M18 2v4h-4M6 22v-4h4"/></svg></div>
+          <h3>One switch back</h3>
+          <p>Turn it off and Xiaomi's own rear screen launcher comes straight back.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="setup">
+    <div class="wrap">
+      <h2>Setup</h2>
+      <p class="section-lede">HyperOS doesn't let normal apps draw on the rear display, so Back Screen uses <a href="https://shizuku.rikka.app/">Shizuku</a> to run a few shell commands on your behalf. You set it up once.</p>
+      <ol class="steps">
+        <li>
+          <h3>Install Shizuku</h3>
+          <p>Get it from <a href="https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api">Google Play</a> or <a href="https://github.com/RikkaApps/Shizuku/releases">GitHub</a>, and start it using wireless debugging or from a computer with ADB. Shizuku's own guide walks you through it.</p>
+        </li>
+        <li>
+          <h3>Install Back Screen</h3>
+          <p><a href="https://github.com/totallynotkasai/back-screen-wallpaper/releases/latest/download/BackScreen.apk">Download the APK</a> and open it. You may need to allow installing from your browser or file manager.</p>
+        </li>
+        <li>
+          <h3>Allow access</h3>
+          <p>Open Back Screen and tap <b>Allow access</b>. If the prompt doesn't appear, open Shizuku → <b>Authorized apps</b> and switch Back Screen on.</p>
+        </li>
+        <li>
+          <h3>Pick an image and switch it on</h3>
+          <p>Tap the preview to choose an image or GIF, then turn on <b>Show on back screen</b>. Add the tile or widget if you want a faster toggle.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="requirements">
+    <div class="wrap split">
+      <div>
+        <h2>Requirements</h2>
+        <p class="section-lede" style="margin-bottom:0">Built and tested on the Xiaomi 17 Pro Max. Other Xiaomi phones with a rear display may work, but aren't tested.</p>
+      </div>
+      <div class="card">
+        <ul class="req">
+          <li><b>Phone</b><span>Xiaomi 17 Pro Max (rear display)</span></li>
+          <li><b>System</b><span>HyperOS, Android 13 or newer</span></li>
+          <li><b>Helper</b><span>Shizuku, running and authorised</span></li>
+          <li><b>Permissions</b><span>Foreground service only. No internet, no storage.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2>FAQ</h2>
+      <p class="section-lede">Short answers to what people usually ask.</p>
+      <details>
+        <summary>What does Shizuku actually do here?</summary>
+        <p>It runs a small, fixed set of shell commands: start the wallpaper screen on the rear display, move it there if needed, wake that display, and stop or restart Xiaomi's rear launcher. You can read every one of them in <code>RearCommands.kt</code>. Arguments are passed straight to the process, so nothing can be injected.</p>
+      </details>
+      <details>
+        <summary>Do I need to re-start Shizuku after a reboot?</summary>
+        <p>Usually yes, unless your phone is rooted. That's a Shizuku limitation. Once Shizuku is running again, Back Screen picks up where it left off.</p>
+      </details>
+      <details>
+        <summary>Does it drain the battery?</summary>
+        <p>The service sleeps until the rear display changes state, then re-applies the wallpaper. The rear display itself uses power when lit, just as it does with Xiaomi's own wallpapers.</p>
+      </details>
+      <details>
+        <summary>Why is it not on the Play Store?</summary>
+        <p>It depends on Xiaomi-specific behaviour and Shizuku, which isn't a good fit for the Play Store. The full source is on GitHub, so you can build it yourself if you prefer.</p>
+      </details>
+      <details>
+        <summary>How do I build it from source?</summary>
+        <p>Clone the repository and run <code>./gradlew assembleDebug</code> with JDK 17 and the Android SDK installed. The APK lands in <code>app/build/outputs/apk/debug/</code>.</p>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Back Screen · made by <a href="https://github.com/totallynotkasai">totallynotkasai</a></span>
+    <span>Not affiliated with Xiaomi.</span>
+  </div>
+</footer>
+
+<script>
+  // Cycle the mock rear-screen wallpapers.
+  (function () {
+    var walls = document.querySelectorAll('.wall');
+    var tag = document.querySelector('.gif-tag');
+    if (!walls.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var i = 0;
+    setInterval(function () {
+      walls[i].classList.remove('on');
+      i = (i + 1) % walls.length;
+      walls[i].classList.add('on');
+      tag.classList.toggle('on', i === walls.length - 1);
+    }, 3000);
+  })();
+</script>
+</body>
+</html>
