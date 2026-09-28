@@ -8,5 +8,7 @@ class App : Application() {
         super.onCreate()
         // Material You: take the app's colours from the phone's wallpaper.
         DynamicColors.applyToActivitiesIfAvailable(this)
+        // Force stopping the app cancels its alarms; this sets the next schedule change again.
+        Schedules.update(this)
     }
 }

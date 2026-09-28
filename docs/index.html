@@ -201,7 +201,7 @@
           View source
         </a>
       </div>
-      <p class="meta">Version 1.2 · Android 13+ · Requires <a href="https://shizuku.rikka.app/">Shizuku</a></p>
+      <p class="meta">Version 1.3 · Android 13+ · Requires <a href="https://shizuku.rikka.app/">Shizuku</a></p>
     </div>
 
     <div class="phone-stage" aria-hidden="true">
@@ -240,7 +240,7 @@
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg></div>
           <h3>Quick toggle</h3>
-          <p>Turn it on or off from a Quick Settings tile or a Material You home-screen widget.</p>
+          <p>Turn it on or off from a Quick Settings tile or a Material You home-screen widget. Off brings Xiaomi's own rear screen straight back.</p>
         </div>
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div>
@@ -253,9 +253,9 @@
           <p>No internet permission and no storage permission. Only the file you pick is shared with the app.</p>
         </div>
         <div class="card">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7M21 12a9 9 0 0 1-15 6.7"/><path d="M18 2v4h-4M6 22v-4h4"/></svg></div>
-          <h3>One switch back</h3>
-          <p>Turn it off and Xiaomi's own rear screen launcher comes straight back.</p>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Schedules</h3>
+          <p>Set times for it to turn on and off by itself, such as off overnight. Add as many as you like, each with its own days.</p>
         </div>
       </div>
     </div>
@@ -297,7 +297,7 @@
           <li><b>Phone</b><span>Xiaomi 17 Pro Max (rear display)</span></li>
           <li><b>System</b><span>HyperOS, Android 13 or newer</span></li>
           <li><b>Helper</b><span>Shizuku, running and authorised</span></li>
-          <li><b>Permissions</b><span>Foreground service only. No internet, no storage.</span></li>
+          <li><b>Permissions</b><span>Foreground service, plus alarms and start-after-restart for schedules. No internet, no storage.</span></li>
         </ul>
       </div>
     </div>
@@ -318,6 +318,10 @@
       <details>
         <summary>Does it drain the battery?</summary>
         <p>The service sleeps until the rear display changes state, then re-applies the wallpaper. The rear display itself uses power when lit, just as it does with Xiaomi's own wallpapers.</p>
+      </details>
+      <details>
+        <summary>My schedule didn't turn it on. Why?</summary>
+        <p>HyperOS pauses apps in the background and holds back their alarms. Open Settings → Apps → Back Screen, turn on <b>Autostart</b> and set <b>Battery saver</b> to <b>No restrictions</b>; the Schedule card shows a reminder until you do. Shizuku also has to be running at the scheduled time.</p>
       </details>
       <details>
         <summary>Why is it not on the Play Store?</summary>

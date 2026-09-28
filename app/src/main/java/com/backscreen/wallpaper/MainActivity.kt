@@ -1,15 +1,19 @@
 package com.backscreen.wallpaper
 
+import android.app.AlarmManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
@@ -33,6 +37,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var allowButton: Button
     private lateinit var detailsButton: Button
     private lateinit var log: TextView
+    private lateinit var scheduleSummary: TextView
+    private lateinit var scheduleList: LinearLayout
+    private lateinit var alarmWarning: View
+    private lateinit var batteryWarning: View
+
+    private var schedules = emptyList<Schedule>()
 
     // System photo picker: only the chosen file is shared, no storage permission needed.
     private val pickImage = registerForActivityResult(PickVisualMedia()) { uri -> uri?.let(::onImagePicked) }
@@ -70,6 +80,10 @@ class MainActivity : AppCompatActivity() {
         allowButton = findViewById(R.id.allowButton)
         detailsButton = findViewById(R.id.detailsButton)
         log = findViewById(R.id.log)
+        scheduleSummary = findViewById(R.id.scheduleSummary)
+        scheduleList = findViewById(R.id.scheduleList)
+        alarmWarning = findViewById(R.id.alarmWarning)
+        batteryWarning = findViewById(R.id.batteryWarning)
 
         val choose = View.OnClickListener {
             pickImage.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
@@ -91,6 +105,16 @@ class MainActivity : AppCompatActivity() {
             log.visibility = if (show) View.VISIBLE else View.GONE
             detailsButton.setText(if (show) R.string.hide_details else R.string.show_details)
         }
+
+        findViewById<View>(R.id.addScheduleButton).setOnClickListener { editSchedule(null) }
+        findViewById<View>(R.id.alarmButton).setOnClickListener {
+            startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
+        }
+        findViewById<View>(R.id.batteryButton).setOnClickListener {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        }
+        schedules = Schedules.load(this)
+        showSchedules()
 
         shizukuDot.background = GradientDrawable().apply { shape = GradientDrawable.OVAL }
         Shizuku.addRequestPermissionResultListener(permissionListener)
@@ -152,6 +176,61 @@ class MainActivity : AppCompatActivity() {
         )
         allowButton.visibility = if (running && !ready) View.VISIBLE else View.GONE
         if (log.visibility == View.VISIBLE) log.text = BackScreen.logText()
+        refreshSchedule(enabled)
+    }
+
+    /** The next scheduled change, and a warning if the schedule can't run on time. */
+    private fun refreshSchedule(enabled: Boolean) {
+        val active = schedules.any { it.enabled }
+        val next = Schedules.nextChange(schedules, System.currentTimeMillis(), enabled)
+        scheduleSummary.text = when {
+            !active -> getString(R.string.schedule_none)
+            next == null -> getString(R.string.schedule_no_change)
+            else -> getString(
+                if (next.second) R.string.schedule_turns_on else R.string.schedule_turns_off,
+                ScheduleEditor.formatWhen(this, next.first)
+            )
+        }
+        val exact = getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+        alarmWarning.visibility = if (active && !exact) View.VISIBLE else View.GONE
+        // HyperOS freezes background apps (holding back their alarms) unless unrestricted.
+        val unrestricted = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+        batteryWarning.visibility = if (active && !unrestricted) View.VISIBLE else View.GONE
+    }
+
+    private fun showSchedules() {
+        scheduleList.removeAllViews()
+        for (schedule in schedules.sortedBy { it.start }) {
+            val row = layoutInflater.inflate(R.layout.item_schedule, scheduleList, false)
+            row.findViewById<TextView>(R.id.scheduleTimes).text = getString(
+                R.string.schedule_times,
+                ScheduleEditor.formatTime(this, schedule.start),
+                ScheduleEditor.formatTime(this, schedule.end)
+            )
+            row.findViewById<TextView>(R.id.scheduleDays).text = ScheduleEditor.formatDays(this, schedule.days)
+            val switch = row.findViewById<MaterialSwitch>(R.id.scheduleSwitch)
+            switch.isChecked = schedule.enabled
+            switch.setOnCheckedChangeListener { _, checked ->
+                saveSchedules(schedules.map { if (it.id == schedule.id) it.copy(enabled = checked) else it })
+            }
+            row.setOnClickListener { editSchedule(schedule) }
+            scheduleList.addView(row)
+        }
+        scheduleList.visibility = if (schedules.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    private fun editSchedule(schedule: Schedule?) {
+        ScheduleEditor.show(this, schedule) { edited ->
+            val others = schedules.filter { it.id != schedule?.id }
+            saveSchedules(if (edited == null) others else others + edited)
+            showSchedules()
+        }
+    }
+
+    private fun saveSchedules(list: List<Schedule>) {
+        schedules = list
+        Schedules.save(this, list)
+        refresh()
     }
 
     private fun turnOn() {

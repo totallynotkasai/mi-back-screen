@@ -2,13 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        The only permissions this app requests. Both are "normal" install-time permissions:
-        no prompt, no access to your data. They let a small service keep the wallpaper on
-        the back screen while the app is closed. There is NO internet permission.
-        (Shizuku access is separate and is approved by you inside the Shizuku app.)
+        The only permissions this app requests. None gives access to your data, and there is
+        NO internet permission. (Shizuku access is separate and is approved by you inside the
+        Shizuku app.)
     -->
+    <!-- A small service keeps the wallpaper on the back screen while the app is closed. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!--
+        Schedules: switch on and off at the exact times you set (you allow this in Settings),
+        and set the next switch again after the phone restarts.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".App"
@@ -63,6 +69,19 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps a user-chosen image on the phone's rear display" />
         </service>
+
+        <!-- Schedule alarms; the system broadcasts below mean the alarm must be set again. -->
+        <receiver
+            android:name=".ScheduleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Home screen on/off widget. -->
         <receiver

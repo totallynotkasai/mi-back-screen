@@ -81,6 +81,7 @@ class KeeperService : Service() {
             ACTION_RESTORE -> restore()
             ACTION_TOGGLE -> if (BackScreen.isEnabled(this)) restore() else turnOn()
             ACTION_APPLY -> turnOn()
+            ACTION_SCHEDULED_ON -> turnOn(wake = false)
             // The system restarted us after the process was killed.
             else -> if (BackScreen.isEnabled(this)) apply() else stopSelf()
         }
@@ -100,15 +101,15 @@ class KeeperService : Service() {
         super.onDestroy()
     }
 
-    private fun turnOn() {
+    private fun turnOn(wake: Boolean = true) {
         if (!BackScreen.wallpaperFile(this).exists()) {
             BackScreen.log("Choose an image first")
             fail()
             return
         }
         BackScreen.setEnabled(this, true)
-        // You just asked for it, so light the back screen up to show it.
-        wakeWhenShown = true
+        // You just asked for it, so light the back screen up to show it (a schedule doesn't).
+        wakeWhenShown = wake
         apply()
     }
 
@@ -267,6 +268,7 @@ class KeeperService : Service() {
         const val ACTION_APPLY = "com.backscreen.wallpaper.APPLY"
         const val ACTION_RESTORE = "com.backscreen.wallpaper.RESTORE"
         const val ACTION_TOGGLE = "com.backscreen.wallpaper.TOGGLE"
+        const val ACTION_SCHEDULED_ON = "com.backscreen.wallpaper.SCHEDULED_ON"
 
         private const val ACTION_SUB_SCREEN_ON = "miui.intent.action.SUB_SCREEN_ON"
         private const val CHANNEL_ID = "keeper"

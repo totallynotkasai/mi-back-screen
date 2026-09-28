@@ -10,6 +10,7 @@ Show your own image or animated GIF on the **Xiaomi 17 Pro Max** rear display.
 - Images and looping GIFs, chosen with the system photo picker
 - Preview shaped like the rear display, with an option to keep clear of the camera
 - Quick Settings tile and home-screen widget to toggle it
+- Schedules to turn it on and off at set times (e.g. off overnight), as many as you like
 - Background service keeps the wallpaper on the rear display
 - No internet permission, no storage permission
 
