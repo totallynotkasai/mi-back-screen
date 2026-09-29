@@ -46,6 +46,7 @@ class KeeperService : Service() {
     private val directLaunchTimeout = Runnable { onDirectLaunchFailed() }
     private val checkRear = Runnable { checkRearDisplay() }
     private val checkRearLate = Runnable { checkRearDisplay() }
+    private val wakeForChanges = Runnable { wakeRear() }
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -53,6 +54,8 @@ class KeeperService : Service() {
         override fun onDisplayChanged(displayId: Int) {
             val rear = BackScreen.findRearDisplay(this@KeeperService) ?: return
             if (displayId != rear.displayId || rear.state != Display.STATE_ON) return
+            // The gallery doesn't move on while the phone sleeps; catch up now it can be seen.
+            RearWallpaperActivity.refreshImage()
             scheduleRearCheck()
         }
     }
@@ -92,6 +95,7 @@ class KeeperService : Service() {
         instance = null
         BackScreen.mainHandler.removeCallbacks(checkRear)
         BackScreen.mainHandler.removeCallbacks(checkRearLate)
+        BackScreen.mainHandler.removeCallbacks(wakeForChanges)
         BackScreen.mainHandler.removeCallbacks(shizukuTimeout)
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         Shizuku.removeBinderReceivedListener(binderReceived)
@@ -102,7 +106,7 @@ class KeeperService : Service() {
     }
 
     private fun turnOn(wake: Boolean = true) {
-        if (!BackScreen.wallpaperFile(this).exists()) {
+        if (!Gallery.hasImages(this)) {
             BackScreen.log("Choose an image first")
             fail()
             return
@@ -194,6 +198,23 @@ class KeeperService : Service() {
     }
 
     /**
+     * A setting changed. The wallpaper takes it at once, but a back screen that has gone to
+     * sleep (or is covered by Xiaomi's always-on layer) doesn't draw it until it's woken, so
+     * wake it. Waits a moment so a run of changes wakes it once.
+     */
+    fun showChanges() {
+        BackScreen.mainHandler.removeCallbacks(wakeForChanges)
+        BackScreen.mainHandler.postDelayed(wakeForChanges, SHOW_CHANGES_DELAY_MS)
+    }
+
+    private fun wakeRear() {
+        if (!BackScreen.isEnabled(this)) return
+        val rear = BackScreen.findRearDisplay(this)?.displayId ?: return
+        // Waking fires the display listener, which also clears Xiaomi's layer if it's on top.
+        shell(onUnavailable = {}) { BackScreen.log("Show changes: ${RearCommands.wakeDisplay(rear)}") }
+    }
+
+    /**
      * Called when the wallpaper stops being visible on the rear. Xiaomi's doze layer starts a
      * moment after the rear display wakes and hides us; this catches it whenever it lands.
      */
@@ -279,6 +300,7 @@ class KeeperService : Service() {
         private const val REAPPLY_MIN_INTERVAL_MS = 5000L
         private const val SHIZUKU_WAIT_MS = 4000L
         private const val DIRECT_LAUNCH_TIMEOUT_MS = 1500L
+        private const val SHOW_CHANGES_DELAY_MS = 400L
 
         @Volatile
         var instance: KeeperService? = null

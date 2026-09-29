@@ -1,6 +1,6 @@
 # Back Screen
 
-Show your own image or animated GIF on the **Xiaomi 17 Pro Max** rear display.
+Show your own images, animated GIFs and a clock on the **Xiaomi 17 Pro Max** rear display.
 
 **Website:** https://totallynotkasai.github.io/back-screen-wallpaper/
 **Download:** [latest APK](https://github.com/totallynotkasai/back-screen-wallpaper/releases/latest/download/BackScreen.apk)
@@ -8,6 +8,10 @@ Show your own image or animated GIF on the **Xiaomi 17 Pro Max** rear display.
 ## Features
 
 - Images and looping GIFs, chosen with the system photo picker
+- Gallery: pick several images or a folder and it changes image every 1 minute to 1 day, in order or shuffled
+- Scaling: Fill, Fit, Stretch or None (actual size, centred)
+- Optional clock (time and date) over the wallpaper, in five styles: drag it anywhere in the preview or align it to an edge; any text colour, or Auto to stand out from the image; optional background colour and opacity
+- Refresh button to put the wallpaper up afresh if something didn't update
 - Preview shaped like the rear display, with an option to keep clear of the camera
 - Quick Settings tile and home-screen widget to toggle it
 - Schedules to turn it on and off at set times (e.g. off overnight), as many as you like
@@ -24,7 +28,7 @@ Show your own image or animated GIF on the **Xiaomi 17 Pro Max** rear display.
 1. Install and start Shizuku (wireless debugging or ADB).
 2. Install the APK and open Back Screen.
 3. Tap **Allow access** (or enable it in Shizuku → Authorized apps).
-4. Pick an image or GIF and turn on **Show on back screen**.
+4. Pick images (or a folder) and turn on **Show on back screen**.
 
 ## Building
 
