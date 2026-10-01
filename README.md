@@ -2,8 +2,8 @@
 
 Show your own images, animated GIFs and a clock on the **Xiaomi 17 Pro Max** rear display.
 
-**Website:** https://totallynotkasai.github.io/back-screen-wallpaper/
-**Download:** [latest APK](https://github.com/totallynotkasai/back-screen-wallpaper/releases/latest/download/BackScreen.apk)
+**Website:** https://totallynotkasai.github.io/mi-back-screen/
+**Download:** [latest APK](https://github.com/totallynotkasai/mi-back-screen/releases/latest/download/MiBackScreen.apk)
 
 ## Features
 
