@@ -6,6 +6,10 @@
     <color name="widget_off_bg">@android:color/system_neutral2_100</color>
     <color name="widget_off_fg">@android:color/system_neutral2_700</color>
 
+    <!-- Text on the preview when it's black like the back screen; the same in light and dark. -->
+    <color name="on_rear_preview">#DEFFFFFF</color>
+    <color name="on_rear_preview_variant">#99FFFFFF</color>
+
     <color name="ic_launcher_background">#FFD3E3FD</color>
     <color name="ic_launcher_foreground">#FF0B57D0</color>
 </resources>

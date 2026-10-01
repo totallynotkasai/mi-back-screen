@@ -120,6 +120,13 @@ object Gallery {
         restart(context)
     }
 
+    /** No images: deletes the copies, or lets go of the folder. The originals are untouched. */
+    fun clear(context: Context) {
+        imagesDir(context).deleteRecursively()
+        releaseFolder(context)
+        restart(context)
+    }
+
     private fun releaseFolder(context: Context) {
         val old = folder(context) ?: return
         try {

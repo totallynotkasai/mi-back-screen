@@ -1,5 +1,6 @@
 package com.backscreen.wallpaper
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Matrix
 import android.graphics.drawable.Drawable
@@ -10,7 +11,11 @@ import android.widget.ImageView
  * One wallpaper image, fitted the way [scaling] says. The app's preview is smaller than the
  * back screen, so it sets [ratio] (preview size / back screen size) for [Scaling.NONE] to
  * show the image at the size it will really be.
+ *
+ * A plain ImageView on purpose: the back screen's window uses a platform theme, where an
+ * AppCompat view logs an error each time it's created, and wallpapers never need tinting.
  */
+@SuppressLint("AppCompatCustomView")
 class WallpaperView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : ImageView(context, attrs) {

@@ -170,5 +170,20 @@ object BackScreen {
         }
     }
 
+    /** Only to logcat, for things too frequent for the app's own short log. */
+    fun trace(msg: String) {
+        Log.d(TAG, msg)
+    }
+
     fun logText(): String = synchronized(log) { log.reversed().joinToString("\n") }
+
+    /** The back screen's power state, for the log. */
+    fun stateName(state: Int?) = when (state) {
+        Display.STATE_ON -> "on"
+        Display.STATE_OFF -> "off"
+        Display.STATE_DOZE -> "dim"
+        Display.STATE_DOZE_SUSPEND -> "dim (suspended)"
+        Display.STATE_ON_SUSPEND -> "on (suspended)"
+        else -> "unknown ($state)"
+    }
 }

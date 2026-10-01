@@ -56,12 +56,7 @@
                     android:layout_height="match_parent"
                     android:contentDescription="@string/title" />
 
-                <com.backscreen.wallpaper.ClockLayer
-                    android:id="@+id/clock"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:visibility="gone" />
-
+                <!-- No images: the back screen is black. Under the clock, which still shows. -->
                 <LinearLayout
                     android:id="@+id/emptyState"
                     android:layout_width="wrap_content"
@@ -71,22 +66,55 @@
                     android:orientation="vertical">
 
                     <ImageView
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_image"
-                        app:tint="?attr/colorOnSurfaceVariant" />
+                        app:tint="@color/on_rear_preview_variant" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/no_wallpaper"
+                        android:textAppearance="?attr/textAppearanceTitleSmall"
+                        android:textColor="@color/on_rear_preview" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/no_wallpaper_summary"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="@color/on_rear_preview_variant" />
+
+                    <Button
+                        android:id="@+id/emptyChooseButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="@string/no_image"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
+                        android:text="@string/choose_images" />
                 </LinearLayout>
+
+                <com.backscreen.wallpaper.ClockLayer
+                    android:id="@+id/clock"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
             </com.backscreen.wallpaper.RearPreviewLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <!-- With no images and the clock on, the preview shows just the clock; this says why. -->
+        <TextView
+            android:id="@+id/emptyCaption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:text="@string/no_wallpaper_caption"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:visibility="gone" />
 
         <!-- Main on/off switch. -->
         <com.google.android.material.card.MaterialCardView
@@ -143,6 +171,80 @@
             android:layout_marginTop="8dp"
             android:text="@string/refresh"
             app:icon="@drawable/ic_refresh" />
+
+        <!-- Only shown while a schedule or the clock needs something allowed to run on time. -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/setupCard"
+            style="@style/Widget.BackScreen.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="?attr/colorErrorContainer">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/setup_title"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnErrorContainer" />
+
+                <LinearLayout
+                    android:id="@+id/alarmWarning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/alarms_needed"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textColor="?attr/colorOnErrorContainer" />
+
+                    <Button
+                        android:id="@+id/alarmButton"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="-12dp"
+                        android:text="@string/allow_alarms"
+                        android:textColor="?attr/colorOnErrorContainer" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/batteryWarning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/battery_needed"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textColor="?attr/colorOnErrorContainer" />
+
+                    <Button
+                        android:id="@+id/batteryButton"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="-12dp"
+                        android:text="@string/open_app_settings"
+                        android:textColor="?attr/colorOnErrorContainer" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- Only shown when the rear display reports a camera cutout. -->
         <com.google.android.material.card.MaterialCardView
@@ -331,6 +433,15 @@
                         android:text="@string/next_image"
                         app:icon="@drawable/ic_skip" />
                 </LinearLayout>
+
+                <Button
+                    android:id="@+id/removeButton"
+                    style="@style/Widget.Material3.Button.TextButton.Icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-12dp"
+                    android:text="@string/remove_images"
+                    app:icon="@drawable/ic_delete" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -633,56 +744,6 @@
                     android:layout_marginTop="8dp"
                     android:orientation="vertical" />
 
-                <!-- Only shown while a schedule is on but exact alarms aren't allowed. -->
-                <LinearLayout
-                    android:id="@+id/alarmWarning"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/alarms_needed"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorError" />
-
-                    <Button
-                        android:id="@+id/alarmButton"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="-12dp"
-                        android:text="@string/allow_alarms" />
-                </LinearLayout>
-
-                <!-- Only shown while a schedule is on but HyperOS may freeze the app. -->
-                <LinearLayout
-                    android:id="@+id/batteryWarning"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/battery_needed"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorError" />
-
-                    <Button
-                        android:id="@+id/batteryButton"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="-12dp"
-                        android:text="@string/open_app_settings" />
-                </LinearLayout>
-
                 <Button
                     android:id="@+id/addScheduleButton"
                     style="@style/Widget.Material3.Button.TextButton.Icon"
@@ -764,5 +825,14 @@
             android:textColor="?attr/colorOnSurfaceVariant"
             android:textIsSelectable="true"
             android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/about"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 </ScrollView>

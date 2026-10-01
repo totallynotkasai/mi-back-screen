@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var previewFrame: RearPreviewLayout
     private lateinit var preview: WallpaperView
     private lateinit var emptyState: View
+    private lateinit var emptyCaption: View
     private lateinit var cameraCard: View
     private lateinit var cameraSwitch: MaterialSwitch
     private lateinit var toggleSwitch: MaterialSwitch
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var log: TextView
     private lateinit var scheduleSummary: TextView
     private lateinit var scheduleList: LinearLayout
+    private lateinit var setupCard: View
     private lateinit var alarmWarning: View
     private lateinit var batteryWarning: View
 
@@ -96,7 +98,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val onToggle = CompoundButton.OnCheckedChangeListener { _, checked ->
-        if (checked) turnOn() else KeeperService.start(this, KeeperService.ACTION_RESTORE)
+        if (checked) turnOn() else turnOff()
         refresh()
     }
 
@@ -107,6 +109,7 @@ class MainActivity : AppCompatActivity() {
         previewFrame = findViewById(R.id.previewFrame)
         preview = findViewById(R.id.preview)
         emptyState = findViewById(R.id.emptyState)
+        emptyCaption = findViewById(R.id.emptyCaption)
         cameraCard = findViewById(R.id.cameraCard)
         cameraSwitch = findViewById(R.id.cameraSwitch)
         toggleSwitch = findViewById(R.id.toggleSwitch)
@@ -118,6 +121,7 @@ class MainActivity : AppCompatActivity() {
         log = findViewById(R.id.log)
         scheduleSummary = findViewById(R.id.scheduleSummary)
         scheduleList = findViewById(R.id.scheduleList)
+        setupCard = findViewById(R.id.setupCard)
         alarmWarning = findViewById(R.id.alarmWarning)
         batteryWarning = findViewById(R.id.batteryWarning)
         clock = findViewById(R.id.clock)
@@ -143,7 +147,12 @@ class MainActivity : AppCompatActivity() {
             pickImages.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
         }
         findViewById<View>(R.id.chooseButton).setOnClickListener(choose)
+        findViewById<View>(R.id.emptyChooseButton).setOnClickListener(choose)
         findViewById<View>(R.id.previewCard).setOnClickListener(choose)
+        findViewById<View>(R.id.removeButton).setOnClickListener { confirmRemoveImages() }
+        findViewById<TextView>(R.id.about).text = getString(
+            R.string.about, packageManager.getPackageInfo(packageName, 0).versionName
+        )
         findViewById<View>(R.id.folderButton).setOnClickListener { pickFolder.launch(Gallery.folder(this)) }
 
         findViewById<View>(R.id.intervalRow).setOnClickListener { chooseInterval() }
@@ -205,7 +214,7 @@ class MainActivity : AppCompatActivity() {
     /** The Quick Settings tile opens us to toggle when it isn't allowed to itself. */
     private fun handleIntent(intent: Intent?) {
         if (intent?.action != KeeperService.ACTION_TOGGLE) return
-        if (BackScreen.isEnabled(this)) KeeperService.start(this, KeeperService.ACTION_RESTORE) else turnOn()
+        if (BackScreen.isEnabled(this)) turnOff() else turnOn()
     }
 
     override fun onResume() {
@@ -234,7 +243,13 @@ class MainActivity : AppCompatActivity() {
         toggleSwitch.setOnCheckedChangeListener(null)
         toggleSwitch.isChecked = enabled
         toggleSwitch.setOnCheckedChangeListener(onToggle)
-        toggleState.setText(if (enabled) R.string.state_on else R.string.state_off_xiaomi)
+        toggleState.setText(
+            when {
+                !enabled -> R.string.state_off_xiaomi
+                previewUri == null -> R.string.state_on_black
+                else -> R.string.state_on
+            }
+        )
 
         shizukuStatus.setText(
             when {
@@ -251,13 +266,16 @@ class MainActivity : AppCompatActivity() {
             )
         )
         allowButton.visibility = if (running && !ready) View.VISIBLE else View.GONE
-        if (log.visibility == View.VISIBLE) log.text = BackScreen.logText()
+        if (log.visibility == View.VISIBLE) {
+            log.text = listOfNotNull(ClockAlarm.summary(), BackScreen.logText()).joinToString("\n")
+        }
         // Keep up with the gallery moving on while the app is open.
         if (previewUri != null && Gallery.shown(this) != previewUri) loadPreview()
         refreshSchedule(enabled)
+        refreshSetup()
     }
 
-    /** The next scheduled change, and a warning if the schedule can't run on time. */
+    /** The next scheduled change. */
     private fun refreshSchedule(enabled: Boolean) {
         val active = schedules.any { it.enabled }
         val next = Schedules.nextChange(schedules, System.currentTimeMillis(), enabled)
@@ -269,11 +287,19 @@ class MainActivity : AppCompatActivity() {
                 ScheduleEditor.formatWhen(this, next.first)
             )
         }
+    }
+
+    /**
+     * What has to be allowed for schedules and the clock to run on time: exact alarms, and
+     * HyperOS not freezing the app in the background, which holds its alarms back.
+     */
+    private fun refreshSetup() {
+        val needed = schedules.any { it.enabled } || BackScreen.showClock(this)
         val exact = getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
-        alarmWarning.visibility = if (active && !exact) View.VISIBLE else View.GONE
-        // HyperOS freezes background apps (holding back their alarms) unless unrestricted.
         val unrestricted = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
-        batteryWarning.visibility = if (active && !unrestricted) View.VISIBLE else View.GONE
+        alarmWarning.visibility = if (needed && !exact) View.VISIBLE else View.GONE
+        batteryWarning.visibility = if (needed && !unrestricted) View.VISIBLE else View.GONE
+        setupCard.visibility = if (needed && !(exact && unrestricted)) View.VISIBLE else View.GONE
     }
 
     private fun showSchedules() {
@@ -311,20 +337,25 @@ class MainActivity : AppCompatActivity() {
         refresh()
     }
 
-    /** Turns the wallpaper on, or puts it up again if it's on. False if it can't. */
+    /**
+     * Turns the wallpaper on, or puts it up again if it's on. False if it can't. With no images
+     * the back screen is black, with the clock if that's on.
+     */
     private fun turnOn(): Boolean {
-        val message = when {
-            !Gallery.hasImages(this) -> R.string.need_image
-            !RearCommands.isReady() -> R.string.need_shizuku
-            else -> null
-        }
-        if (message != null) {
-            Snackbar.make(toggleSwitch, message, Snackbar.LENGTH_SHORT).show()
+        if (!RearCommands.isReady()) {
+            Snackbar.make(toggleSwitch, R.string.need_shizuku, Snackbar.LENGTH_SHORT).show()
             BackScreen.mainHandler.post { refresh() } // flips the switch back off
             return false
         }
+        // Saved here as well as by the service, so the switch doesn't flick back while it starts.
+        BackScreen.setEnabled(this, true)
         KeeperService.start(this, KeeperService.ACTION_APPLY)
         return true
+    }
+
+    private fun turnOff() {
+        BackScreen.setEnabled(this, false)
+        KeeperService.start(this, KeeperService.ACTION_RESTORE)
     }
 
     /** Reloads everything and puts the wallpaper up afresh, for when something didn't update. */
@@ -377,6 +408,21 @@ class MainActivity : AppCompatActivity() {
         if (BackScreen.isEnabled(this) && !RearWallpaperActivity.reload()) {
             KeeperService.start(this, KeeperService.ACTION_APPLY)
         }
+    }
+
+    private fun confirmRemoveImages() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.remove_images_title)
+            .setMessage(R.string.remove_images_message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.remove_images) { _, _ ->
+                Gallery.clear(this)
+                BackScreen.log("Removed images")
+                Snackbar.make(toggleSwitch, R.string.images_removed, Snackbar.LENGTH_SHORT).show()
+                // The back screen fades to black.
+                onImagesChanged()
+            }
+            .show()
     }
 
     /**
@@ -488,6 +534,7 @@ class MainActivity : AppCompatActivity() {
         clock.visibility = if (show) View.VISIBLE else View.GONE
         clockOptions.visibility = if (show) View.VISIBLE else View.GONE
         clock.settings = settings
+        showEmptyState()
 
         syncingClock = true
         // Only a button that matches exactly; after a drag, maybe none.
@@ -556,10 +603,11 @@ class MainActivity : AppCompatActivity() {
         BackScreen.stop(preview.drawable)
         // The clock's automatic colours follow the image.
         clock.backdropChanged()
+        // Black like the rear display, wherever the image doesn't reach, or with no image.
+        preview.setBackgroundColor(Color.BLACK)
+        showEmptyState()
         if (uri == null) {
             preview.setImageDrawable(null)
-            preview.background = null
-            emptyState.visibility = View.VISIBLE
             return
         }
         try {
@@ -568,12 +616,20 @@ class MainActivity : AppCompatActivity() {
             preview.scaling = scaling
             preview.setImageDrawable(drawable)
             BackScreen.start(drawable)
-            // Black like the rear display, wherever the image doesn't reach.
-            preview.setBackgroundColor(Color.BLACK)
-            emptyState.visibility = View.GONE
         } catch (e: Exception) {
             BackScreen.log("Preview failed: ${e.message}")
         }
+    }
+
+    /**
+     * With no images the preview is black like the back screen, and says so. With the clock
+     * on, the preview shows just the clock and the note goes underneath, so they don't overlap.
+     */
+    private fun showEmptyState() {
+        val empty = previewUri == null
+        val clockOn = BackScreen.showClock(this)
+        emptyState.visibility = if (empty && !clockOn) View.VISIBLE else View.GONE
+        emptyCaption.visibility = if (empty && clockOn) View.VISIBLE else View.GONE
     }
 
     private companion object {

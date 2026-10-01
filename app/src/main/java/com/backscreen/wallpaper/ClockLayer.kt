@@ -19,8 +19,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.TextClock
+import android.widget.TextView
 import androidx.core.graphics.ColorUtils
+import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -53,10 +54,14 @@ data class ClockSettings(
  * The time and date, drawn over the wallpaper. Everything is sized as a share of the layer's
  * height, so the app's small preview looks just like the rear display. Keep it clear of the
  * camera with padding.
+ *
+ * Plain text views that [ClockTicker] keeps up to date, not TextClocks: a TextClock counts to
+ * its next tick in uptime and stops ticking while its window is hidden, so on a back screen
+ * that stays visible while the phone sleeps it fell minutes behind.
  */
 class ClockLayer @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
-) : FrameLayout(context, attrs) {
+) : FrameLayout(context, attrs), ClockTicker.Listener {
 
     var settings = ClockSettings()
         set(value) {
@@ -79,6 +84,9 @@ class ClockLayer @JvmOverloads constructor(
     /** Called when the automatic colours change, e.g. for a new image. */
     var onColorsChanged: (() -> Unit)? = null
 
+    /** Called when the time or date shown changes. */
+    var onTextChanged: (() -> Unit)? = null
+
     /** The colours Auto gives right now, and the colours in use. */
     val autoTextColor get() = if (lightText) shadeLight else shadeDark
     val textColor get() = settings.color ?: autoTextColor
@@ -87,8 +95,13 @@ class ClockLayer @JvmOverloads constructor(
 
     private val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-    // Each text and its size as a share of the height.
-    private val texts = mutableListOf<Pair<TextClock, Float>>()
+    /** One line of the clock: its formats, and its size as a share of the height. */
+    private class Field(val view: TextView, val size: Float, val format12: String, val format24: String)
+
+    private val fields = mutableListOf<Field>()
+
+    // The date formats depend on the language, so they're rebuilt when it changes.
+    private var builtFor: Locale? = null
 
     // Automatic colours: a light and a dark shade of the image under the clock; the text gets
     // whichever stands out more, and the background the other.
@@ -117,7 +130,8 @@ class ClockLayer @JvmOverloads constructor(
 
     private fun build() {
         box.removeAllViews()
-        texts.clear()
+        fields.clear()
+        builtFor = Locale.getDefault()
         when (settings.style) {
             ClockStyle.CLASSIC -> {
                 add(time(), 0.30f, "sans-serif-medium")
@@ -137,31 +151,75 @@ class ClockLayer @JvmOverloads constructor(
                 add(date("EEEdMMM"), 0.06f, "monospace")
             }
             ClockStyle.SERIF -> {
-                add(date("EEEEdMMMM").apply { isAllCaps = true; letterSpacing = 0.2f }, 0.05f, "serif")
+                add(date("EEEEdMMMM"), 0.05f, "serif") { isAllCaps = true; letterSpacing = 0.2f }
                 add(time(), 0.28f, "serif")
             }
         }
         applyLook()
+        updateTime()
     }
 
-    private fun add(text: TextClock, size: Float, font: String) {
-        text.typeface = Typeface.create(font, Typeface.NORMAL)
-        text.includeFontPadding = false
+    private fun add(formats: Formats, size: Float, font: String, style: TextView.() -> Unit = {}) {
+        val text = TextView(context).apply {
+            typeface = Typeface.create(font, Typeface.NORMAL)
+            includeFontPadding = false
+            style()
+        }
         box.addView(text)
-        texts += text to size
+        fields += Field(text, size, formats.format12, formats.format24)
     }
+
+    private class Formats(val format12: String, val format24: String)
 
     private fun time() = clock("h:mm", "HH:mm")
 
     /** The date the way the phone's region writes it, from a [skeleton] like "EEEEdMMMM". */
-    private fun date(skeleton: String): TextClock {
+    private fun date(skeleton: String): Formats {
         val pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton)
         return clock(pattern, pattern)
     }
 
-    private fun clock(format12: String, format24: String) = TextClock(context).apply {
-        format12Hour = format12
-        format24Hour = format24
+    private fun clock(format12: String, format24: String) = Formats(format12, format24)
+
+    /**
+     * Shows the time now, in the phone's 12 or 24-hour style. Cheap when nothing has changed,
+     * so call it whenever the phone may have slept.
+     */
+    fun updateTime() {
+        if (Locale.getDefault() != builtFor) return build()
+        val now = Calendar.getInstance()
+        val is24 = DateFormat.is24HourFormat(context)
+        var changed = false
+        for (field in fields) {
+            val text = DateFormat.format(if (is24) field.format24 else field.format12, now).toString()
+            // Only a real change, so checking again doesn't re-measure or redraw anything.
+            if (field.view.text.toString() != text) {
+                field.view.text = text
+                changed = true
+            }
+        }
+        if (changed) onTextChanged?.invoke()
+    }
+
+    override fun onTimeChanged() {
+        if (isShown) updateTime()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        ClockTicker.add(context, this)
+        updateTime()
+    }
+
+    override fun onDetachedFromWindow() {
+        ClockTicker.remove(this)
+        super.onDetachedFromWindow()
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        // Shown again, perhaps after a long time hidden.
+        if (isVisible) updateTime()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -181,9 +239,10 @@ class ClockLayer @JvmOverloads constructor(
             isLight(text) -> 0x99000000.toInt()
             else -> 0x66FFFFFF
         }
-        for ((view, size) in texts) {
+        for (field in fields) {
+            val view = field.view
             view.setTextColor(text)
-            if (h > 0) view.setTextSize(TypedValue.COMPLEX_UNIT_PX, size * h)
+            if (h > 0) view.setTextSize(TypedValue.COMPLEX_UNIT_PX, field.size * h)
             view.setShadowLayer(max(0.02f * h, 0.01f), 0f, 0.005f * h, shadow)
         }
         box.gravity = when {

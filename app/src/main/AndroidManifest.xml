@@ -15,6 +15,8 @@
     -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The back screen clock: a moment awake each minute to draw the new time. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".App"
@@ -82,6 +84,11 @@
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!-- The back screen clock's per-minute alarm. -->
+        <receiver
+            android:name=".ClockAlarmReceiver"
+            android:exported="false" />
 
         <!-- Home screen on/off widget. -->
         <receiver

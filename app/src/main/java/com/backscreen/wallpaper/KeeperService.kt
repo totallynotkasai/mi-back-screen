@@ -16,17 +16,24 @@ import android.os.SystemClock
 import android.view.Display
 import rikka.shizuku.Shizuku
 import java.util.concurrent.Executors
+import kotlin.math.max
 
 /**
  * Puts the wallpaper on the rear display and keeps it there.
  *
- * Applying is:
- *   1. launch RearWallpaperActivity straight onto the rear display (allowed while unlocked
- *      because the manifest carries Xiaomi's `miui.rear.policy` opt-in),
- *   2. stop Xiaomi's rear launcher so it doesn't cover the wallpaper again.
- * When locked, or if HyperOS refuses step 1, launch on the main display instead and move the
- * task to the rear, which HyperOS doesn't block.
- * Each step needs shell access, which Shizuku provides (see RearCommands).
+ * Applying launches RearWallpaperActivity straight onto the rear display (allowed while
+ * unlocked because the manifest carries Xiaomi's `miui.rear.policy` opt-in). When locked, or if
+ * HyperOS refuses that, it's launched on the main display instead and its task moved to the
+ * rear, which HyperOS doesn't block. Each step needs shell access, which Shizuku provides (see
+ * RearCommands).
+ *
+ * Staying there: each time the rear goes from lit to dimmed, Xiaomi's back screen app brings
+ * its launcher back to the front and closes the app that was on top, but only if that launcher
+ * has been created since Xiaomi's app last started (that's how its code reads, HyperOS 3.0.319).
+ * So once the wallpaper is up, if Xiaomi's launcher is underneath, Xiaomi's app is restarted
+ * once; it comes straight back without the launcher and leaves the wallpaper alone. If the
+ * wallpaper is closed anyway, it's put back. (1.3 restarted Xiaomi's app every time the
+ * wallpaper looked covered, which relit the rear every ~10 s; this is once per turn-on.)
  */
 class KeeperService : Service() {
 
@@ -46,6 +53,7 @@ class KeeperService : Service() {
     private val directLaunchTimeout = Runnable { onDirectLaunchFailed() }
     private val checkRear = Runnable { checkRearDisplay() }
     private val checkRearLate = Runnable { checkRearDisplay() }
+    private val putBack = Runnable { checkRearDisplay() }
     private val wakeForChanges = Runnable { wakeRear() }
 
     private val displayListener = object : DisplayManager.DisplayListener {
@@ -64,7 +72,10 @@ class KeeperService : Service() {
     // doesn't fire (the doze layer reports the display as off); anyone can send it, but all
     // it does is trigger a check.
     private val subScreenOn = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = scheduleRearCheck()
+        override fun onReceive(context: Context, intent: Intent) {
+            RearWallpaperActivity.refreshImage()
+            scheduleRearCheck()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -85,7 +96,8 @@ class KeeperService : Service() {
             ACTION_TOGGLE -> if (BackScreen.isEnabled(this)) restore() else turnOn()
             ACTION_APPLY -> turnOn()
             ACTION_SCHEDULED_ON -> turnOn(wake = false)
-            // The system restarted us after the process was killed.
+            // ACTION_RESUME after an app update, or none: the system restarted us after the
+            // process was killed.
             else -> if (BackScreen.isEnabled(this)) apply() else stopSelf()
         }
         return START_STICKY
@@ -95,6 +107,7 @@ class KeeperService : Service() {
         instance = null
         BackScreen.mainHandler.removeCallbacks(checkRear)
         BackScreen.mainHandler.removeCallbacks(checkRearLate)
+        BackScreen.mainHandler.removeCallbacks(putBack)
         BackScreen.mainHandler.removeCallbacks(wakeForChanges)
         BackScreen.mainHandler.removeCallbacks(shizukuTimeout)
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
@@ -105,12 +118,8 @@ class KeeperService : Service() {
         super.onDestroy()
     }
 
+    /** Works with no images too: the back screen is black, with the clock if that's on. */
     private fun turnOn(wake: Boolean = true) {
-        if (!Gallery.hasImages(this)) {
-            BackScreen.log("Choose an image first")
-            fail()
-            return
-        }
         BackScreen.setEnabled(this, true)
         // You just asked for it, so light the back screen up to show it (a schedule doesn't).
         wakeWhenShown = wake
@@ -119,6 +128,7 @@ class KeeperService : Service() {
 
     private fun apply() {
         lastApply = SystemClock.elapsedRealtime()
+        BackScreen.mainHandler.removeCallbacks(putBack)
         RearWallpaperActivity.finishCurrent()
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.log("Applying wallpaper...")
@@ -127,7 +137,9 @@ class KeeperService : Service() {
         val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
         if (rear == null || locked || directLaunchBlocked) {
             awaitingDirectLaunch = false
-            shell { BackScreen.log("Open wallpaper: ${RearCommands.launchWallpaperActivity(Display.DEFAULT_DISPLAY)}") }
+            shell {
+                BackScreen.log("Open wallpaper: ${RearCommands.launchWallpaperActivity(Display.DEFAULT_DISPLAY)}")
+            }
             return
         }
         awaitingDirectLaunch = true
@@ -140,6 +152,7 @@ class KeeperService : Service() {
             )
         }
     }
+
 
     private fun onDirectLaunchFailed() {
         if (!awaitingDirectLaunch) return
@@ -156,25 +169,31 @@ class KeeperService : Service() {
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         val rear = BackScreen.findRearDisplay(this)?.displayId
             ?: return BackScreen.log("Back screen not found")
-        shell {
-            BackScreen.log("Move to back screen: ${RearCommands.moveTaskToDisplay(taskId, rear)}")
-            BackScreen.log("Stop Xiaomi back screen app: ${RearCommands.stopXiaomiRearLauncher()}")
-        }
+        shell { BackScreen.log("Move to back screen: ${RearCommands.moveTaskToDisplay(taskId, rear)}") }
     }
 
     /** Called by RearWallpaperActivity when it is showing on the rear display. */
     fun onWallpaperCreatedOnRear(displayId: Int) {
-        val direct = awaitingDirectLaunch
         val wake = wakeWhenShown
         awaitingDirectLaunch = false
         wakeWhenShown = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
-        if (!direct && !wake) return
-        shell {
-            // After a move, onWallpaperCreatedOnMain has already stopped it.
-            if (direct) BackScreen.log("Stop Xiaomi back screen app: ${RearCommands.stopXiaomiRearLauncher()}")
+        shell(onUnavailable = {}) {
             if (wake) BackScreen.log("Wake back screen: ${RearCommands.wakeDisplay(displayId)}")
+            removeXiaomiLauncher(displayId)
         }
+    }
+
+    /**
+     * Restarts Xiaomi's back screen app if its launcher is under the wallpaper. Not while the
+     * launcher is in front: Android would start it again straight away. The wallpaper is put
+     * back on top first, and this runs again then. Shell thread.
+     */
+    private fun removeXiaomiLauncher(displayId: Int) {
+        val tasks = RearCommands.taskList() ?: return
+        val packages = TaskList.packagesOn(tasks, displayId)
+        if (packages.firstOrNull() != packageName || RearCommands.XIAOMI_REAR_PACKAGE !in packages) return
+        BackScreen.log("Restart Xiaomi back screen app, without its launcher: ${RearCommands.restartXiaomiRearApp()}")
     }
 
     private fun restore() {
@@ -182,9 +201,12 @@ class KeeperService : Service() {
         awaitingDirectLaunch = false
         wakeWhenShown = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
+        BackScreen.mainHandler.removeCallbacks(putBack)
         RearWallpaperActivity.finishCurrent()
+        ClockAlarm.update(this)
         val rear = BackScreen.findRearDisplay(this)?.displayId ?: 1
         shell(onUnavailable = { stopSelf() }) {
+            // Usually already underneath; this makes sure it's there.
             BackScreen.log("Restore Xiaomi back screen: ${RearCommands.restoreXiaomiRearLauncher(rear)}")
             BackScreen.mainHandler.post { stopSelf() }
         }
@@ -194,13 +216,13 @@ class KeeperService : Service() {
     private fun fail() {
         BackScreen.setEnabled(this, false)
         RearWallpaperActivity.finishCurrent()
+        ClockAlarm.update(this)
         stopSelf()
     }
 
     /**
-     * A setting changed. The wallpaper takes it at once, but a back screen that has gone to
-     * sleep (or is covered by Xiaomi's always-on layer) doesn't draw it until it's woken, so
-     * wake it. Waits a moment so a run of changes wakes it once.
+     * A setting changed. The wallpaper takes it at once, but a dimmed back screen doesn't show
+     * it until it's woken, so wake it. Waits a moment so a run of changes wakes it once.
      */
     fun showChanges() {
         BackScreen.mainHandler.removeCallbacks(wakeForChanges)
@@ -210,40 +232,53 @@ class KeeperService : Service() {
     private fun wakeRear() {
         if (!BackScreen.isEnabled(this)) return
         val rear = BackScreen.findRearDisplay(this)?.displayId ?: return
-        // Waking fires the display listener, which also clears Xiaomi's layer if it's on top.
         shell(onUnavailable = {}) { BackScreen.log("Show changes: ${RearCommands.wakeDisplay(rear)}") }
     }
 
-    /**
-     * Called when the wallpaper stops being visible on the rear. Xiaomi's doze layer starts a
-     * moment after the rear display wakes and hides us; this catches it whenever it lands.
-     */
+    /** Called when the wallpaper stops being visible on the rear: check it's still there. */
     fun onWallpaperHidden() {
         BackScreen.mainHandler.removeCallbacks(checkRear)
         BackScreen.mainHandler.postDelayed(checkRear, HIDDEN_CHECK_DELAY_MS)
+    }
+
+    /**
+     * Something other than us closed the wallpaper: Xiaomi's back screen taking the rear back.
+     * Put it back once Xiaomi's screen is up, so ours lands on top of it.
+     */
+    fun onWallpaperRemoved() {
+        if (!BackScreen.isEnabled(this)) return
+        // Not too often, in case something keeps closing it.
+        val wait = max(PUT_BACK_DELAY_MS, lastApply + REAPPLY_MIN_INTERVAL_MS - SystemClock.elapsedRealtime())
+        BackScreen.mainHandler.removeCallbacks(putBack)
+        BackScreen.mainHandler.postDelayed(putBack, wait)
     }
 
     private fun scheduleRearCheck() {
         BackScreen.mainHandler.removeCallbacks(checkRear)
         BackScreen.mainHandler.removeCallbacks(checkRearLate)
         BackScreen.mainHandler.postDelayed(checkRear, CHECK_DELAY_MS)
-        // Backup: the doze layer can arrive after the first check.
+        // Backup: Xiaomi's screen can arrive after the first check.
         BackScreen.mainHandler.postDelayed(checkRearLate, LATE_CHECK_DELAY_MS)
     }
 
-    /** The rear display just turned on: make sure it's showing our wallpaper. */
+    /** Makes sure the back screen is showing our wallpaper, or will be once it's lit. */
     private fun checkRearDisplay() {
-        // No display-state check here: Xiaomi's doze layer reports the back screen as off
-        // while it covers us, which is exactly when we need to act.
         if (!BackScreen.isEnabled(this) || RearWallpaperActivity.visibleOnRear) return
+        val rear = BackScreen.findRearDisplay(this)
         if (RearWallpaperActivity.isOnRear()) {
-            // Usually Xiaomi's always-on "doze" layer drawn over us; stopping the app ends it.
-            BackScreen.log("Xiaomi app covered the wallpaper; stopping it")
-            shell { RearCommands.stopXiaomiRearLauncher() }
-        } else if (SystemClock.elapsedRealtime() - lastApply > REAPPLY_MIN_INTERVAL_MS) {
-            BackScreen.log("Back screen is on but wallpaper isn't showing; re-applying")
-            apply()
+            // Hidden only because the rear is dimmed or off: still there when it lights up.
+            if (rear?.state != Display.STATE_ON) return
+            BackScreen.log("Something covered the wallpaper; bringing it back")
+        } else {
+            BackScreen.log("Wallpaper isn't on the back screen; putting it back")
         }
+        val wait = lastApply + REAPPLY_MIN_INTERVAL_MS - SystemClock.elapsedRealtime()
+        if (wait > 0) {
+            BackScreen.mainHandler.removeCallbacks(putBack)
+            BackScreen.mainHandler.postDelayed(putBack, wait)
+            return
+        }
+        apply()
     }
 
     /** Runs [block] with Shizuku, waiting briefly for its connection if needed. */
@@ -276,11 +311,11 @@ class KeeperService : Service() {
 
     private fun buildNotification(): Notification {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Back screen wallpaper", NotificationManager.IMPORTANCE_MIN)
+            NotificationChannel(CHANNEL_ID, getString(R.string.keeper_channel), NotificationManager.IMPORTANCE_MIN)
         )
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_image)
-            .setContentTitle("Back screen wallpaper active")
+            .setContentTitle(getString(R.string.keeper_title))
             .setOngoing(true)
             .build()
     }
@@ -290,6 +325,7 @@ class KeeperService : Service() {
         const val ACTION_RESTORE = "com.backscreen.wallpaper.RESTORE"
         const val ACTION_TOGGLE = "com.backscreen.wallpaper.TOGGLE"
         const val ACTION_SCHEDULED_ON = "com.backscreen.wallpaper.SCHEDULED_ON"
+        const val ACTION_RESUME = "com.backscreen.wallpaper.RESUME"
 
         private const val ACTION_SUB_SCREEN_ON = "miui.intent.action.SUB_SCREEN_ON"
         private const val CHANNEL_ID = "keeper"
@@ -297,6 +333,7 @@ class KeeperService : Service() {
         private const val CHECK_DELAY_MS = 600L
         private const val LATE_CHECK_DELAY_MS = 1500L
         private const val HIDDEN_CHECK_DELAY_MS = 300L
+        private const val PUT_BACK_DELAY_MS = 700L
         private const val REAPPLY_MIN_INTERVAL_MS = 5000L
         private const val SHIZUKU_WAIT_MS = 4000L
         private const val DIRECT_LAUNCH_TIMEOUT_MS = 1500L

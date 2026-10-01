@@ -11,8 +11,8 @@ android {
         applicationId = "com.backscreen.wallpaper"
         minSdk = 33 // needed for the system photo picker (no storage permission)
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.3"
+        versionCode = 6
+        versionName = "1.4"
     }
 
     compileOptions {
@@ -33,4 +33,6 @@ dependencies {
     val shizuku = "13.1.5"
     implementation("dev.rikka.shizuku:api:$shizuku")
     implementation("dev.rikka.shizuku:provider:$shizuku")
+
+    testImplementation("junit:junit:4.13.2")
 }

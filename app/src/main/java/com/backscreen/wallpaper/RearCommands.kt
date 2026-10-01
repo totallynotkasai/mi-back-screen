@@ -11,7 +11,7 @@ object RearCommands {
     private const val AM = "/system/bin/am"
     private const val INPUT = "/system/bin/input"
     private const val PACKAGE = "com.backscreen.wallpaper"
-    private const val XIAOMI_REAR_PACKAGE = "com.xiaomi.subscreencenter"
+    const val XIAOMI_REAR_PACKAGE = "com.xiaomi.subscreencenter"
 
     // Xiaomi's back screen launcher has had different names across HyperOS builds; the first
     // one that starts wins.
@@ -34,7 +34,21 @@ object RearCommands {
     fun wakeDisplay(displayId: Int) =
         run(INPUT, "-d", displayId.toString(), "keyevent", "KEYCODE_WAKEUP")
 
-    fun stopXiaomiRearLauncher() =
+    /** What `am stack list` prints (read it with [TaskList]), or null if it couldn't run. */
+    fun taskList(): String? {
+        if (!isReady()) return null
+        return try {
+            val process = newProcess(arrayOf(AM, "stack", "list"))
+            val output = process.inputStream.bufferedReader().readText()
+            process.errorStream.bufferedReader().readText()
+            if (process.waitFor() == 0) output else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Xiaomi's back screen app restarts itself straight away, without its launcher. */
+    fun restartXiaomiRearApp() =
         run(AM, "force-stop", XIAOMI_REAR_PACKAGE)
 
     fun restoreXiaomiRearLauncher(displayId: Int): String {

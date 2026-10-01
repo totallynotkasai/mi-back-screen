@@ -1,23 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Back Screen</string>
-    <string name="title">Back screen</string>
+    <string name="app_name">Mi Back Screen</string>
+    <string name="title">Mi Back Screen</string>
     <string name="subtitle">Show your own images or GIFs on the rear display</string>
-    <string name="no_image">No image chosen</string>
+    <string name="no_wallpaper">No wallpaper</string>
+    <string name="no_wallpaper_summary">The back screen shows black.</string>
+    <string name="no_wallpaper_caption">No wallpaper. The back screen shows black.</string>
     <string name="choose_images">Choose images</string>
     <string name="choose_folder">Folder</string>
     <string name="show_on_back_screen">Show on back screen</string>
     <string name="state_on">On</string>
+    <string name="state_on_black">On · black, no images</string>
     <string name="state_off">Off</string>
     <string name="state_off_xiaomi">Off · Xiaomi back screen</string>
     <string name="shizuku_title">Shizuku</string>
     <string name="shizuku_ready">Connected</string>
     <string name="shizuku_not_running">Not running. Start it from your computer, then come back.</string>
-    <string name="shizuku_not_allowed">Running, but this app isn\'t allowed yet. If the button below is blocked, open Shizuku → Authorized apps and switch Back Screen on.</string>
+    <string name="shizuku_not_allowed">Running, but this app isn\'t allowed yet. If the button below is blocked, open Shizuku → Authorized apps and switch Mi Back Screen on.</string>
     <string name="allow_access">Allow access</string>
     <string name="show_details">Show details</string>
     <string name="hide_details">Hide details</string>
-    <string name="need_image">Choose an image first</string>
     <string name="copying_images">Adding images…</string>
     <string name="copy_failed">Couldn\'t add those images</string>
     <string name="folder_empty">No images in that folder</string>
@@ -39,6 +41,11 @@
     <string name="every_day_interval">1 day</string>
     <string name="shuffle">Shuffle</string>
     <string name="next_image">Next image</string>
+    <string name="remove_images">Remove images</string>
+    <string name="remove_images_title">Remove images?</string>
+    <string name="remove_images_message">The back screen shows black instead, with the clock if it\'s on. Only the app\'s own copies are removed; your photos and folders aren\'t touched.</string>
+    <string name="images_removed">Images removed</string>
+    <string name="cancel">Cancel</string>
     <string name="clock_title">Clock</string>
     <string name="clock_summary">Show the time and date over the image</string>
     <string name="clock_classic">Classic</string>
@@ -93,10 +100,14 @@
     <string name="every_day">Every day</string>
     <string name="weekdays">Weekdays</string>
     <string name="weekends">Weekends</string>
-    <string name="alarms_needed">Allow alarms so schedules switch on time, even when the app is closed.</string>
+    <string name="alarms_needed">Allow alarms so schedules switch on time and the clock stays right while the phone sleeps.</string>
     <string name="allow_alarms">Allow alarms</string>
-    <string name="battery_needed">HyperOS pauses this app in the background, so schedules can\'t turn it on. In app settings, turn on Autostart and set Battery saver to No restrictions.</string>
+    <string name="setup_title">Setup needed</string>
+    <string name="battery_needed">HyperOS pauses this app in the background, which holds up schedules and the clock. In app settings, turn on Autostart and set Battery saver to No restrictions.</string>
     <string name="open_app_settings">Open app settings</string>
     <string name="tile_label">Back screen wallpaper</string>
-    <string name="widget_description">Turn your back screen wallpaper on or off</string>
+    <string name="widget_description">Turn the Mi Back Screen wallpaper on or off</string>
+    <string name="keeper_channel">Mi Back Screen</string>
+    <string name="keeper_title">Mi Back Screen is on</string>
+    <string name="about">Mi Back Screen %1$s · Not affiliated with Xiaomi</string>
 </resources>
