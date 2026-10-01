@@ -11,8 +11,9 @@ import android.os.PowerManager
  * Wakes the phone at each minute boundary while the clock is on the back screen, the way
  * always-on displays do, so the time there doesn't lag while the phone sleeps. Only set while
  * the wallpaper and its clock are both on, the wallpaper is on the back screen, and that screen
- * isn't off. Locked, Xiaomi turns it off after 90 s, so most of the time there's no alarm; when
- * it wakes, the wallpaper catches the clock up at once and sets the alarm again.
+ * isn't off (Xiaomi turns it off when the back is covered, and after a while in some
+ * conditions); when it wakes, the wallpaper catches the clock up at once and sets the alarm
+ * again.
  *
  * Each wake updates the clock and gets the new frame onto the dimmed panel
  * (see [RearWallpaperActivity.onMinuteAlarm]); a short wake lock lets that finish before the

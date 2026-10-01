@@ -50,7 +50,11 @@ HyperOS doesn't let normal apps draw on the rear display, so Mi Back Screen uses
 - **Putting the wallpaper up.** It's launched straight onto the rear display while the phone is unlocked. While it's locked, HyperOS only allows its own apps there, so the wallpaper is opened on the main display and its task moved to the rear.
 - **Keeping it there.** Each time the rear dims, Xiaomi's back screen app brings its own launcher back and closes whatever was on top, but only if that launcher has been opened since Xiaomi's app started. So when the wallpaper goes up over Xiaomi's launcher, Xiaomi's app is restarted **once**; it comes straight back without the launcher and leaves the wallpaper alone. If anything closes the wallpaper anyway, it's put back. (Up to 1.3 the app stopped Xiaomi's app every time, which relit the rear about every 10 seconds.)
 - **Switching off** brings Xiaomi's launcher back.
-- **The clock.** A dimmed back screen keeps showing its last frame, and the phone sleeps between minutes. So while the clock is on the back screen and that screen is lit or dimmed, an exact alarm wakes the phone briefly at each minute, the new time is drawn, and a short draw wake lock sends the frame to the dimmed panel, as the system's own always-on displays do. While the back screen is off (Xiaomi turns it off after 90 seconds locked), there's no alarm; the clock catches up as soon as it wakes.
+- **The clock.** A dimmed back screen keeps showing its last frame, and the phone sleeps between minutes. So while the clock is on the back screen and that screen is lit or dimmed, an exact alarm wakes the phone briefly at each minute, the new time is drawn, and a short draw wake lock sends the frame to the dimmed panel, as the system's own always-on displays do. While the back screen is off (for example when the back is covered), there's no alarm; the clock catches up as soon as it wakes.
+
+## Battery
+
+Measured on a 17 Pro Max (HyperOS 3.0.319), unplugged and locked for an hour with the clock showing on the dimmed back screen almost the whole time: the app used an estimated **1.5 mAh**, about 0.02% of the battery. That's 46 one-minute wake-ups of about a second each, and the battery level didn't drop a percent. Every clock update arrived within 1.5 seconds of the minute.
 
 ## Privacy
 
