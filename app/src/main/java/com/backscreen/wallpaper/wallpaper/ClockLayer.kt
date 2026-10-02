@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.wallpaper
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -21,6 +21,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
+import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.core.BackScreen
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs

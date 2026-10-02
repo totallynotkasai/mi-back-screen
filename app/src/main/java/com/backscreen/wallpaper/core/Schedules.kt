@@ -1,9 +1,11 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.core
 
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import com.backscreen.wallpaper.ScheduleReceiver
+import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.DayOfWeek
@@ -121,7 +123,7 @@ object Schedules {
     /** The alarm fired: switch the wallpaper to match the schedules, then set the next alarm. */
     fun onAlarm(context: Context) {
         val on = activeAt(load(context).filter { it.enabled }, System.currentTimeMillis())
-        if (on != BackScreen.isEnabled(context)) {
+        if (on != WallpaperSettings.isEnabled(context)) {
             BackScreen.log(if (on) "Schedule: turning on" else "Schedule: turning off")
             try {
                 KeeperService.start(context, if (on) KeeperService.ACTION_SCHEDULED_ON else KeeperService.ACTION_RESTORE)

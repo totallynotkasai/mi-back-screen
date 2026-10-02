@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The five sections. A dot on a tab means that section is switched on. -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_wallpaper"
+        android:icon="@drawable/ic_image"
+        android:title="@string/tab_wallpaper" />
+    <item
+        android:id="@+id/nav_notifications"
+        android:icon="@drawable/ic_notifications"
+        android:title="@string/tab_notifications" />
+    <item
+        android:id="@+id/nav_battery"
+        android:icon="@drawable/ic_battery_charging"
+        android:title="@string/tab_battery" />
+    <item
+        android:id="@+id/nav_mirror"
+        android:icon="@drawable/ic_swap"
+        android:title="@string/tab_mirror" />
+    <item
+        android:id="@+id/nav_camera"
+        android:icon="@drawable/ic_camera"
+        android:title="@string/tab_camera" />
+</menu>

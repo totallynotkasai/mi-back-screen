@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.wallpaper
 
 import android.annotation.SuppressLint
 import android.content.Context

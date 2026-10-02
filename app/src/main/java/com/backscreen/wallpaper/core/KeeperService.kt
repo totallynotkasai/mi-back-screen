@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.core
 
 import android.app.KeyguardManager
 import android.app.Notification
@@ -14,17 +14,24 @@ import android.hardware.display.DisplayManager
 import android.os.IBinder
 import android.os.SystemClock
 import android.view.Display
+import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.rear.RearHostActivity
+import com.backscreen.wallpaper.wallpaper.ClockAlarm
+import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import rikka.shizuku.Shizuku
 import java.util.concurrent.Executors
 import kotlin.math.max
 
 /**
- * Puts the wallpaper on the rear display and keeps it there.
+ * Looks after the back screen for every section: puts our host window there and keeps it there
+ * while the wallpaper is on, puts it up for a moment over Xiaomi's screen (a pop-over) while
+ * the wallpaper is off, and leaves the back screen alone while another app has it. Who has it
+ * is [RearState]. Runs while any section needs it, and stops itself when none do.
  *
- * Applying launches RearWallpaperActivity straight onto the rear display (allowed while
- * unlocked because the manifest carries Xiaomi's `miui.rear.policy` opt-in). When locked, or if
- * HyperOS refuses that, it's launched on the main display instead and its task moved to the
- * rear, which HyperOS doesn't block. Each step needs shell access, which Shizuku provides (see
+ * Putting the host up: it's launched straight onto the rear display (allowed while unlocked
+ * because the manifest carries Xiaomi's `miui.rear.policy` opt-in). When locked, or if HyperOS
+ * refuses that, it's launched on the main display instead and its task moved to the rear,
+ * which HyperOS doesn't block. Each step needs shell access, which Shizuku provides (see
  * RearCommands).
  *
  * Staying there: each time the rear goes from lit to dimmed, Xiaomi's back screen app brings
@@ -34,6 +41,10 @@ import kotlin.math.max
  * once; it comes straight back without the launcher and leaves the wallpaper alone. If the
  * wallpaper is closed anyway, it's put back. (1.3 restarted Xiaomi's app every time the
  * wallpaper looked covered, which relit the rear every ~10 s; this is once per turn-on.)
+ *
+ * A pop-over goes over Xiaomi's launcher and Xiaomi's app is left as it is: when the pop-over
+ * closes, Xiaomi's launcher is simply underneath. If the rear dims first, Xiaomi closes the
+ * pop-over itself, which just ends it early.
  */
 class KeeperService : Service() {
 
@@ -55,6 +66,7 @@ class KeeperService : Service() {
     private val checkRearLate = Runnable { checkRearDisplay() }
     private val putBack = Runnable { checkRearDisplay() }
     private val wakeForChanges = Runnable { wakeRear() }
+    private val popoverDone = Runnable { endPopover("done") }
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -63,7 +75,7 @@ class KeeperService : Service() {
             val rear = BackScreen.findRearDisplay(this@KeeperService) ?: return
             if (displayId != rear.displayId || rear.state != Display.STATE_ON) return
             // The gallery doesn't move on while the phone sleeps; catch up now it can be seen.
-            RearWallpaperActivity.refreshImage()
+            RearHostActivity.refreshImage()
             scheduleRearCheck()
         }
     }
@@ -73,7 +85,7 @@ class KeeperService : Service() {
     // it does is trigger a check.
     private val subScreenOn = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            RearWallpaperActivity.refreshImage()
+            RearHostActivity.refreshImage()
             scheduleRearCheck()
         }
     }
@@ -93,12 +105,15 @@ class KeeperService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         when (intent?.action) {
             ACTION_RESTORE -> restore()
-            ACTION_TOGGLE -> if (BackScreen.isEnabled(this)) restore() else turnOn()
+            ACTION_TOGGLE -> if (WallpaperSettings.isEnabled(this)) restore() else turnOn()
             ACTION_APPLY -> turnOn()
             ACTION_SCHEDULED_ON -> turnOn(wake = false)
             // ACTION_RESUME after an app update, or none: the system restarted us after the
             // process was killed.
-            else -> if (BackScreen.isEnabled(this)) apply() else stopSelf()
+            else -> {
+                if (RearState.snapshot(this).guardsWallpaper) apply()
+                stopIfIdle()
+            }
         }
         return START_STICKY
     }
@@ -111,6 +126,7 @@ class KeeperService : Service() {
         BackScreen.mainHandler.removeCallbacks(wakeForChanges)
         BackScreen.mainHandler.removeCallbacks(shizukuTimeout)
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
+        BackScreen.mainHandler.removeCallbacks(popoverDone)
         Shizuku.removeBinderReceivedListener(binderReceived)
         getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
         unregisterReceiver(subScreenOn)
@@ -118,33 +134,53 @@ class KeeperService : Service() {
         super.onDestroy()
     }
 
+    /** Stops the service once no section needs it. */
+    private fun stopIfIdle() {
+        if (!RearState.keeperNeeded(this)) stopSelf()
+    }
+
     /** Works with no images too: the back screen is black, with the clock if that's on. */
     private fun turnOn(wake: Boolean = true) {
-        BackScreen.setEnabled(this, true)
+        WallpaperSettings.setEnabled(this, true)
+        RearState.wallpaperChanged(this, true)
+        BackScreen.mainHandler.removeCallbacks(popoverDone)
         // You just asked for it, so light the back screen up to show it (a schedule doesn't).
         wakeWhenShown = wake
+        val owner = RearState.owner(this)
+        if (owner is RearOwner.Lent) {
+            BackScreen.log("Wallpaper on; it shows when ${owner.lend.packageName} leaves the back screen")
+            return
+        }
         apply()
     }
 
+    /** Puts the wallpaper up afresh. */
     private fun apply() {
         lastApply = SystemClock.elapsedRealtime()
         BackScreen.mainHandler.removeCallbacks(putBack)
-        RearWallpaperActivity.finishCurrent()
+        launchHost("Applying wallpaper...")
+    }
+
+    /** Launches the host, replacing it if it's up. It shows whatever [RearState] says. */
+    private fun launchHost(what: String) {
+        RearHostActivity.finishCurrent()
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
-        BackScreen.log("Applying wallpaper...")
+        BackScreen.log(what)
         val rear = BackScreen.findRearDisplay(this)?.displayId
         // HyperOS only honours our rear display opt-in while the phone is unlocked.
         val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
+        val popover = RearState.owner(this) == RearOwner.Popover
+        val unavailable: () -> Unit = if (popover) ({ endPopover("Shizuku isn't ready") }) else ::fail
         if (rear == null || locked || directLaunchBlocked) {
             awaitingDirectLaunch = false
-            shell {
-                BackScreen.log("Open wallpaper: ${RearCommands.launchWallpaperActivity(Display.DEFAULT_DISPLAY)}")
+            shell(unavailable) {
+                BackScreen.log("Open on main screen, to move: ${RearCommands.launchHost(Display.DEFAULT_DISPLAY)}")
             }
             return
         }
         awaitingDirectLaunch = true
-        shell {
-            val result = RearCommands.launchWallpaperActivity(rear)
+        shell(unavailable) {
+            val result = RearCommands.launchHost(rear)
             BackScreen.log("Open on back screen: $result")
             // Give it a moment to appear; if it doesn't, use the main display route.
             BackScreen.mainHandler.postDelayed(
@@ -153,17 +189,16 @@ class KeeperService : Service() {
         }
     }
 
-
     private fun onDirectLaunchFailed() {
         if (!awaitingDirectLaunch) return
         awaitingDirectLaunch = false
         directLaunchBlocked = true
         BackScreen.log("Back screen refused a direct launch; going via the main screen")
-        apply()
+        launchHost("Opening via the main screen...")
     }
 
-    /** Called by RearWallpaperActivity when it has been created on the main display. */
-    fun onWallpaperCreatedOnMain(taskId: Int) {
+    /** Called by RearHostActivity when it has been created on the main display. */
+    fun onHostCreatedOnMain(taskId: Int) {
         // HyperOS may put a direct launch on the main display instead; moving it fixes that.
         awaitingDirectLaunch = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
@@ -172,15 +207,17 @@ class KeeperService : Service() {
         shell { BackScreen.log("Move to back screen: ${RearCommands.moveTaskToDisplay(taskId, rear)}") }
     }
 
-    /** Called by RearWallpaperActivity when it is showing on the rear display. */
-    fun onWallpaperCreatedOnRear(displayId: Int) {
+    /** Called by RearHostActivity when it is showing on the rear display. */
+    fun onHostShownOnRear(displayId: Int) {
         val wake = wakeWhenShown
         awaitingDirectLaunch = false
         wakeWhenShown = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
+        // Only for the wallpaper, which stays: a pop-over is gone in seconds.
+        val guard = RearState.snapshot(this).guardsWallpaper
         shell(onUnavailable = {}) {
             if (wake) BackScreen.log("Wake back screen: ${RearCommands.wakeDisplay(displayId)}")
-            removeXiaomiLauncher(displayId)
+            if (guard) removeXiaomiLauncher(displayId)
         }
     }
 
@@ -197,27 +234,95 @@ class KeeperService : Service() {
     }
 
     private fun restore() {
-        BackScreen.setEnabled(this, false)
+        WallpaperSettings.setEnabled(this, false)
+        RearState.wallpaperChanged(this, false)
         awaitingDirectLaunch = false
         wakeWhenShown = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.mainHandler.removeCallbacks(putBack)
-        RearWallpaperActivity.finishCurrent()
+        RearHostActivity.finishCurrent()
         ClockAlarm.update(this)
+        if (RearState.owner(this) is RearOwner.Lent) {
+            // Bringing Xiaomi's launcher up now would cover the app; it comes back when that leaves.
+            stopIfIdle()
+            return
+        }
+        restoreXiaomi()
+    }
+
+    /** Brings Xiaomi's launcher to the front of the back screen. */
+    private fun restoreXiaomi() {
         val rear = BackScreen.findRearDisplay(this)?.displayId ?: 1
-        shell(onUnavailable = { stopSelf() }) {
+        shell(onUnavailable = { stopIfIdle() }) {
             // Usually already underneath; this makes sure it's there.
             BackScreen.log("Restore Xiaomi back screen: ${RearCommands.restoreXiaomiRearLauncher(rear)}")
-            BackScreen.mainHandler.post { stopSelf() }
+            BackScreen.mainHandler.post { stopIfIdle() }
         }
     }
 
     /** Couldn't turn on: show "off" everywhere and stop. */
     private fun fail() {
-        BackScreen.setEnabled(this, false)
-        RearWallpaperActivity.finishCurrent()
+        WallpaperSettings.setEnabled(this, false)
+        RearState.wallpaperChanged(this, false)
+        RearHostActivity.finishCurrent()
         ClockAlarm.update(this)
-        stopSelf()
+        stopIfIdle()
+    }
+
+    /**
+     * Puts the host up over Xiaomi's back screen for [durationMs], for something that can't wait
+     * for the wallpaper because it's off. False if it can't: with the wallpaper on, it goes in
+     * the host instead (see [RearSnapshot.routeOverlay]); with an app lent the back screen, it's
+     * dropped.
+     */
+    fun showPopover(durationMs: Long, wake: Boolean): Boolean {
+        if (!RearState.startPopover(this)) return false
+        wakeWhenShown = wake
+        BackScreen.mainHandler.removeCallbacks(popoverDone)
+        BackScreen.mainHandler.postDelayed(popoverDone, durationMs)
+        launchHost("Pop-over on back screen...")
+        return true
+    }
+
+    /** The pop-over is over: close the host, and Xiaomi's launcher is there underneath. */
+    private fun endPopover(why: String) {
+        BackScreen.mainHandler.removeCallbacks(popoverDone)
+        if (RearState.owner(this) != RearOwner.Popover) return
+        RearState.endPopover(this)
+        awaitingDirectLaunch = false
+        wakeWhenShown = false
+        BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
+        RearHostActivity.finishCurrent()
+        BackScreen.log("Pop-over ended: $why")
+        stopIfIdle()
+    }
+
+    /**
+     * Another app now has the back screen: nothing of ours covers it until [onLendEnded]. The
+     * host stays underneath if it's up. False if an app has it already.
+     */
+    fun onLent(lend: Lend): Boolean {
+        endPopover("${lend.packageName} took the back screen")
+        if (!RearState.lend(this, lend)) return false
+        BackScreen.mainHandler.removeCallbacks(putBack)
+        BackScreen.mainHandler.removeCallbacks(checkRear)
+        BackScreen.mainHandler.removeCallbacks(checkRearLate)
+        BackScreen.log("${lend.packageName} has the back screen (${lend.reason.name.lowercase()})")
+        ClockAlarm.update(this)
+        return true
+    }
+
+    /** The lent app left the back screen: it goes to the wallpaper or Xiaomi's screen, whichever is on now. */
+    fun onLendEnded() {
+        if (!RearState.endLend(this)) return
+        BackScreen.log("Back screen returned")
+        ClockAlarm.update(this)
+        if (RearState.snapshot(this).guardsWallpaper) {
+            // Usually still underneath, and showing again; put back if not.
+            scheduleRearCheck()
+        } else {
+            restoreXiaomi()
+        }
     }
 
     /**
@@ -230,27 +335,33 @@ class KeeperService : Service() {
     }
 
     private fun wakeRear() {
-        if (!BackScreen.isEnabled(this)) return
+        if (!RearState.snapshot(this).guardsWallpaper) return
         val rear = BackScreen.findRearDisplay(this)?.displayId ?: return
         shell(onUnavailable = {}) { BackScreen.log("Show changes: ${RearCommands.wakeDisplay(rear)}") }
     }
 
-    /** Called when the wallpaper stops being visible on the rear: check it's still there. */
-    fun onWallpaperHidden() {
+    /** Called when the host stops being visible on the rear: check it's still there. */
+    fun onHostHidden() {
         BackScreen.mainHandler.removeCallbacks(checkRear)
         BackScreen.mainHandler.postDelayed(checkRear, HIDDEN_CHECK_DELAY_MS)
     }
 
     /**
-     * Something other than us closed the wallpaper: Xiaomi's back screen taking the rear back.
-     * Put it back once Xiaomi's screen is up, so ours lands on top of it.
+     * Something other than us closed the host: Xiaomi's back screen taking the rear back. Put
+     * the wallpaper back once Xiaomi's screen is up, so ours lands on top of it. A pop-over just
+     * ends.
      */
-    fun onWallpaperRemoved() {
-        if (!BackScreen.isEnabled(this)) return
-        // Not too often, in case something keeps closing it.
-        val wait = max(PUT_BACK_DELAY_MS, lastApply + REAPPLY_MIN_INTERVAL_MS - SystemClock.elapsedRealtime())
-        BackScreen.mainHandler.removeCallbacks(putBack)
-        BackScreen.mainHandler.postDelayed(putBack, wait)
+    fun onHostRemoved() {
+        when (RearState.owner(this)) {
+            is RearOwner.Host -> {
+                // Not too often, in case something keeps closing it.
+                val wait = max(PUT_BACK_DELAY_MS, lastApply + REAPPLY_MIN_INTERVAL_MS - SystemClock.elapsedRealtime())
+                BackScreen.mainHandler.removeCallbacks(putBack)
+                BackScreen.mainHandler.postDelayed(putBack, wait)
+            }
+            RearOwner.Popover -> endPopover("closed on the back screen")
+            else -> {}
+        }
     }
 
     private fun scheduleRearCheck() {
@@ -263,9 +374,9 @@ class KeeperService : Service() {
 
     /** Makes sure the back screen is showing our wallpaper, or will be once it's lit. */
     private fun checkRearDisplay() {
-        if (!BackScreen.isEnabled(this) || RearWallpaperActivity.visibleOnRear) return
+        if (!RearState.snapshot(this).guardsWallpaper || RearHostActivity.visibleOnRear) return
         val rear = BackScreen.findRearDisplay(this)
-        if (RearWallpaperActivity.isOnRear()) {
+        if (RearHostActivity.isOnRear()) {
             // Hidden only because the rear is dimmed or off: still there when it lights up.
             if (rear?.state != Display.STATE_ON) return
             BackScreen.log("Something covered the wallpaper; bringing it back")
@@ -345,6 +456,15 @@ class KeeperService : Service() {
 
         fun start(context: Context, action: String) {
             context.startForegroundService(Intent(context, KeeperService::class.java).setAction(action))
+        }
+
+        /**
+         * The Wallpaper switch, from the app. Saved here as well as by the service, so the switch
+         * doesn't flick back while it starts.
+         */
+        fun setWallpaper(context: Context, on: Boolean) {
+            WallpaperSettings.setEnabled(context, on)
+            start(context, if (on) ACTION_APPLY else ACTION_RESTORE)
         }
     }
 }

@@ -1,10 +1,12 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.wallpaper
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.widget.ImageView
+import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.core.BackScreen
 import java.io.File
 import kotlin.random.Random
 

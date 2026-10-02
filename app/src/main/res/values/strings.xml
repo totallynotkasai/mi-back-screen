@@ -2,24 +2,82 @@
 <resources>
     <string name="app_name">Mi Back Screen</string>
     <string name="title">Mi Back Screen</string>
-    <string name="subtitle">Show your own images or GIFs on the rear display</string>
+
+    <!-- Sections: the bottom bar's tabs, and each one's main switch. -->
+    <string name="tab_wallpaper">Wallpaper</string>
+    <string name="tab_notifications">Notifications</string>
+    <string name="tab_battery">Battery</string>
+    <string name="tab_mirror">Mirror</string>
+    <string name="tab_camera">Camera</string>
+    <string name="feature_on">On</string>
+    <string name="show_on_back_screen">Show on back screen</string>
+    <string name="notifications_switch">Show notifications on back screen</string>
+    <string name="battery_switch">Charging animation</string>
+    <string name="mirror_switch">Quick Switch</string>
+    <string name="camera_switch">Swipe left for Xiaomi Camera</string>
+    <string name="coming_later">Coming in a later update</string>
+    <string name="notifications_planned">New notifications slide in at the top of the back screen, showing as much as you choose: just the app, who it\'s from, or the whole message. Swipe down on the back screen for the ones you haven\'t cleared.</string>
+    <string name="battery_planned">When you plug in, the back screen plays a short animation with the battery level, then goes back to your wallpaper.</string>
+    <string name="mirror_planned">A Quick Settings tile that moves the app you\'re using to the back screen, and brings it back with another tap.</string>
+    <string name="camera_planned">Swipe left on the back screen to open Xiaomi Camera there, on the main cameras, for selfies with the best lenses.</string>
+
+    <!-- Top bar and its menu. -->
+    <string name="refresh">Refresh back screen</string>
+    <string name="refreshing">Refreshing the back screen…</string>
+    <string name="refresh_off">Turn on Show on back screen first</string>
+    <string name="diagnostics">Diagnostics</string>
+    <string name="setup_help">Setup help</string>
+    <string name="about_title">About</string>
+    <string name="about">Mi Back Screen %1$s</string>
+    <string name="about_message">Shows your own images, GIFs and a clock on the Xiaomi 17 Pro Max back screen.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
+    <string name="website">Website</string>
+    <string name="website_url" translatable="false">https://totallynotkasai.github.io/mi-back-screen/</string>
+    <string name="close">Close</string>
+    <string name="copy">Copy</string>
+    <string name="copied">Copied</string>
+
+    <!-- Shizuku: the banner when it isn't ready, and its status elsewhere. -->
+    <string name="shizuku_title">Shizuku</string>
+    <string name="shizuku_ready">Connected</string>
+    <string name="shizuku_not_running">Not running. Start it with wireless debugging or from your computer, then come back.</string>
+    <string name="shizuku_not_allowed">Running, but this app isn\'t allowed yet. If the button is blocked, open Shizuku → Authorized apps and switch Mi Back Screen on.</string>
+    <string name="shizuku_banner_not_running">Shizuku isn\'t running</string>
+    <string name="shizuku_banner_not_running_text">Mi Back Screen needs Shizuku to use the back screen. Start it with wireless debugging or from your computer, then come back.</string>
+    <string name="shizuku_banner_not_allowed">Allow Shizuku access</string>
+    <string name="shizuku_banner_not_allowed_text">Shizuku is running, but Mi Back Screen isn\'t allowed to use it yet.</string>
+    <string name="allow_access">Allow access</string>
+    <string name="need_shizuku">Shizuku isn\'t ready</string>
+
+    <!-- Setup help. -->
+    <string name="setup_shizuku_text">Mi Back Screen runs a few fixed commands through Shizuku to use the back screen.</string>
+    <string name="setup_alarms_title">Alarms</string>
+    <string name="setup_alarms_text">Lets schedules switch on time and the clock stay right while the phone sleeps.</string>
+    <string name="setup_battery_title">Battery</string>
+    <string name="setup_battery_text">HyperOS pauses apps in the background, which holds up schedules and the clock. In app settings, turn on Autostart and set Battery saver to No restrictions.</string>
+    <string name="setup_done">Done</string>
+    <string name="setup_needed_short">Needed</string>
+
+    <!-- Diagnostics. -->
+    <string name="diag_version">Mi Back Screen %1$s (%2$d)</string>
+    <string name="diag_shizuku">Shizuku: %1$s</string>
+    <string name="diag_owner">Back screen: %1$s</string>
+    <string name="diag_rear_state">Back screen display: %1$s</string>
+    <string name="owner_xiaomi">Xiaomi\'s screen</string>
+    <string name="owner_wallpaper">wallpaper</string>
+    <string name="owner_shade">notifications</string>
+    <string name="owner_popover">pop-over</string>
+    <string name="owner_lent">%1$s</string>
+
+    <!-- Wallpaper tab. -->
     <string name="no_wallpaper">No wallpaper</string>
     <string name="no_wallpaper_summary">The back screen shows black.</string>
     <string name="no_wallpaper_caption">No wallpaper. The back screen shows black.</string>
     <string name="choose_images">Choose images</string>
     <string name="choose_folder">Folder</string>
-    <string name="show_on_back_screen">Show on back screen</string>
     <string name="state_on">On</string>
     <string name="state_on_black">On · black, no images</string>
     <string name="state_off">Off</string>
     <string name="state_off_xiaomi">Off · Xiaomi back screen</string>
-    <string name="shizuku_title">Shizuku</string>
-    <string name="shizuku_ready">Connected</string>
-    <string name="shizuku_not_running">Not running. Start it from your computer, then come back.</string>
-    <string name="shizuku_not_allowed">Running, but this app isn\'t allowed yet. If the button below is blocked, open Shizuku → Authorized apps and switch Mi Back Screen on.</string>
-    <string name="allow_access">Allow access</string>
-    <string name="show_details">Show details</string>
-    <string name="hide_details">Hide details</string>
     <string name="copying_images">Adding images…</string>
     <string name="copy_failed">Couldn\'t add those images</string>
     <string name="folder_empty">No images in that folder</string>
@@ -77,10 +135,6 @@
     <string name="scale_fit">Fit</string>
     <string name="scale_stretch">Stretch</string>
     <string name="scale_none">None</string>
-    <string name="refresh">Refresh back screen</string>
-    <string name="refreshing">Refreshing the back screen…</string>
-    <string name="refresh_off">Turn on Show on back screen first</string>
-    <string name="need_shizuku">Shizuku isn\'t ready</string>
     <string name="avoid_camera_title">Keep clear of the camera</string>
     <string name="avoid_camera_summary">Fit the image beside the camera instead of partly behind it</string>
     <string name="schedule_title">Schedule</string>
@@ -105,9 +159,10 @@
     <string name="setup_title">Setup needed</string>
     <string name="battery_needed">HyperOS pauses this app in the background, which holds up schedules and the clock. In app settings, turn on Autostart and set Battery saver to No restrictions.</string>
     <string name="open_app_settings">Open app settings</string>
+
+    <!-- Outside the app. -->
     <string name="tile_label">Back screen wallpaper</string>
     <string name="widget_description">Turn the Mi Back Screen wallpaper on or off</string>
     <string name="keeper_channel">Mi Back Screen</string>
     <string name="keeper_title">Mi Back Screen is on</string>
-    <string name="about">Mi Back Screen %1$s · Not affiliated with Xiaomi</string>
 </resources>

@@ -1,46 +1,56 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.rear
 
 import android.app.Activity
 import android.graphics.Color
-import android.graphics.drawable.Drawable
 import android.hardware.display.DisplayManager
-import android.net.Uri
 import android.os.Bundle
 import android.os.PowerManager
 import android.view.Display
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.ImageView
+import com.backscreen.wallpaper.camera.CameraSettings
+import com.backscreen.wallpaper.core.BackScreen
+import com.backscreen.wallpaper.core.KeeperService
+import com.backscreen.wallpaper.core.RearOwner
+import com.backscreen.wallpaper.core.RearState
+import com.backscreen.wallpaper.notifications.NotificationSettings
+import com.backscreen.wallpaper.wallpaper.ClockAlarm
+import com.backscreen.wallpaper.wallpaper.ClockLayer
+import com.backscreen.wallpaper.wallpaper.WallpaperLayer
+import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import java.lang.ref.WeakReference
-import java.util.concurrent.Executors
-import kotlin.math.max
 
 /**
- * Full-screen wallpaper shown on the rear display. KeeperService launches it straight onto
- * the rear; if HyperOS won't allow that, it's launched on the main display (transparent, so
- * it doesn't flash) and its task moved to the rear, where it's recreated and draws the image.
+ * Our one window on the back screen. Each feature is a layer inside it, so whatever it shows
+ * appears at once, and never has to get past HyperOS's rules for starting apps there:
  *
- * Two layers: the gallery's images, which crossfade from one to the next, and the clock. With
- * no images it's black, with the clock if that's on.
+ * - the wallpaper: the gallery's images ([WallpaperLayer]), or black with none;
+ * - the clock ([ClockLayer]).
+ *
+ * [RearGestures] reads swipes on it.
+ *
+ * KeeperService launches it straight onto the rear; if HyperOS won't allow that, it's launched
+ * on the main display (transparent, so it doesn't flash) and its task moved to the rear, where
+ * it's recreated. It shows what [RearState] says: the wallpaper, or, with the wallpaper off, a
+ * pop-over over Xiaomi's screen, which is black with just what it's up for.
  *
  * The rear lights and dims on Xiaomi's own timeout, as with Xiaomi's screen. If something
  * closes the wallpaper (Xiaomi taking the rear back), KeeperService puts it back.
  */
-class RearWallpaperActivity : Activity() {
+class RearHostActivity : Activity() {
 
-    private lateinit var images: FrameLayout
-    private lateinit var clock: ClockLayer
-    @Volatile private var shown: Uri? = null
-    private var loads = 0
+    private lateinit var gestures: RearGestures
+    private var wallpaper: WallpaperLayer? = null
+    private var clock: ClockLayer? = null
 
     private var onRear = false
+    private var popover = false
+    private var started = false
     private var finishRequested = false
     private var rearState = Display.STATE_UNKNOWN
 
-    // Decoding happens here so a big image or a slow folder doesn't hold up the screen.
-    private val loader = Executors.newSingleThreadExecutor()
-    private val nextImage = Runnable { showImage(advance = true) }
     private val redraw = Runnable {
         if (!isDestroyed) window.decorView.invalidate()
     }
@@ -61,10 +71,11 @@ class RearWallpaperActivity : Activity() {
         val display = display ?: return
         if (display.displayId == Display.DEFAULT_DISPLAY) {
             val keeper = KeeperService.instance
-            if (keeper == null) finishQuietly() else keeper.onWallpaperCreatedOnMain(taskId)
+            if (keeper == null) finishQuietly() else keeper.onHostCreatedOnMain(taskId)
             return
         }
         onRear = true
+        popover = RearState.owner(this) == RearOwner.Popover
 
         // Opaque on the rear, so the system doesn't need to draw Xiaomi's launcher behind us.
         setTranslucent(false)
@@ -72,67 +83,71 @@ class RearWallpaperActivity : Activity() {
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
-        val camera = BackScreen.cameraInsets(display)
-        images = FrameLayout(this)
-        if (BackScreen.avoidCamera(this)) images.setPadding(camera.left, camera.top, camera.right, camera.bottom)
-        // The clock always keeps clear of the camera.
-        clock = ClockLayer(this).apply {
-            setPadding(camera.left, camera.top, camera.right, camera.bottom)
-            onTextChanged = { if (clock.visibility == View.VISIBLE) onShownChanged() }
-        }
-        setContentView(FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
-            addView(images)
-            addView(clock)
-        })
-        clock.backdrop = images
-        applyClock()
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        setContentView(root)
+        if (!popover) addWallpaper(root, display)
+        gestures = RearGestures(this, ::onSwipe)
 
         getSystemService(DisplayManager::class.java).registerDisplayListener(displayListener, BackScreen.mainHandler)
         onRearStateChanged()
-
-        // The first image straight away, so there's no blank moment.
-        try {
-            val uri = Gallery.current(this, advance = true)
-            if (uri == null) {
-                BackScreen.log("No images; the back screen shows black")
-            } else {
-                setImage(uri, BackScreen.loadImage(this, uri, display, Gallery.scaling(this)), fade = false)
-                BackScreen.log("Wallpaper showing on back screen")
-            }
-        } catch (e: Exception) {
-            BackScreen.log("Couldn't load image: ${e.message}")
-        }
-        scheduleNextImage()
+        wallpaper?.showFirst()
         ClockAlarm.update(this)
-        KeeperService.instance?.onWallpaperCreatedOnRear(display.displayId)
+        KeeperService.instance?.onHostShownOnRear(display.displayId)
+    }
+
+    /** The images, and the clock over them. */
+    private fun addWallpaper(root: FrameLayout, display: Display) {
+        val camera = BackScreen.cameraInsets(display)
+        val clock = ClockLayer(this).apply {
+            // The clock always keeps clear of the camera.
+            setPadding(camera.left, camera.top, camera.right, camera.bottom)
+            onTextChanged = { if (visibility == View.VISIBLE) onShownChanged() }
+        }
+        val images = WallpaperLayer(this, display).apply {
+            if (WallpaperSettings.avoidCamera(context)) setPadding(camera.left, camera.top, camera.right, camera.bottom)
+            isLit = { this@RearHostActivity.isLit() }
+            onShownChanged = { this@RearHostActivity.onShownChanged() }
+            onBackdropChanged = clock::backdropChanged
+        }
+        root.addView(images)
+        root.addView(clock)
+        clock.backdrop = images
+        wallpaper = images
+        this.clock = clock
+        applyClock()
     }
 
     override fun onStart() {
         super.onStart()
+        started = true
         if (onRear) {
             if (isCurrent()) visibleOnRear = true
-            showImage(advance = true)
-            clock.updateTime()
+            wallpaper?.showImage(advance = true)
+            clock?.updateTime()
             // In case the display listener missed the rear waking.
             onRearStateChanged()
+            updateGestures()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        if (onRear) clock.updateTime()
+        if (onRear) clock?.updateTime()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (onRear) clock.updateTime()
+        if (onRear) clock?.updateTime()
     }
 
     override fun onStop() {
-        // A wallpaper being replaced stops after its replacement has started; leave that one be.
+        started = false
+        // A host being replaced stops after its replacement has started; leave that one be.
         if (isCurrent()) visibleOnRear = false
-        if (!isFinishing && onRear) KeeperService.instance?.onWallpaperHidden()
+        if (onRear) {
+            updateGestures()
+            if (!isFinishing) KeeperService.instance?.onHostHidden()
+        }
         super.onStop()
     }
 
@@ -141,17 +156,16 @@ class RearWallpaperActivity : Activity() {
             current = null
             visibleOnRear = false
         }
-        BackScreen.mainHandler.removeCallbacks(nextImage)
         BackScreen.mainHandler.removeCallbacks(redraw)
-        loader.shutdownNow()
         if (onRear) {
             getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
-            for (i in 0 until images.childCount) BackScreen.stop((images.getChildAt(i) as ImageView).drawable)
+            wallpaper?.release()
+            gestures.release()
             ClockAlarm.update(this)
             // Closed by someone else: Xiaomi's back screen service taking the rear back.
             if (!finishRequested && !isChangingConfigurations) {
-                BackScreen.log("Wallpaper was closed on the back screen")
-                KeeperService.instance?.onWallpaperRemoved()
+                BackScreen.log(if (popover) "Pop-over was closed on the back screen" else "Wallpaper was closed on the back screen")
+                KeeperService.instance?.onHostRemoved()
             }
         }
         super.onDestroy()
@@ -173,6 +187,21 @@ class RearWallpaperActivity : Activity() {
         }
     }
 
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (onRear) gestures.onTouchEvent(event, window.decorView.width, window.decorView.height)
+        return super.dispatchTouchEvent(event)
+    }
+
+    /** Swipes are read only while a section uses them, and touches only arrive while the rear is lit. */
+    private fun updateGestures() {
+        gestures.enabled = !popover && (CameraSettings.isEnabled(this) || NotificationSettings.isEnabled(this))
+        gestures.setLit(started && isLit())
+    }
+
+    private fun onSwipe(swipe: Swipe) {
+        BackScreen.log(if (swipe == Swipe.LEFT) "Swiped left on the back screen" else "Swiped down on the back screen")
+    }
+
     /** The back screen lit up, dimmed or went off. */
     private fun onRearStateChanged() {
         val state = display?.state ?: return
@@ -187,8 +216,9 @@ class RearWallpaperActivity : Activity() {
         val wasOff = rearState == Display.STATE_OFF
         val wasSuspended = rearState == Display.STATE_DOZE_SUSPEND
         rearState = state
+        updateGestures()
         // It may have been asleep a while.
-        clock.updateTime()
+        clock?.updateTime()
         // Anything drawn while it was suspended never reached it (see pushFrame): draw it again.
         if (wasSuspended && (state == Display.STATE_ON || state == Display.STATE_DOZE)) {
             window.decorView.invalidate()
@@ -198,102 +228,22 @@ class RearWallpaperActivity : Activity() {
     }
 
     private fun applyClock() {
-        clock.visibility = if (BackScreen.showClock(this)) View.VISIBLE else View.GONE
-        val settings = BackScreen.clockSettings(this)
+        val clock = clock ?: return
+        clock.visibility = if (WallpaperSettings.showClock(this)) View.VISIBLE else View.GONE
+        val settings = WallpaperSettings.clockSettings(this)
         if (clock.settings != settings) clock.settings = settings
-    }
-
-    /**
-     * Shows the gallery's current image, moving on to the next first if [advance] and it's time.
-     * With [force], reloads it even if it's the one already showing. With no images, fades to
-     * black.
-     */
-    private fun showImage(advance: Boolean, force: Boolean = false) {
-        val display = display ?: return
-        val load = ++loads
-        loader.execute {
-            try {
-                val uri = Gallery.current(this, advance)
-                val drawable = if (uri == null || (uri == shown && !force)) null
-                else BackScreen.loadImage(this, uri, display, Gallery.scaling(this))
-                runOnUiThread {
-                    if (isDestroyed || load != loads) return@runOnUiThread
-                    if (uri != null && drawable != null) setImage(uri, drawable, fade = true)
-                    if (uri == null) clearImage()
-                    scheduleNextImage()
-                }
-            } catch (e: Exception) {
-                BackScreen.log("Couldn't load image: ${e.message}")
-                runOnUiThread { if (!isDestroyed) scheduleNextImage() }
-            }
-        }
-    }
-
-    /**
-     * Puts [drawable] on top, fading it in over the old image, which is then removed. Only fades
-     * while the rear is lit: a dimmed one would only show a moment of the fade.
-     */
-    private fun setImage(uri: Uri, drawable: Drawable, fade: Boolean) {
-        shown = uri
-        val view = WallpaperView(this).apply {
-            scaling = Gallery.scaling(this@RearWallpaperActivity)
-            setImageDrawable(drawable)
-        }
-        BackScreen.start(drawable)
-        val old = (0 until images.childCount).map { images.getChildAt(it) as ImageView }
-        images.addView(view)
-        val removeOld = {
-            for (o in old) {
-                BackScreen.stop(o.drawable)
-                images.removeView(o)
-            }
-            // A new image under the clock: its automatic colours may need to change.
-            clock.backdropChanged()
-        }
-        if (fade && old.isNotEmpty() && isLit()) {
-            view.alpha = 0f
-            view.animate().alpha(1f).setDuration(FADE_MS).withEndAction(removeOld)
-        } else {
-            removeOld()
-        }
-        BackScreen.log("Showing image ${uri.lastPathSegment?.substringAfterLast('/')}")
-        onShownChanged()
-    }
-
-    /** The images were removed: fade out whatever is showing (at once if dimmed), leaving black. */
-    private fun clearImage() {
-        if (shown == null && images.childCount == 0) return
-        shown = null
-        val old = (0 until images.childCount).map { images.getChildAt(it) as ImageView }
-        for (o in old) {
-            val remove = {
-                BackScreen.stop(o.drawable)
-                images.removeView(o)
-                clock.backdropChanged()
-            }
-            if (isLit()) o.animate().alpha(0f).setDuration(FADE_MS).withEndAction(remove) else remove()
-        }
-        BackScreen.log("No images; the back screen shows black")
-        onShownChanged()
     }
 
     private fun isLit() = display?.state == Display.STATE_ON
 
-    private fun scheduleNextImage() {
-        BackScreen.mainHandler.removeCallbacks(nextImage)
-        val at = Gallery.nextChangeAt(this) ?: return
-        // While the phone sleeps this runs late; onStart and the display turning on catch up.
-        BackScreen.mainHandler.postDelayed(nextImage, max(MIN_DELAY_MS, at - System.currentTimeMillis()))
-    }
-
     /** The minute changed while the phone may be asleep. */
     private fun onMinute() {
         BackScreen.trace("Minute alarm; back screen ${BackScreen.stateName(display?.state)}")
-        clock.updateTime()
+        clock?.updateTime()
     }
 
     /**
-     * What the wallpaper shows changed: a new image, or the clock showing a new time (the next
+     * What the host shows changed: a new image, or the clock showing a new time (the next
      * minute, or the time, time zone or 12/24-hour setting changed). If the rear is dimmed, get
      * the new frame onto it (see [pushFrame]).
      */
@@ -325,8 +275,6 @@ class RearWallpaperActivity : Activity() {
     }
 
     companion object {
-        private const val FADE_MS = 800L
-        private const val MIN_DELAY_MS = 1000L
         // The rear switches to DOZE about 10 ms after the lock is taken.
         private const val REDRAW_DELAY_MS = 50L
         private const val PUSH_HOLD_MS = 300L
@@ -334,43 +282,48 @@ class RearWallpaperActivity : Activity() {
         // PowerManager.DRAW_WAKE_LOCK, hidden from the SDK but open to any app with WAKE_LOCK.
         private const val DRAW_WAKE_LOCK = 0x80
 
-        private var current: WeakReference<RearWallpaperActivity>? = null
+        private var current: WeakReference<RearHostActivity>? = null
 
         var visibleOnRear = false
             private set
 
         private fun showing() = current?.get()?.takeIf { !it.isFinishing && it.onRear }
 
+        /** The host showing the wallpaper, rather than a pop-over. */
+        private fun showingWallpaper() = showing()?.takeIf { !it.popover }
+
         fun isOnRear() = showing() != null
 
-        /** On the rear, and the rear is lit or dimmed rather than off, so the clock can be seen. */
-        fun isClockVisible() = showing()?.let { it.rearState != Display.STATE_OFF } == true
+        /** The wallpaper is on the rear, and the rear is lit or dimmed rather than off, so the clock can be seen. */
+        fun isClockVisible() = showingWallpaper()?.let { it.rearState != Display.STATE_OFF } == true
 
         /** Moves the gallery on if it's time, and catches the clock up; the rear woke. */
         fun refreshImage() {
-            val activity = showing() ?: return
-            activity.showImage(advance = true)
-            activity.clock.updateTime()
+            val activity = showingWallpaper() ?: return
+            activity.wallpaper?.showImage(advance = true)
+            activity.clock?.updateTime()
         }
 
         /** The clock alarm: see [onMinute]. */
         fun onMinuteAlarm() {
-            showing()?.onMinute()
+            showingWallpaper()?.onMinute()
         }
 
         /** Loads the gallery's current image again. False if the wallpaper isn't up. */
         fun reload(): Boolean {
-            val activity = showing() ?: return false
-            activity.showImage(advance = false, force = true)
+            val activity = showingWallpaper() ?: return false
+            activity.wallpaper?.showImage(advance = false, force = true)
             KeeperService.instance?.showChanges()
             return true
         }
 
-        /** The clock or gallery timing changed. */
+        /** The clock or gallery timing changed, or a section that uses swipes was switched. */
         fun settingsChanged() {
             val activity = showing() ?: return
+            activity.updateGestures()
+            if (activity.popover) return
             activity.applyClock()
-            activity.scheduleNextImage()
+            activity.wallpaper?.scheduleNextImage()
             ClockAlarm.update(activity)
             KeeperService.instance?.showChanges()
         }

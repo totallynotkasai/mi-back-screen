@@ -4,6 +4,9 @@
     <style name="Theme.BackScreen" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Dark status and navigation bar icons over the light surface, light ones in dark mode. -->
+        <item name="android:windowLightStatusBar">?attr/isLightTheme</item>
+        <item name="android:windowLightNavigationBar">?attr/isLightTheme</item>
     </style>
 
     <style name="Widget.BackScreen.Card" parent="Widget.Material3.CardView.Filled">

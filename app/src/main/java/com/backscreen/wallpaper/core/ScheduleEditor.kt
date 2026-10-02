@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.core
 
 import android.content.Context
 import android.text.format.DateFormat
@@ -8,6 +8,7 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.backscreen.wallpaper.R
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder

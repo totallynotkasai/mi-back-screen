@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.wallpaper
 
 import android.content.Context
 import android.graphics.Canvas
@@ -24,6 +24,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.widget.doAfterTextChanged
+import com.backscreen.wallpaper.R
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch

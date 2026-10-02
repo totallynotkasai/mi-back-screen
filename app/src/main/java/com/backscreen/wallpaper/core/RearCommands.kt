@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.core
 
 import android.content.pm.PackageManager
 import rikka.shizuku.Shizuku
@@ -24,8 +24,9 @@ object RearCommands {
     fun isReady() =
         Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
 
-    fun launchWallpaperActivity(displayId: Int) =
-        run(AM, "start", "--display", displayId.toString(), "-n", "$PACKAGE/.RearWallpaperActivity")
+    /** Our one window on the back screen (RearHostActivity), on [displayId]. */
+    fun launchHost(displayId: Int) =
+        run(AM, "start", "--display", displayId.toString(), "-n", "$PACKAGE/.rear.RearHostActivity")
 
     fun moveTaskToDisplay(taskId: Int, displayId: Int) =
         run(AM, "display", "move-stack", taskId.toString(), displayId.toString())

@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.wallpaper
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.database.ContentObserver
 import android.os.SystemClock
 import android.provider.Settings
+import com.backscreen.wallpaper.core.BackScreen
 import java.util.TimeZone
 
 /**

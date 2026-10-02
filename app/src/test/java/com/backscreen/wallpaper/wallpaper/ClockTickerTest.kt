@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.wallpaper
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

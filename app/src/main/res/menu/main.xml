@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The top bar's overflow menu, the same on every tab. -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_refresh"
+        android:title="@string/refresh" />
+    <item
+        android:id="@+id/menu_diagnostics"
+        android:title="@string/diagnostics" />
+    <item
+        android:id="@+id/menu_setup_help"
+        android:title="@string/setup_help" />
+    <item
+        android:id="@+id/menu_about"
+        android:title="@string/about_title" />
+</menu>

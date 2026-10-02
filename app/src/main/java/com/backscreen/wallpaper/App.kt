@@ -1,6 +1,8 @@
 package com.backscreen.wallpaper
 
 import android.app.Application
+import com.backscreen.wallpaper.core.Schedules
+import com.backscreen.wallpaper.wallpaper.Gallery
 import com.google.android.material.color.DynamicColors
 
 class App : Application() {

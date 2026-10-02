@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.wallpaper
 
 import android.content.Context
 import android.graphics.Canvas
@@ -14,6 +14,8 @@ import android.util.DisplayMetrics
 import android.view.Display
 import android.view.View
 import android.widget.FrameLayout
+import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.core.BackScreen
 import kotlin.math.max
 
 /**

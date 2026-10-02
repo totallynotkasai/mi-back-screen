@@ -1,4 +1,4 @@
-package com.backscreen.wallpaper
+package com.backscreen.wallpaper.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -28,6 +28,16 @@ class TaskListTest {
     fun findsEachDisplaysPackagesFrontFirst() {
         assertEquals(listOf("com.backscreen.wallpaper", "com.xiaomi.subscreencenter"), TaskList.packagesOn(withLauncher, 1))
         assertEquals(listOf("com.teslacoilsw.launcher"), TaskList.packagesOn(withLauncher, 0))
+    }
+
+    @Test
+    fun findsEachDisplaysTasksWithTheirIds() {
+        assertEquals(
+            listOf(TaskList.Task(3010, "com.backscreen.wallpaper"), TaskList.Task(3005, "com.xiaomi.subscreencenter")),
+            TaskList.tasksOn(withLauncher, 1)
+        )
+        // The app in front on the main screen, as Quick Switch takes it.
+        assertEquals(TaskList.Task(12, "com.teslacoilsw.launcher"), TaskList.tasksOn(withLauncher, 0).first())
     }
 
     @Test

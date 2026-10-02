@@ -27,7 +27,7 @@
 
         <!--
             Xiaomi's opt-in for showing activities on the rear display (found in the open source
-            MiRearScreenSwitcher app). Lets RearWallpaperActivity be launched straight there.
+            MiRearScreenSwitcher app). Lets RearHostActivity be launched straight there.
         -->
         <meta-data
             android:name="miui.rear.policy"
@@ -47,7 +47,7 @@
             main screen and closes itself unless this app's service asked for it.
         -->
         <activity
-            android:name=".RearWallpaperActivity"
+            android:name=".rear.RearHostActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
@@ -64,7 +64,7 @@
         </activity>
 
         <service
-            android:name=".KeeperService"
+            android:name=".core.KeeperService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
@@ -87,7 +87,7 @@
 
         <!-- The back screen clock's per-minute alarm. -->
         <receiver
-            android:name=".ClockAlarmReceiver"
+            android:name=".wallpaper.ClockAlarmReceiver"
             android:exported="false" />
 
         <!-- Home screen on/off widget. -->

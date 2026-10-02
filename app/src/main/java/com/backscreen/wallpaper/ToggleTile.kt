@@ -8,13 +8,15 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import com.backscreen.wallpaper.core.KeeperService
+import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 
 /** Quick Settings tile: tap to turn the back screen wallpaper on or off. */
 class ToggleTile : TileService() {
 
     override fun onStartListening() {
         val tile = qsTile ?: return
-        val enabled = BackScreen.isEnabled(this)
+        val enabled = WallpaperSettings.isEnabled(this)
         tile.state = if (enabled) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.subtitle = getString(if (enabled) R.string.state_on else R.string.state_off)
         tile.updateTile()

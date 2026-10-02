@@ -7,6 +7,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import com.backscreen.wallpaper.core.KeeperService
+import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 
 /** Home screen widget: tap to turn the back screen wallpaper on or off. */
 class ToggleWidget : AppWidgetProvider() {
@@ -23,7 +25,7 @@ class ToggleWidget : AppWidgetProvider() {
         }
 
         private fun buildViews(context: Context): RemoteViews {
-            val layout = if (BackScreen.isEnabled(context)) R.layout.widget_on else R.layout.widget_off
+            val layout = if (WallpaperSettings.isEnabled(context)) R.layout.widget_on else R.layout.widget_off
             // Tapping a widget is allowed to start a foreground service from the background.
             val toggle = PendingIntent.getForegroundService(
                 context, 0,
