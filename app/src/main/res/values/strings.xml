@@ -135,6 +135,20 @@
     <string name="scale_fit">Fit</string>
     <string name="scale_stretch">Stretch</string>
     <string name="scale_none">None</string>
+    <string name="scaling_summary">How images fit the back screen</string>
+    <string name="pan_fills">Panning always fills the screen</string>
+    <string name="pan_title">Panning</string>
+    <string name="pan_summary">Glide slowly across images that don\'t fit the screen\'s shape</string>
+    <string name="pan_speed">Speed</string>
+    <string name="pan_slow">Slow</string>
+    <string name="pan_medium">Medium</string>
+    <string name="pan_fast">Fast</string>
+    <string name="pan_vertical">Pans up and down for this image: %1$s each way</string>
+    <string name="pan_horizontal">Pans side to side for this image: %1$s each way</string>
+    <string name="pan_fits">This image already fits the screen</string>
+    <!-- Non-breaking spaces, so a number never wraps away from its unit. -->
+    <string name="duration_seconds">%1$d s</string>
+    <string name="duration_minutes">%1$d min %2$d s</string>
     <string name="avoid_camera_title">Keep clear of the camera</string>
     <string name="avoid_camera_summary">Fit the image beside the camera instead of partly behind it</string>
     <string name="schedule_title">Schedule</string>

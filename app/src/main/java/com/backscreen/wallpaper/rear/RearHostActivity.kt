@@ -26,7 +26,7 @@ import java.lang.ref.WeakReference
  * Our one window on the back screen. Each feature is a layer inside it, so whatever it shows
  * appears at once, and never has to get past HyperOS's rules for starting apps there:
  *
- * - the wallpaper: the gallery's images ([WallpaperLayer]), or black with none;
+ * - the wallpaper: the gallery's images ([WallpaperLayer]), panning if that's on, or black with none;
  * - the clock ([ClockLayer]).
  *
  * [RearGestures] reads swipes on it.
@@ -108,6 +108,7 @@ class RearHostActivity : Activity() {
             isLit = { this@RearHostActivity.isLit() }
             onShownChanged = { this@RearHostActivity.onShownChanged() }
             onBackdropChanged = clock::backdropChanged
+            onBackdropMoved = clock::backdropMoved
         }
         root.addView(images)
         root.addView(clock)
@@ -127,6 +128,7 @@ class RearHostActivity : Activity() {
             // In case the display listener missed the rear waking.
             onRearStateChanged()
             updateGestures()
+            updateMotion()
         }
     }
 
@@ -146,6 +148,7 @@ class RearHostActivity : Activity() {
         if (isCurrent()) visibleOnRear = false
         if (onRear) {
             updateGestures()
+            updateMotion()
             if (!isFinishing) KeeperService.instance?.onHostHidden()
         }
         super.onStop()
@@ -198,6 +201,11 @@ class RearHostActivity : Activity() {
         gestures.setLit(started && isLit())
     }
 
+    /** Images pan and GIFs play only while the rear is lit: a dimmed one shows none of it. */
+    private fun updateMotion() {
+        wallpaper?.moving = started && isLit()
+    }
+
     private fun onSwipe(swipe: Swipe) {
         BackScreen.log(if (swipe == Swipe.LEFT) "Swiped left on the back screen" else "Swiped down on the back screen")
     }
@@ -217,6 +225,7 @@ class RearHostActivity : Activity() {
         val wasSuspended = rearState == Display.STATE_DOZE_SUSPEND
         rearState = state
         updateGestures()
+        updateMotion()
         // It may have been asleep a while.
         clock?.updateTime()
         // Anything drawn while it was suspended never reached it (see pushFrame): draw it again.
@@ -317,12 +326,13 @@ class RearHostActivity : Activity() {
             return true
         }
 
-        /** The clock or gallery timing changed, or a section that uses swipes was switched. */
+        /** The clock or gallery timing changed, the pan speed changed, or a section that uses swipes was switched. */
         fun settingsChanged() {
             val activity = showing() ?: return
             activity.updateGestures()
             if (activity.popover) return
             activity.applyClock()
+            activity.wallpaper?.panChanged()
             activity.wallpaper?.scheduleNextImage()
             ClockAlarm.update(activity)
             KeeperService.instance?.showChanges()

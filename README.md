@@ -11,6 +11,7 @@ Show your own images, animated GIFs and a clock on the **Xiaomi 17 Pro Max** rea
 - Gallery: pick several images or a folder and it changes image every 1 minute to 1 day, in order or shuffled
 - Works with no images too: the back screen is black, with the clock if it's on. **Remove images** clears the app's copies or lets go of the folder
 - Scaling: Fill, Fit, Stretch or None (actual size, centred)
+- Panning: images that don't fit the screen's shape glide slowly up and down or side to side, at Slow, Medium or Fast. It only moves while the back screen is lit
 - Optional clock (time and date) over the wallpaper, in five styles: drag it anywhere in the preview or align it to an edge; any text colour, or Auto to stand out from the image; optional background colour and opacity
 - The clock stays on time while the phone sleeps, including on the dimmed back screen
 - Refresh button to put the wallpaper up afresh if something didn't update
@@ -55,6 +56,8 @@ HyperOS doesn't let normal apps draw on the rear display, so Mi Back Screen uses
 ## Battery
 
 Measured on a 17 Pro Max (HyperOS 3.0.319), unplugged and locked for an hour with the clock showing on the dimmed back screen almost the whole time: the app used an estimated **1.5 mAh**, about 0.02% of the battery. That's 46 one-minute wake-ups of about a second each, and the battery level didn't drop a percent. Every clock update arrived within 1.5 seconds of the minute.
+
+Panning only moves while the back screen is lit; a dimmed back screen shows its last frame and costs nothing extra. Measured with the back screen held lit (three 5-minute runs each way, extrapolated): panning at Medium cost the app about **20 mAh per lit hour**, 0.3% of the battery, against about 1 mAh with it still. That's about 5 mAh a day if the back screen is lit for 15 minutes in all.
 
 ## Privacy
 

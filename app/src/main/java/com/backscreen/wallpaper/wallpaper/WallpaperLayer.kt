@@ -6,7 +6,6 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.view.Display
 import android.widget.FrameLayout
-import android.widget.ImageView
 import com.backscreen.wallpaper.core.BackScreen
 import java.util.concurrent.Executors
 import kotlin.math.max
@@ -28,8 +27,24 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
     /** A different image is under the clock, so its automatic colours may need to change. */
     var onBackdropChanged: (() -> Unit)? = null
 
+    /** The image under the clock moved, as it pans. */
+    var onBackdropMoved: (() -> Unit)? = null
+
+    /**
+     * Whether images pan and GIFs play. Only while the back screen is lit: a dimmed one keeps
+     * showing the last frame, and moving would just use battery.
+     */
+    var moving = false
+        set(value) {
+            field = value
+            for (image in images()) image.moving = value
+        }
+
     @Volatile private var shown: Uri? = null
     private var loads = 0
+
+    // A reload overtaken by a later request (the rear waking, say) must still happen.
+    private var reloadPending = false
     private var released = false
 
     private val loader = Executors.newSingleThreadExecutor()
@@ -42,7 +57,7 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
             if (uri == null) {
                 BackScreen.log("No images; the back screen shows black")
             } else {
-                setImage(uri, BackScreen.loadImage(context, uri, display, Gallery.scaling(context)), fade = false)
+                setImage(uri, BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context)), fade = false)
                 BackScreen.log("Wallpaper showing on back screen")
             }
         } catch (e: Exception) {
@@ -59,16 +74,20 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
     fun showImage(advance: Boolean, force: Boolean = false) {
         if (released) return
         val load = ++loads
+        val reload = force || reloadPending
+        reloadPending = reload
         loader.execute {
             try {
                 val uri = Gallery.current(context, advance)
-                val drawable = if (uri == null || (uri == shown && !force)) null
-                else BackScreen.loadImage(context, uri, display, Gallery.scaling(context))
+                val drawable = if (uri == null || (uri == shown && !reload)) null
+                else BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context))
+                val next = Gallery.nextChangeAt(context)
                 BackScreen.mainHandler.post {
                     if (released || load != loads) return@post
+                    reloadPending = false
                     if (uri != null && drawable != null) setImage(uri, drawable, fade = true)
                     if (uri == null) clearImage()
-                    scheduleNextImage()
+                    setNextImage(next)
                 }
             } catch (e: Exception) {
                 BackScreen.log("Couldn't load image: ${e.message}")
@@ -77,13 +96,30 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         }
     }
 
-    /** Sets the gallery's next change, for when the interval or images change too. */
+    /**
+     * Sets the gallery's next change, for when the interval or images change too. Working it out
+     * reads the folder, which can take half a second for a big one, so it's done on the loader's
+     * thread: on the main thread it held up the pan and the clock.
+     */
     fun scheduleNextImage() {
-        BackScreen.mainHandler.removeCallbacks(nextImage)
         if (released) return
-        val at = Gallery.nextChangeAt(context) ?: return
+        loader.execute {
+            val next = Gallery.nextChangeAt(context)
+            BackScreen.mainHandler.post { setNextImage(next) }
+        }
+    }
+
+    private fun setNextImage(at: Long?) {
+        BackScreen.mainHandler.removeCallbacks(nextImage)
+        if (released || at == null) return
         // While the phone sleeps this runs late; the host catches up when the rear wakes.
         BackScreen.mainHandler.postDelayed(nextImage, max(MIN_DELAY_MS, at - System.currentTimeMillis()))
+    }
+
+    /** The pan speed changed: the image showing carries on from where it is, at the new speed. */
+    fun panChanged() {
+        val pan = WallpaperSettings.pan(context)
+        for (image in images()) image.pan = pan
     }
 
     /** Stops loading and animating, for good. */
@@ -91,22 +127,24 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         released = true
         BackScreen.mainHandler.removeCallbacks(nextImage)
         loader.shutdownNow()
-        for (i in 0 until childCount) BackScreen.stop((getChildAt(i) as ImageView).drawable)
+        moving = false
     }
 
     /** Puts [drawable] on top, fading it in over the old image (if [fade] and lit), which is then removed. */
     private fun setImage(uri: Uri, drawable: Drawable, fade: Boolean) {
         shown = uri
         val view = WallpaperView(context).apply {
-            scaling = Gallery.scaling(context)
+            scaling = WallpaperSettings.scalingInUse(context)
+            pan = WallpaperSettings.pan(context)
             setImageDrawable(drawable)
+            onPanned = { onBackdropMoved?.invoke() }
+            moving = this@WallpaperLayer.moving
         }
-        BackScreen.start(drawable)
         val old = images()
         addView(view)
         val removeOld = Runnable {
             for (o in old) {
-                BackScreen.stop(o.drawable)
+                o.moving = false
                 removeView(o)
             }
             onBackdropChanged?.invoke()
@@ -127,7 +165,7 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         shown = null
         for (o in images()) {
             val remove = Runnable {
-                BackScreen.stop(o.drawable)
+                o.moving = false
                 removeView(o)
                 onBackdropChanged?.invoke()
             }
@@ -137,7 +175,7 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         onShownChanged?.invoke()
     }
 
-    private fun images() = (0 until childCount).map { getChildAt(it) as ImageView }
+    private fun images() = (0 until childCount).map { getChildAt(it) as WallpaperView }
 
     private companion object {
         const val FADE_MS = 800L

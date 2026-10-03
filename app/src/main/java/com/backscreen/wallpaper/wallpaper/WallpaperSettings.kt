@@ -19,6 +19,8 @@ object WallpaperSettings : FeatureSettings("backscreen") {
     private const val KEY_CLOCK_COLOR = "clock_color"
     private const val KEY_CLOCK_BG_COLOR = "clock_bg_color"
     private const val KEY_CLOCK_BG_OPACITY = "clock_bg_opacity"
+    private const val KEY_PAN = "pan"
+    private const val KEY_PAN_SPEED = "pan_speed"
 
     /** The tile and widget show this switch, so they follow it. */
     override fun setEnabled(context: Context, enabled: Boolean) {
@@ -33,6 +35,26 @@ object WallpaperSettings : FeatureSettings("backscreen") {
     fun setAvoidCamera(context: Context, avoid: Boolean) {
         prefs(context).edit().putBoolean(KEY_AVOID_CAMERA, avoid).apply()
     }
+
+    /** The speed images pan at, or null while panning is off. */
+    fun pan(context: Context): PanSpeed? = if (prefs(context).getBoolean(KEY_PAN, false)) panSpeed(context) else null
+
+    fun setPan(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAN, on).apply()
+    }
+
+    /** The chosen speed, kept while panning is off. */
+    fun panSpeed(context: Context): PanSpeed {
+        val name = prefs(context).getString(KEY_PAN_SPEED, null)
+        return PanSpeed.entries.firstOrNull { it.name == name } ?: PanSpeed.MEDIUM
+    }
+
+    fun setPanSpeed(context: Context, speed: PanSpeed) {
+        prefs(context).edit().putString(KEY_PAN_SPEED, speed.name).apply()
+    }
+
+    /** How images are fitted: the gallery's scaling, except that panning always fills the screen. */
+    fun scalingInUse(context: Context): Scaling = if (pan(context) != null) Scaling.FILL else Gallery.scaling(context)
 
     /** Show the time and date over the wallpaper. */
     fun showClock(context: Context) = prefs(context).getBoolean(KEY_CLOCK, false)

@@ -4,11 +4,14 @@ import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Insets
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.DisplayMetrics
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -38,11 +41,12 @@ import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 /**
  * The Wallpaper tab: the switch, a preview shaped like the back screen, the images and gallery,
- * the clock, keeping clear of the camera, and schedules.
+ * scaling and panning, the clock, keeping clear of the camera, and schedules.
  */
 class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
@@ -66,6 +70,12 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private lateinit var intervalValue: TextView
     private lateinit var shuffleSwitch: MaterialSwitch
     private lateinit var scalingChips: ChipGroup
+    private lateinit var fitCard: View
+    private lateinit var scalingPanNote: View
+    private lateinit var panSwitch: MaterialSwitch
+    private lateinit var panOptions: View
+    private lateinit var panSpeeds: ChipGroup
+    private lateinit var panImageNote: TextView
     private lateinit var clockSwitch: MaterialSwitch
     private lateinit var clockOptions: View
     private lateinit var clockStyles: ChipGroup
@@ -80,6 +90,13 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
     private var schedules = emptyList<Schedule>()
     private var previewUri: Uri? = null
+
+    // Reading a big folder and decoding an image can take a second or more. They're done here
+    // rather than on the main thread, which the back screen shares: a stall there froze the
+    // app and stopped the back screen's pan.
+    private val loader = Executors.newSingleThreadExecutor()
+    private var previewLoads = 0
+    private var previewLoading = false
 
     // Set while controls are updated to match the settings, so their listeners ignore it.
     private var syncingClock = false
@@ -114,6 +131,12 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         intervalValue = view.findViewById(R.id.intervalValue)
         shuffleSwitch = view.findViewById(R.id.shuffleSwitch)
         scalingChips = view.findViewById(R.id.scalingChips)
+        fitCard = view.findViewById(R.id.fitCard)
+        scalingPanNote = view.findViewById(R.id.scalingPanNote)
+        panSwitch = view.findViewById(R.id.panSwitch)
+        panOptions = view.findViewById(R.id.panOptions)
+        panSpeeds = view.findViewById(R.id.panSpeeds)
+        panImageNote = view.findViewById(R.id.panImageNote)
         clockSwitch = view.findViewById(R.id.clockSwitch)
         clockOptions = view.findViewById(R.id.clockOptions)
         clockStyles = view.findViewById(R.id.clockStyles)
@@ -125,6 +148,8 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         clockBgSwatch = view.findViewById(R.id.clockBgSwatch)
         clockOpacity = view.findViewById(R.id.clockOpacity)
         clockOpacityValue = view.findViewById(R.id.clockOpacityValue)
+        // What the preview will show, until it's loaded: no flash of "No wallpaper".
+        previewUri = Gallery.shown(ctx)
 
         mainSwitch.onCheckedChange = { checked ->
             if (checked) turnOn() else turnOff()
@@ -145,9 +170,14 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         shuffleSwitch.isChecked = Gallery.shuffle(ctx)
         shuffleSwitch.setOnCheckedChangeListener { _, checked -> Gallery.setShuffle(ctx, checked) }
         view.findViewById<View>(R.id.nextButton).setOnClickListener {
-            Gallery.skip(ctx)
-            loadPreview()
-            RearHostActivity.reload()
+            val app = ctx.applicationContext
+            loader.execute {
+                Gallery.skip(app)
+                BackScreen.mainHandler.post {
+                    RearHostActivity.reload()
+                    if (view != null) loadPreview()
+                }
+            }
         }
 
         addChips(scalingChips, Scaling.entries, Gallery.scaling(ctx), Scaling::label) { scaling ->
@@ -155,6 +185,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             loadPreview()
             RearHostActivity.reload()
         }
+        setUpPanning(view)
 
         setUpClock(view)
         cameraCard.setOnClickListener { cameraSwitch.toggle() }
@@ -162,6 +193,8 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         cameraSwitch.setOnCheckedChangeListener { _, checked ->
             WallpaperSettings.setAvoidCamera(ctx, checked)
             showRearShape()
+            // Beside the camera the screen is a different shape, so images may pan differently.
+            showPanning()
             if (WallpaperSettings.isEnabled(ctx)) KeeperService.start(ctx, KeeperService.ACTION_APPLY)
         }
 
@@ -181,9 +214,26 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
     override fun onResume() {
         super.onResume()
+        preview.moving = !isHidden
         // A chosen folder may have changed while we were away.
         showGallery()
         refresh()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        preview.moving = false
+    }
+
+    /** Another tab is showing, or this one again: the preview only pans and plays while it can be seen. */
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        preview.moving = !hidden && isResumed
+    }
+
+    override fun onDestroy() {
+        loader.shutdownNow()
+        super.onDestroy()
     }
 
     override fun refresh() {
@@ -198,7 +248,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             }
         )
         // Keep up with the gallery moving on while the app is open.
-        if (previewUri != null && Gallery.shown(ctx) != previewUri) loadPreview()
+        if (!previewLoading && previewUri != null && Gallery.shown(ctx) != previewUri) loadPreview()
         refreshSchedule(enabled)
         refreshSetup()
     }
@@ -310,11 +360,15 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private fun onFolderPicked(folder: Uri) {
         try {
             Gallery.setFolder(ctx, folder)
-            BackScreen.log("Chose folder ${Gallery.folderName(ctx)}")
         } catch (e: Exception) {
             BackScreen.log("Couldn't use folder: ${e.message}")
         }
-        if (!Gallery.hasImages(ctx)) snackbar(R.string.folder_empty, Snackbar.LENGTH_LONG)
+        val app = ctx.applicationContext
+        loader.execute {
+            BackScreen.log("Chose folder ${Gallery.folderName(app)}")
+            val empty = !Gallery.hasImages(app)
+            BackScreen.mainHandler.post { if (view != null && empty) snackbar(R.string.folder_empty, Snackbar.LENGTH_LONG) }
+        }
         onImagesChanged()
     }
 
@@ -346,10 +400,18 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
      * through, or a folder.
      */
     private fun showGallery() {
-        val count = Gallery.images(ctx).size
-        val folder = Gallery.folderName(ctx)
+        val app = ctx.applicationContext
+        loader.execute {
+            val count = Gallery.images(app).size
+            val folder = Gallery.folderName(app)
+            BackScreen.mainHandler.post { if (view != null) showGallery(count, folder) }
+        }
+    }
+
+    private fun showGallery(count: Int, folder: String?) {
         val hasFolder = Gallery.folder(ctx) != null
         galleryCard.visibility = if (count > 0 || hasFolder) View.VISIBLE else View.GONE
+        fitCard.visibility = if (count > 0) View.VISIBLE else View.GONE
         galleryRotation.visibility = if (count > 1 || hasFolder) View.VISIBLE else View.GONE
         val images = resources.getQuantityString(R.plurals.gallery_count, count, count)
         gallerySummary.text = if (folder == null) images else getString(R.string.gallery_from_folder, images, folder)
@@ -409,6 +471,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
         // Colours: Auto reads the image under the clock in the preview, as the back screen does.
         clock.backdrop = preview
+        preview.onPanned = clock::backdropMoved
         clock.onColorsChanged = { showClockColors() }
         view.findViewById<View>(R.id.clockColorRow).setOnClickListener {
             ColorPicker.show(
@@ -512,29 +575,101 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         cameraCard.visibility = if (previewFrame.hasCamera) View.VISIBLE else View.GONE
     }
 
+    /** Loads the gallery's current image into the preview, decoded just as the back screen does. */
     private fun loadPreview() {
         val display = BackScreen.findRearDisplay(ctx) ?: requireActivity().display ?: return
-        val uri = Gallery.current(ctx)
+        val app = ctx.applicationContext
+        val load = ++previewLoads
+        previewLoading = true
+        loader.execute {
+            val uri = Gallery.current(app)
+            val scaling = WallpaperSettings.scalingInUse(app)
+            val drawable = try {
+                uri?.let { BackScreen.loadImage(app, it, display, scaling) }
+            } catch (e: Exception) {
+                BackScreen.log("Preview failed: ${e.message}")
+                null
+            }
+            BackScreen.mainHandler.post {
+                if (view == null || load != previewLoads) return@post
+                previewLoading = false
+                showPreview(uri, drawable, scaling)
+            }
+        }
+    }
+
+    private fun showPreview(uri: Uri?, drawable: Drawable?, scaling: Scaling) {
         previewUri = uri
-        BackScreen.stop(preview.drawable)
-        // The clock's automatic colours follow the image.
-        clock.backdropChanged()
         // Black like the rear display, wherever the image doesn't reach, or with no image.
         preview.setBackgroundColor(Color.BLACK)
+        preview.scaling = scaling
+        preview.pan = WallpaperSettings.pan(ctx)
+        preview.setImageDrawable(drawable)
+        // The clock's automatic colours follow the image.
+        clock.backdropChanged()
         showEmptyState()
-        if (uri == null) {
-            preview.setImageDrawable(null)
-            return
+        showPanning()
+        // "On" or "On · black, no images".
+        refresh()
+    }
+
+    private fun setUpPanning(view: View) {
+        view.findViewById<View>(R.id.panRow).setOnClickListener { panSwitch.toggle() }
+        panSwitch.isChecked = WallpaperSettings.pan(ctx) != null
+        panSwitch.setOnCheckedChangeListener { _, checked ->
+            WallpaperSettings.setPan(ctx, checked)
+            // The options at once; the image may need decoding again, since panning always fills the screen.
+            showPanning()
+            loadPreview()
+            RearHostActivity.reload()
         }
-        try {
-            val scaling = Gallery.scaling(ctx)
-            val drawable = BackScreen.loadImage(ctx, uri, display, scaling)
-            preview.scaling = scaling
-            preview.setImageDrawable(drawable)
-            BackScreen.start(drawable)
-        } catch (e: Exception) {
-            BackScreen.log("Preview failed: ${e.message}")
+        addChips(panSpeeds, PanSpeed.entries, WallpaperSettings.panSpeed(ctx), PanSpeed::label) { speed ->
+            WallpaperSettings.setPanSpeed(ctx, speed)
+            // The preview and the back screen carry on from where they are, at the new speed.
+            preview.pan = speed
+            showPanning()
+            RearHostActivity.settingsChanged()
         }
+    }
+
+    /** The panning options, the scaling it overrides, and what it does with the image showing. */
+    private fun showPanning() {
+        val pan = WallpaperSettings.pan(ctx)
+        panOptions.visibility = if (pan != null) View.VISIBLE else View.GONE
+        scalingPanNote.visibility = if (pan != null) View.VISIBLE else View.GONE
+        for (i in 0 until scalingChips.childCount) scalingChips.getChildAt(i).isEnabled = pan == null
+        val note = pan?.let(::describePan)
+        panImageNote.text = note
+        panImageNote.visibility = if (note == null) View.GONE else View.VISIBLE
+    }
+
+    /**
+     * Which way the image in the preview pans on the back screen, and how long each sweep takes,
+     * worked out just as the back screen does: the preview's image is decoded the same way.
+     */
+    private fun describePan(speed: PanSpeed): String? {
+        val image = preview.drawable ?: return null
+        val rear = BackScreen.findRearDisplay(ctx) ?: return null
+        @Suppress("DEPRECATION")
+        val m = DisplayMetrics().also { rear.getRealMetrics(it) }
+        val inset = if (WallpaperSettings.avoidCamera(ctx)) BackScreen.cameraInsets(rear) else Insets.NONE
+        val plan = PanPlanner.plan(
+            image.intrinsicWidth, image.intrinsicHeight,
+            m.widthPixels - inset.left - inset.right, m.heightPixels - inset.top - inset.bottom,
+            m.heightPixels, speed
+        )
+        val sweep = formatDuration(plan.sweepMs)
+        return when (plan.axis) {
+            PanAxis.NONE -> getString(R.string.pan_fits)
+            PanAxis.HORIZONTAL -> getString(R.string.pan_horizontal, sweep)
+            PanAxis.VERTICAL -> getString(R.string.pan_vertical, sweep)
+        }
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val seconds = ((ms + 500) / 1000).toInt()
+        return if (seconds < 60) getString(R.string.duration_seconds, seconds)
+        else getString(R.string.duration_minutes, seconds / 60, seconds % 60)
     }
 
     /**

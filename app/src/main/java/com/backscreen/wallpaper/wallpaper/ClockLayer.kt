@@ -1,5 +1,8 @@
 package com.backscreen.wallpaper.wallpaper
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -112,6 +115,11 @@ class ClockLayer @JvmOverloads constructor(
     private var lightText = true
     private val sampled = Rect()
 
+    // A change of automatic colours while the image pans fades in, from these colours.
+    private var fadeFrom: Look? = null
+    private var fadeAmount = 1f
+    private var fade: ValueAnimator? = null
+
     private var dragging = false
     private var grabX = 0f
     private var grabY = 0f
@@ -215,13 +223,17 @@ class ClockLayer @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         ClockTicker.remove(this)
+        stopFade()
         super.onDetachedFromWindow()
     }
 
     override fun onVisibilityAggregated(isVisible: Boolean) {
         super.onVisibilityAggregated(isVisible)
-        // Shown again, perhaps after a long time hidden.
-        if (isVisible) updateTime()
+        // Shown again, perhaps after a long time hidden, with the image panned on under it.
+        if (isVisible) {
+            updateTime()
+            backdropChanged()
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -233,36 +245,92 @@ class ClockLayer @JvmOverloads constructor(
     /** Sizes, colours and background, from [settings] and the layer's height. */
     private fun applyLook() {
         val h = height
-        val text = textColor
-        val bgAlpha = settings.bgOpacity.coerceIn(0, 100) * 255 / 100
-        // A shadow helps the text stand out, unless there's a solid background doing that.
-        val shadow = when {
-            bgAlpha > 100 -> Color.TRANSPARENT
-            isLight(text) -> 0x99000000.toInt()
-            else -> 0x66FFFFFF
-        }
         for (field in fields) {
-            val view = field.view
-            view.setTextColor(text)
-            if (h > 0) view.setTextSize(TypedValue.COMPLEX_UNIT_PX, field.size * h)
-            view.setShadowLayer(max(0.02f * h, 0.01f), 0f, 0.005f * h, shadow)
+            if (h > 0) field.view.setTextSize(TypedValue.COMPLEX_UNIT_PX, field.size * h)
         }
         box.gravity = when {
             settings.x < 1 / 3f -> Gravity.START
             settings.x > 2 / 3f -> Gravity.END
             else -> Gravity.CENTER_HORIZONTAL
         }
-        if (bgAlpha > 0) {
+        if (bgAlpha() > 0) {
             val pad = (0.035f * h).toInt()
             box.setPadding(pad * 2, pad, pad * 2, pad)
-            box.background = GradientDrawable().apply {
-                setColor(ColorUtils.setAlphaComponent(bgColor, bgAlpha))
-                cornerRadius = 0.05f * h
-            }
+            box.background = GradientDrawable().apply { cornerRadius = 0.05f * h }
         } else {
             box.setPadding(0, 0, 0, 0)
             box.background = null
         }
+        applyColors()
+    }
+
+    /** The colours of the text, the background behind it, and the text's shadow. */
+    private class Look(val text: Int, val bg: Int, val shadow: Int)
+
+    private fun bgAlpha() = settings.bgOpacity.coerceIn(0, 100) * 255 / 100
+
+    /** The colours the settings and the image call for. */
+    private fun look(): Look {
+        val text = textColor
+        val bgAlpha = bgAlpha()
+        // A shadow helps the text stand out, unless there's a solid background doing that.
+        val shadow = when {
+            bgAlpha > 100 -> Color.TRANSPARENT
+            isLight(text) -> 0x99000000.toInt()
+            else -> 0x66FFFFFF
+        }
+        return Look(text, ColorUtils.setAlphaComponent(bgColor, bgAlpha), shadow)
+    }
+
+    /** The colours on screen: part way from the old ones while a change fades in. */
+    private fun shownLook(): Look {
+        val to = look()
+        val from = fadeFrom ?: return to
+        return Look(
+            ColorUtils.blendARGB(from.text, to.text, fadeAmount),
+            ColorUtils.blendARGB(from.bg, to.bg, fadeAmount),
+            ColorUtils.blendARGB(from.shadow, to.shadow, fadeAmount),
+        )
+    }
+
+    private fun applyColors() {
+        val h = height
+        val look = shownLook()
+        for (field in fields) {
+            field.view.setTextColor(look.text)
+            field.view.setShadowLayer(max(0.02f * h, 0.01f), 0f, 0.005f * h, look.shadow)
+        }
+        (box.background as? GradientDrawable)?.setColor(look.bg)
+    }
+
+    /** Changes the colours gradually, from [from] to what they should be now. */
+    private fun fadeColors(from: Look) {
+        stopFade()
+        fadeFrom = from
+        fadeAmount = 0f
+        fade = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = COLOR_FADE_MS
+            addUpdateListener {
+                fadeAmount = it.animatedValue as Float
+                applyColors()
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (fade !== animation) return
+                    fade = null
+                    fadeFrom = null
+                    applyColors()
+                }
+            })
+            start()
+        }
+    }
+
+    private fun stopFade() {
+        val running = fade ?: return
+        fade = null
+        fadeFrom = null
+        running.cancel()
     }
 
     /** The space the clock can move in: inside the padding, less a margin. */
@@ -294,8 +362,20 @@ class ClockLayer @JvmOverloads constructor(
         post { sampleBackdrop() }
     }
 
+    /**
+     * The image under the clock moved, as it pans. Checks the automatic colours again, but only
+     * changes them when the text should flip between light and dark, and then fades: a clock
+     * changing tint every few seconds would be distracting.
+     */
+    fun backdropMoved() {
+        if (!isShown || dragging) return
+        // Both colours chosen, so there's nothing automatic to keep up with.
+        if (settings.color != null && (settings.bgColor != null || settings.bgOpacity == 0)) return
+        sampleBackdrop(moving = true)
+    }
+
     /** Works out the automatic colours from the average colour under the clock. */
-    private fun sampleBackdrop() {
+    private fun sampleBackdrop(moving: Boolean = false) {
         val src = backdrop ?: return
         if (box.width == 0 || src.width == 0) return
         sampled.set(box.left, box.top, box.right, box.bottom)
@@ -306,11 +386,18 @@ class ClockLayer @JvmOverloads constructor(
         val light = ColorUtils.HSLToColor(floatArrayOf(hsl[0], saturation, 0.95f))
         val dark = ColorUtils.HSLToColor(floatArrayOf(hsl[0], saturation, 0.12f))
         val useLight = ColorUtils.calculateContrast(light, average) >= ColorUtils.calculateContrast(dark, average)
+        if (moving && useLight == lightText) return
         if (light == shadeLight && dark == shadeDark && useLight == lightText) return
+        val shown = shownLook()
         shadeLight = light
         shadeDark = dark
         lightText = useLight
-        applyLook()
+        if (moving) {
+            fadeColors(from = shown)
+        } else {
+            stopFade()
+            applyLook()
+        }
         onColorsChanged?.invoke()
     }
 
@@ -408,6 +495,7 @@ class ClockLayer @JvmOverloads constructor(
 
     private companion object {
         const val SAMPLE_SIZE = 48f
+        const val COLOR_FADE_MS = 600L
         const val SNAP_DISTANCE = 0.04f
         val SNAP_POINTS = listOf(0f, 0.5f, 1f)
     }

@@ -68,14 +68,22 @@ class KeeperService : Service() {
     private val wakeForChanges = Runnable { wakeRear() }
     private val popoverDone = Runnable { endPopover("done") }
 
+    // The rear's state when it last changed, to tell it waking from its other changes.
+    private var rearState = Display.STATE_UNKNOWN
+
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
         override fun onDisplayRemoved(displayId: Int) {}
         override fun onDisplayChanged(displayId: Int) {
             val rear = BackScreen.findRearDisplay(this@KeeperService) ?: return
-            if (displayId != rear.displayId || rear.state != Display.STATE_ON) return
+            if (displayId != rear.displayId) return
+            val woke = rear.state == Display.STATE_ON && rearState != Display.STATE_ON
+            rearState = rear.state
+            if (rear.state != Display.STATE_ON) return
             // The gallery doesn't move on while the phone sleeps; catch up now it can be seen.
-            RearHostActivity.refreshImage()
+            // Only on waking: the lit rear reports other changes several times a second, and
+            // reading a big folder each time held up the pan.
+            if (woke) RearHostActivity.refreshImage()
             scheduleRearCheck()
         }
     }
