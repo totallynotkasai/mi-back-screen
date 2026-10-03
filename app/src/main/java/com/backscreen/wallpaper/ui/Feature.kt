@@ -24,7 +24,7 @@ enum class Feature(
         R.id.nav_notifications, R.string.notifications_switch, R.drawable.ic_notifications,
         NotificationSettings, R.string.notifications_planned,
     ),
-    BATTERY(R.id.nav_battery, R.string.battery_switch, R.drawable.ic_battery_charging, BatterySettings, R.string.battery_planned),
+    BATTERY(R.id.nav_battery, R.string.battery_switch, R.drawable.ic_battery_charging, BatterySettings),
     MIRROR(R.id.nav_mirror, R.string.mirror_switch, R.drawable.ic_swap, MirrorSettings, R.string.mirror_planned),
     CAMERA(R.id.nav_camera, R.string.camera_switch, R.drawable.ic_camera, CameraSettings, R.string.camera_planned);
 

@@ -65,9 +65,7 @@ class RearGestures(context: Context, private val onSwipe: (Swipe) -> Unit) : Sen
 
     private var lit = false
     private val sensors = context.getSystemService(SensorManager::class.java)
-    private val proximity: Sensor? = sensors.getSensorList(Sensor.TYPE_ALL).firstOrNull {
-        it.name.contains("Proximity", ignoreCase = true) && it.name.contains("Back", ignoreCase = true)
-    }
+    private val proximity: Sensor? = BackSensor.find(sensors)
     private var listening = false
     private var covered = false
 
@@ -123,8 +121,7 @@ class RearGestures(context: Context, private val onSwipe: (Swipe) -> Unit) : Sen
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        // It reads its full range when clear, and less (0 on this phone) when covered.
-        val nowCovered = event.values[0] < event.sensor.maximumRange
+        val nowCovered = BackSensor.isCovered(event)
         if (nowCovered == covered) return
         covered = nowCovered
         if (nowCovered) tracking = false

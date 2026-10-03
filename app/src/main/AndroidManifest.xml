@@ -11,7 +11,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!--
         Schedules: switch on and off at the exact times you set (you allow this in Settings),
-        and set the next switch again after the phone restarts.
+        and set the next switch again after the phone restarts. After a restart, the back
+        screen also carries on as it was.
     -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -69,7 +70,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps a user-chosen image on the phone's rear display" />
+                android:value="Shows a user-chosen image, a clock and a charging animation on the phone's rear display" />
         </service>
 
         <!-- Schedule alarms; the system broadcasts below mean the alarm must be set again. -->

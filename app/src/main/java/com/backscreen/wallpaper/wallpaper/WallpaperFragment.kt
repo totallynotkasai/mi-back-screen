@@ -243,6 +243,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         mainSwitch.setSummary(
             when {
                 !enabled -> R.string.state_off_xiaomi
+                KeeperService.instance?.isWaitingForShizuku == true -> R.string.state_waiting_shizuku
                 previewUri == null -> R.string.state_on_black
                 else -> R.string.state_on
             }

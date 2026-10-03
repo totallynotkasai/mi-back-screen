@@ -68,11 +68,13 @@ class RearPreviewLayout @JvmOverloads constructor(
             (inset.left * scale).toInt(), (inset.top * scale).toInt(),
             (inset.right * scale).toInt(), (inset.bottom * scale).toInt()
         )
-        // The clock always keeps clear of the camera, as on the rear display.
-        findViewById<View>(R.id.clock)?.setPadding(
-            (cameraInsets.left * scale).toInt(), (cameraInsets.top * scale).toInt(),
-            (cameraInsets.right * scale).toInt(), (cameraInsets.bottom * scale).toInt()
-        )
+        // The clock and the charging animation always keep clear of the camera, as on the rear display.
+        for (id in intArrayOf(R.id.clock, R.id.charging)) {
+            findViewById<View>(id)?.setPadding(
+                (cameraInsets.left * scale).toInt(), (cameraInsets.top * scale).toInt(),
+                (cameraInsets.right * scale).toInt(), (cameraInsets.bottom * scale).toInt()
+            )
+        }
         super.onMeasure(
             widthMeasureSpec,
             MeasureSpec.makeMeasureSpec((rearHeight * scale).toInt(), MeasureSpec.EXACTLY)

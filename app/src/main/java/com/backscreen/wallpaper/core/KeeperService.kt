@@ -9,12 +9,19 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Display
+import android.view.Surface
 import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.battery.BatterySettings
+import com.backscreen.wallpaper.battery.ChargingMonitor
+import com.backscreen.wallpaper.battery.ChargingStatus
+import com.backscreen.wallpaper.rear.BackSensor
 import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.wallpaper.ClockAlarm
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
@@ -45,6 +52,15 @@ import kotlin.math.max
  * A pop-over goes over Xiaomi's launcher and Xiaomi's app is left as it is: when the pop-over
  * closes, Xiaomi's launcher is simply underneath. If the rear dims first, Xiaomi closes the
  * pop-over itself, which just ends it early.
+ *
+ * Charging: while Battery is on, plugging in plays the charging animation in the wallpaper, or
+ * in a pop-over if the wallpaper is off and that's allowed (see [onPluggedIn]). Everything that
+ * lights the back screen goes through [lightRear], and [WakeThrottle] decides for the things
+ * that want to be seen, so they can't light it in a burst.
+ *
+ * Restarts: after the phone or this app restarts, it carries on. If Shizuku isn't running yet
+ * (after a phone restart it isn't until you start it), the wallpaper waits for it rather than
+ * switching off (see [waitForShizuku]).
  */
 class KeeperService : Service() {
 
@@ -59,7 +75,20 @@ class KeeperService : Service() {
     // Work waiting for Shizuku's connection, which arrives shortly after our process starts.
     private val waitingForShizuku = mutableListOf<() -> Unit>()
 
-    private val binderReceived = Shizuku.OnBinderReceivedListener { runWaiting() }
+    /** The wallpaper is on but couldn't go up, because Shizuku isn't ready (see [waitForShizuku]). */
+    var isWaitingForShizuku = false
+        private set
+
+    private val charging = ChargingMonitor(this, ::onPluggedIn, ::onUnplugged)
+    private val wakes = WakeThrottle()
+
+    private val binderReceived = Shizuku.OnBinderReceivedListener {
+        runWaiting()
+        BackScreen.mainHandler.post { applyIfWaiting() }
+    }
+    private val permissionResult = Shizuku.OnRequestPermissionResultListener { _, result ->
+        if (result == PackageManager.PERMISSION_GRANTED) BackScreen.mainHandler.post { applyIfWaiting() }
+    }
     private val shizukuTimeout = Runnable { runWaiting() }
     private val directLaunchTimeout = Runnable { onDirectLaunchFailed() }
     private val checkRear = Runnable { checkRearDisplay() }
@@ -104,9 +133,11 @@ class KeeperService : Service() {
         super.onCreate()
         instance = this
         Shizuku.addBinderReceivedListenerSticky(binderReceived)
+        Shizuku.addRequestPermissionResultListener(permissionResult)
         getSystemService(DisplayManager::class.java)
             .registerDisplayListener(displayListener, BackScreen.mainHandler)
         registerReceiver(subScreenOn, IntentFilter(ACTION_SUB_SCREEN_ON), RECEIVER_EXPORTED)
+        charging.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -115,9 +146,11 @@ class KeeperService : Service() {
             ACTION_RESTORE -> restore()
             ACTION_TOGGLE -> if (WallpaperSettings.isEnabled(this)) restore() else turnOn()
             ACTION_APPLY -> turnOn()
-            ACTION_SCHEDULED_ON -> turnOn(wake = false)
-            // ACTION_RESUME after an app update, or none: the system restarted us after the
-            // process was killed.
+            ACTION_SCHEDULED_ON -> turnOn(byYou = false)
+            ACTION_UPDATE -> stopIfIdle()
+            ACTION_PLAY_CHARGING -> playChargingNow()
+            // ACTION_RESUME after the phone restarts or the app updates, or none: the system
+            // restarted us after the process was killed.
             else -> {
                 if (RearState.snapshot(this).guardsWallpaper) apply()
                 stopIfIdle()
@@ -136,8 +169,10 @@ class KeeperService : Service() {
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.mainHandler.removeCallbacks(popoverDone)
         Shizuku.removeBinderReceivedListener(binderReceived)
+        Shizuku.removeRequestPermissionResultListener(permissionResult)
         getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
         unregisterReceiver(subScreenOn)
+        charging.stop()
         executor.shutdown()
         super.onDestroy()
     }
@@ -147,30 +182,57 @@ class KeeperService : Service() {
         if (!RearState.keeperNeeded(this)) stopSelf()
     }
 
-    /** Works with no images too: the back screen is black, with the clock if that's on. */
-    private fun turnOn(wake: Boolean = true) {
+    /**
+     * Works with no images too: the back screen is black, with the clock if that's on. [byYou]:
+     * from the app, tile or widget, where the switch going back off says Shizuku isn't ready.
+     * A schedule's turn-on waits for Shizuku instead.
+     */
+    private fun turnOn(byYou: Boolean = true) {
         WallpaperSettings.setEnabled(this, true)
         RearState.wallpaperChanged(this, true)
         BackScreen.mainHandler.removeCallbacks(popoverDone)
         // You just asked for it, so light the back screen up to show it (a schedule doesn't).
-        wakeWhenShown = wake
+        wakeWhenShown = byYou
         val owner = RearState.owner(this)
         if (owner is RearOwner.Lent) {
             BackScreen.log("Wallpaper on; it shows when ${owner.lend.packageName} leaves the back screen")
             return
         }
-        apply()
+        apply(orWait = !byYou)
     }
 
-    /** Puts the wallpaper up afresh. */
-    private fun apply() {
+    /**
+     * Puts the wallpaper up afresh. If Shizuku isn't ready it waits for it ([waitForShizuku]), or,
+     * unless [orWait], switches the wallpaper off.
+     */
+    private fun apply(orWait: Boolean = true) {
         lastApply = SystemClock.elapsedRealtime()
         BackScreen.mainHandler.removeCallbacks(putBack)
-        launchHost("Applying wallpaper...")
+        launchHost("Applying wallpaper...", if (orWait) ::waitForShizuku else ::fail)
+    }
+
+    /**
+     * Shizuku isn't ready, for a turn-on nobody is watching: after the phone restarts, Shizuku
+     * isn't running until you start it. Rather than switch the wallpaper off, wait, and put it up
+     * as soon as Shizuku connects or allows this app ([applyIfWaiting]).
+     */
+    private fun waitForShizuku() {
+        if (isWaitingForShizuku) return
+        isWaitingForShizuku = true
+        BackScreen.log("Waiting for Shizuku; the wallpaper goes up once it's running")
+        updateNotification()
+    }
+
+    private fun applyIfWaiting() {
+        if (!isWaitingForShizuku || !RearCommands.isReady()) return
+        isWaitingForShizuku = false
+        updateNotification()
+        BackScreen.log("Shizuku is ready")
+        if (RearState.snapshot(this).guardsWallpaper) apply()
     }
 
     /** Launches the host, replacing it if it's up. It shows whatever [RearState] says. */
-    private fun launchHost(what: String) {
+    private fun launchHost(what: String, onUnavailable: () -> Unit = ::fail) {
         RearHostActivity.finishCurrent()
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.log(what)
@@ -178,7 +240,7 @@ class KeeperService : Service() {
         // HyperOS only honours our rear display opt-in while the phone is unlocked.
         val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
         val popover = RearState.owner(this) == RearOwner.Popover
-        val unavailable: () -> Unit = if (popover) ({ endPopover("Shizuku isn't ready") }) else ::fail
+        val unavailable: () -> Unit = if (popover) ({ endPopover("Shizuku isn't ready") }) else onUnavailable
         if (rear == null || locked || directLaunchBlocked) {
             awaitingDirectLaunch = false
             shell(unavailable) {
@@ -217,12 +279,13 @@ class KeeperService : Service() {
 
     /** Called by RearHostActivity when it is showing on the rear display. */
     fun onHostShownOnRear(displayId: Int) {
-        val wake = wakeWhenShown
+        val wake = wakeWhenShown && !hyperOsWouldCover()
         awaitingDirectLaunch = false
         wakeWhenShown = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         // Only for the wallpaper, which stays: a pop-over is gone in seconds.
         val guard = RearState.snapshot(this).guardsWallpaper
+        if (wake) wakes.woke(SystemClock.elapsedRealtime())
         shell(onUnavailable = {}) {
             if (wake) BackScreen.log("Wake back screen: ${RearCommands.wakeDisplay(displayId)}")
             if (guard) removeXiaomiLauncher(displayId)
@@ -244,6 +307,10 @@ class KeeperService : Service() {
     private fun restore() {
         WallpaperSettings.setEnabled(this, false)
         RearState.wallpaperChanged(this, false)
+        if (isWaitingForShizuku) {
+            isWaitingForShizuku = false
+            updateNotification()
+        }
         awaitingDirectLaunch = false
         wakeWhenShown = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
@@ -291,6 +358,9 @@ class KeeperService : Service() {
         launchHost("Pop-over on back screen...")
         return true
     }
+
+    /** The host has shown what the pop-over was up for. */
+    fun onPopoverFinished() = endPopover("done")
 
     /** The pop-over is over: close the host, and Xiaomi's launcher is there underneath. */
     private fun endPopover(why: String) {
@@ -343,9 +413,91 @@ class KeeperService : Service() {
     }
 
     private fun wakeRear() {
-        if (!RearState.snapshot(this).guardsWallpaper) return
+        if (RearState.snapshot(this).guardsWallpaper) lightRear("Show changes")
+    }
+
+    /**
+     * Lights up the back screen, saying [why] in the log. Only here, and when the host is shown
+     * (see [onHostShownOnRear]). Things that want to be seen ask [wakes] first; this is also used
+     * when you asked for it, which [wakes] counts too.
+     */
+    private fun lightRear(why: String) {
         val rear = BackScreen.findRearDisplay(this)?.displayId ?: return
-        shell(onUnavailable = {}) { BackScreen.log("Show changes: ${RearCommands.wakeDisplay(rear)}") }
+        if (hyperOsWouldCover()) return BackScreen.log("$why: not while the main screen is on sideways")
+        wakes.woke(SystemClock.elapsedRealtime())
+        shell(onUnavailable = {}) { BackScreen.log("$why: ${RearCommands.wakeDisplay(rear)}") }
+    }
+
+    private fun isRearLit() = BackScreen.findRearDisplay(this)?.state == Display.STATE_ON
+
+    /**
+     * Whether HyperOS would cover the back screen if we lit it now. While the main screen is on
+     * and turned sideways, HyperOS takes a wake key on the back screen for an accident and puts
+     * its own "Press the Power button to use rear display" over it (DualScreenCoverManager,
+     * HyperOS 3.0.319), so none of ours would be seen.
+     */
+    private fun hyperOsWouldCover(): Boolean {
+        val main = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY) ?: return false
+        val sideways = main.rotation == Surface.ROTATION_90 || main.rotation == Surface.ROTATION_270
+        return main.state == Display.STATE_ON && sideways
+    }
+
+    /** Where the charging animation goes now (see [RearSnapshot.routeOverlay]). */
+    private fun chargingRoute() = RearState.snapshot(this).routeOverlay(BatterySettings.overXiaomi(this))
+
+    /**
+     * You plugged in, with Battery on ([ChargingMonitor]). The animation plays in the wallpaper,
+     * or in a pop-over over Xiaomi's screen if that's allowed, and never over another app. If the
+     * back screen is dark it's lit up for it, if that option is on; but not while the back is
+     * covered (the phone lying on its back, say), nor just after another wake. A back screen
+     * left dark would show none of it, so then nothing plays.
+     */
+    private fun onPluggedIn(status: ChargingStatus) {
+        val owner = RearState.owner(this)
+        if (owner is RearOwner.Lent) return BackScreen.log("Plugged in; ${owner.lend.packageName} has the back screen")
+        if (chargingRoute() == OverlayRoute.DROP) return BackScreen.log("Plugged in; no charging animation while the wallpaper is off")
+        // The broadcast's wake lock ends when it returns; stay awake for the sensor and the launch.
+        getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BackScreen:charging")
+            .acquire(PLUG_IN_AWAKE_MS)
+        BackSensor.check(this) { covered ->
+            val lit = isRearLit()
+            val sideways = hyperOsWouldCover()
+            val wake = BatterySettings.lightUp(this) && !covered && !sideways &&
+                wakes.allow(SystemClock.elapsedRealtime(), lit)
+            when {
+                lit || wake -> showCharging(status, wake)
+                covered -> BackScreen.log("Plugged in; the back is covered, so no charging animation")
+                sideways -> BackScreen.log("Plugged in; the main screen is on sideways, so no charging animation")
+                else -> BackScreen.log("Plugged in; the back screen is dark, so no charging animation")
+            }
+        }
+    }
+
+    private fun onUnplugged() {
+        RearHostActivity.stopCharging()
+    }
+
+    /** Play, on the Battery tab: plays it now as a plug-in would, lighting the back screen since you asked. */
+    private fun playChargingNow() {
+        val status = ChargingStatus.read(this)
+        if (status == null || !BatterySettings.isEnabled(this)) return stopIfIdle()
+        showCharging(status, wake = !isRearLit())
+    }
+
+    /** Puts the animation where [chargingRoute] says; [wake] lights the back screen for it. */
+    private fun showCharging(status: ChargingStatus, wake: Boolean) {
+        when (chargingRoute()) {
+            OverlayRoute.HOST -> {
+                RearHostActivity.playCharging(status)
+                if (wake) lightRear("Wake back screen for charging")
+            }
+            OverlayRoute.POPOVER -> {
+                RearHostActivity.playCharging(status)
+                showPopover(POPOVER_MAX_MS, wake)
+            }
+            OverlayRoute.DROP -> {}
+        }
     }
 
     /** Called when the host stops being visible on the rear: check it's still there. */
@@ -435,8 +587,14 @@ class KeeperService : Service() {
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_image)
             .setContentTitle(getString(R.string.keeper_title))
+            .setContentText(if (isWaitingForShizuku) getString(R.string.keeper_waiting) else null)
             .setOngoing(true)
             .build()
+    }
+
+    /** Shows whether it's waiting for Shizuku. Through the service, which needs no notification permission. */
+    private fun updateNotification() {
+        startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
     }
 
     companion object {
@@ -445,6 +603,12 @@ class KeeperService : Service() {
         const val ACTION_TOGGLE = "com.backscreen.wallpaper.TOGGLE"
         const val ACTION_SCHEDULED_ON = "com.backscreen.wallpaper.SCHEDULED_ON"
         const val ACTION_RESUME = "com.backscreen.wallpaper.RESUME"
+
+        /** A section was switched on or off: start, or stop if nothing needs this any more. */
+        const val ACTION_UPDATE = "com.backscreen.wallpaper.UPDATE"
+
+        /** The Battery tab's Play. */
+        const val ACTION_PLAY_CHARGING = "com.backscreen.wallpaper.PLAY_CHARGING"
 
         private const val ACTION_SUB_SCREEN_ON = "miui.intent.action.SUB_SCREEN_ON"
         private const val CHANNEL_ID = "keeper"
@@ -457,6 +621,10 @@ class KeeperService : Service() {
         private const val SHIZUKU_WAIT_MS = 4000L
         private const val DIRECT_LAUNCH_TIMEOUT_MS = 1500L
         private const val SHOW_CHANGES_DELAY_MS = 400L
+        private const val PLUG_IN_AWAKE_MS = 2000L
+
+        // A pop-over closes when its animation ends; this is in case it never starts.
+        private const val POPOVER_MAX_MS = 9000L
 
         @Volatile
         var instance: KeeperService? = null
