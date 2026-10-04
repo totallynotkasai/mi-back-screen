@@ -13,7 +13,12 @@ object RearCommands {
     private const val CMD = "/system/bin/cmd"
     private const val PACKAGE = "com.backscreen.wallpaper"
     const val XIAOMI_REAR_PACKAGE = "com.xiaomi.subscreencenter"
+    const val CAMERA_PACKAGE = "com.android.camera"
     private const val REAR_TIMEOUT = "subscreen_display_time"
+
+    // How Xiaomi's own back screen opens its camera there (seen in Phase 0): NEW_TASK,
+    // SINGLE_TOP, EXCLUDE_FROM_RECENTS, RESET_TASK_IF_NEEDED and CLEAR_TASK, with no extras.
+    private const val CAMERA_FLAGS = "0x30a08000"
     private val FIXED_ROTATION_MODES = setOf("default", "enabled", "disabled", "enabled_if_no_auto_rotation")
 
     // Xiaomi's back screen launcher has had different names across HyperOS builds; the first
@@ -54,6 +59,23 @@ object RearCommands {
 
     /** Closes the notification shade, once the Quick Switch tile has been tapped. */
     fun collapseShade() = run(CMD, "statusbar", "collapse")
+
+    /**
+     * Xiaomi Camera in its back-screen mode, on the main cameras, exactly as Xiaomi's back screen
+     * opens it (route 1). It's on HyperOS's list of apps allowed there while locked.
+     */
+    fun openXiaomiCamera(displayId: Int) =
+        run(AM, "start", "--display", displayId.toString(), "-n", "$CAMERA_PACKAGE/.Camera", "-f", CAMERA_FLAGS)
+
+    /** The standard "take a photo" intent, kept to Xiaomi Camera, which lands in the same mode (route 2). */
+    fun openCameraByIntent(displayId: Int) =
+        run(AM, "start", "--display", displayId.toString(), "-a", "android.media.action.STILL_IMAGE_CAMERA", "-p", CAMERA_PACKAGE)
+
+    /** BACK on that display, as Xiaomi's back strip sends: Xiaomi Camera closes itself and finishes saving. */
+    fun pressBack(displayId: Int) = run(INPUT, "-d", displayId.toString(), "keyevent", "KEYCODE_BACK")
+
+    /** Only if Xiaomi Camera hasn't closed after BACK. */
+    fun stopXiaomiCamera() = run(AM, "force-stop", CAMERA_PACKAGE)
 
     // Xiaomi's settings that a lend changes, and always puts back (see RearTweaks). The setting
     // names and the display are fixed; only the values vary, and those are numbers or one of

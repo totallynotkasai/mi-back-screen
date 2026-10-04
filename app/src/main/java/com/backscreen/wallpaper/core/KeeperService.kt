@@ -23,6 +23,7 @@ import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.battery.BatterySettings
 import com.backscreen.wallpaper.battery.ChargingMonitor
 import com.backscreen.wallpaper.battery.ChargingStatus
+import com.backscreen.wallpaper.camera.XiaomiCamera
 import com.backscreen.wallpaper.mirror.AppLabels
 import com.backscreen.wallpaper.mirror.MirrorSettings
 import com.backscreen.wallpaper.mirror.QuickSwitch
@@ -80,6 +81,10 @@ import kotlin.math.max
  * back can bring it back ([BackCover]). Whatever the lend changed in Xiaomi's settings
  * ([RearTweaks]) is put back when it ends, or when this starts with nothing lent.
  *
+ * Xiaomi Camera ([XiaomiCamera]): a swipe left on the wallpaper, or Open camera, opens it on the
+ * back screen as another lend, watched the same way. It closes when the back screen dims or goes
+ * off, when the back is covered, and from Close camera in its notification.
+ *
  * Restarts: after the phone or this app restarts, it carries on. If Shizuku isn't running yet
  * (after a phone restart it isn't until you start it), the wallpaper waits for it rather than
  * switching off (see [waitForShizuku]).
@@ -107,9 +112,12 @@ class KeeperService : Service() {
 
     /** Moving the app you're using to the back screen and back. */
     val quickSwitch = QuickSwitch(this)
+
+    /** Xiaomi Camera on the back screen. */
+    val camera = XiaomiCamera(this)
     private val watchdog = LendWatchdog(::shell, ::rearDisplayId, ::onLentAppGone)
     // Lazy: it finds the sensor, which needs the service's context.
-    private val backCover by lazy { BackCover(this) { quickSwitch.bringBack("the back was covered") } }
+    private val backCover by lazy { BackCover(this, ::onBackCovered) }
 
     // After an app is sent, the back screen is lit for it once that won't bring up HyperOS's
     // cover: until then (elapsedRealtime), and not before Xiaomi's app has settled.
@@ -151,7 +159,10 @@ class KeeperService : Service() {
             val rear = BackScreen.findRearDisplay(this@KeeperService) ?: return
             if (displayId != rear.displayId) return
             val woke = rear.state == Display.STATE_ON && rearState != Display.STATE_ON
+            val changed = rear.state != rearState
             rearState = rear.state
+            // Xiaomi Camera closes when the back screen dims or goes off.
+            if (changed) camera.rearChanged(rear.state == Display.STATE_ON)
             tryLightForLend()
             if (rear.state != Display.STATE_ON) return
             // The gallery doesn't move on while the phone sleeps; catch up now it can be seen.
@@ -188,6 +199,7 @@ class KeeperService : Service() {
             // Saved before this process last stopped: make sure it's still there before trusting it.
             BackScreen.log("Checking ${lend.packageName} is still on the back screen")
             watchdog.watch(lend, now = true)
+            camera.resumed()
             updateCover()
         } else {
             putBackTweaksIfIdle()
@@ -210,6 +222,14 @@ class KeeperService : Service() {
             ACTION_QUICK_SWITCH -> quickSwitch.toggle()
             ACTION_BRING_BACK -> quickSwitch.bringBack("the notification")
             ACTION_MIRROR_CHANGED -> mirrorChanged()
+            ACTION_OPEN_CAMERA -> {
+                camera.open(intent.getStringExtra(EXTRA_WHY) ?: "the Camera tab")
+                stopIfIdle()
+            }
+            ACTION_CLOSE_CAMERA -> {
+                camera.close(intent.getStringExtra(EXTRA_WHY) ?: "the notification")
+                stopIfIdle()
+            }
             // ACTION_RESUME after the phone restarts or the app updates, or none: the system
             // restarted us after the process was killed.
             else -> {
@@ -232,6 +252,7 @@ class KeeperService : Service() {
         BackScreen.mainHandler.removeCallbacks(lightForLendAgain)
         watchdog.stop()
         backCover.stop()
+        camera.ended()
         Shizuku.removeBinderReceivedListener(binderReceived)
         Shizuku.removeRequestPermissionResultListener(permissionResult)
         getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
@@ -466,6 +487,7 @@ class KeeperService : Service() {
         BackScreen.log("Back screen returned")
         watchdog.stop()
         backCover.stop()
+        camera.ended()
         lightForLendUntil = 0L
         BackScreen.mainHandler.removeCallbacks(lightForLendAgain)
         ClockAlarm.update(this)
@@ -515,10 +537,27 @@ class KeeperService : Service() {
         QuickSwitchTile.requestUpdate(this)
     }
 
-    /** Covering the back brings a Quick Switch app back, while that option is on. */
+    /**
+     * Covering the back brings a Quick Switch app back, while that option is on, and always
+     * closes Xiaomi Camera.
+     */
     private fun updateCover() {
-        if (quickSwitch.lend != null && MirrorSettings.coverReturn(this)) backCover.start() else backCover.stop()
+        val watch = (quickSwitch.lend != null && MirrorSettings.coverReturn(this)) || camera.lend != null
+        if (watch) backCover.start() else backCover.stop()
     }
+
+    private fun onBackCovered() {
+        if (camera.lend != null) camera.close("the back was covered") else quickSwitch.bringBack("the back was covered")
+    }
+
+    /** Swipe left on the wallpaper: Xiaomi Camera, if that section is on. [why] is for the log. */
+    fun openCamera(why: String) = camera.open(why)
+
+    /**
+     * The wallpaper is showing again while an app is still recorded as lent the back screen: it
+     * has probably closed or gone behind, so look now rather than at the next check.
+     */
+    fun onHostShownWhileLent() = watchdog.lookNow()
 
     fun rearDisplayId() = BackScreen.findRearDisplay(this)?.displayId
 
@@ -593,7 +632,7 @@ class KeeperService : Service() {
         shell(onUnavailable = {}) { BackScreen.log("$why: ${RearCommands.wakeDisplay(rear)}") }
     }
 
-    private fun isRearLit() = BackScreen.findRearDisplay(this)?.state == Display.STATE_ON
+    fun isRearLit() = BackScreen.findRearDisplay(this)?.state == Display.STATE_ON
 
     /**
      * Whether HyperOS would cover the back screen if we lit it now. While the main screen is on
@@ -767,10 +806,32 @@ class KeeperService : Service() {
         if (RearHostActivity.isOnRear()) {
             // Hidden only because the rear is dimmed or off: still there when it lights up.
             if (rear?.state != Display.STATE_ON) return
-            BackScreen.log("Something covered the wallpaper; bringing it back")
-        } else {
-            BackScreen.log("Wallpaper isn't on the back screen; putting it back")
+            return checkCover(rear.displayId)
         }
+        BackScreen.log("Wallpaper isn't on the back screen; putting it back")
+        putBackSoon()
+    }
+
+    /**
+     * Something covered the wallpaper. Xiaomi Camera can open there again by itself: its page on
+     * the main screen opens it each time you come back to it, after the camera had closed when
+     * you left it (Phase 7). Covering a running camera with the wallpaper would hide it, so it
+     * becomes the camera's lend, as if opened here. Anything else is covered over.
+     */
+    private fun checkCover(rear: Int) {
+        shell(onUnavailable = {}) {
+            val front = RearCommands.taskList()?.let { TaskList.tasksOn(it, rear).firstOrNull() }
+            BackScreen.mainHandler.post {
+                if (!RearState.snapshot(this).guardsWallpaper || RearHostActivity.visibleOnRear) return@post
+                if (front?.packageName == RearCommands.CAMERA_PACKAGE) return@post camera.adopt()
+                BackScreen.log("Something covered the wallpaper; bringing it back")
+                putBackSoon()
+            }
+        }
+    }
+
+    /** Puts the wallpaper up again, but not too often, in case something keeps closing it. */
+    private fun putBackSoon() {
         val wait = lastApply + REAPPLY_MIN_INTERVAL_MS - SystemClock.elapsedRealtime()
         if (wait > 0) {
             BackScreen.mainHandler.removeCallbacks(putBack)
@@ -813,27 +874,41 @@ class KeeperService : Service() {
     }
 
     /**
-     * The service's one notification. Minimised, unless an app is on the back screen: then it
-     * says which, with Bring back, on a quiet channel of its own that isn't tucked away.
+     * The service's one notification. Minimised, unless an app or Xiaomi Camera is on the back
+     * screen: then it says which, with Bring back or Close camera, on a quiet channel of its own
+     * that isn't tucked away.
      */
     private fun buildNotification(): Notification {
+        if (camera.lend != null) {
+            return buildLentNotification(
+                R.drawable.ic_camera, getString(R.string.camera_lent_title), getString(R.string.camera_lent_text),
+                getString(R.string.close_camera), ACTION_CLOSE_CAMERA, REQUEST_CLOSE_CAMERA,
+            )
+        }
         val lend = quickSwitch.lend ?: return buildKeeperNotification()
+        return buildLentNotification(
+            R.drawable.ic_swap, getString(R.string.lent_title, AppLabels.get(this, lend.packageName)), getString(R.string.lent_text),
+            getString(R.string.bring_back), ACTION_BRING_BACK, REQUEST_BRING_BACK,
+        )
+    }
+
+    /** What's on the back screen, with one action that ends it; tapping it does the same (Phase 6). */
+    private fun buildLentNotification(
+        icon: Int, title: String, text: String, actionLabel: String, action: String, request: Int,
+    ): Notification {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_LENT_ID, getString(R.string.lent_channel), NotificationManager.IMPORTANCE_LOW)
         )
-        // Tapping it brings the app back too: that's what you'd expect it to do (Phase 6).
-        val bringBack = PendingIntent.getForegroundService(
-            this, REQUEST_BRING_BACK, Intent(this, KeeperService::class.java).setAction(ACTION_BRING_BACK),
+        val intent = PendingIntent.getForegroundService(
+            this, request, Intent(this, KeeperService::class.java).setAction(action),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return Notification.Builder(this, CHANNEL_LENT_ID)
-            .setSmallIcon(R.drawable.ic_swap)
-            .setContentTitle(getString(R.string.lent_title, AppLabels.get(this, lend.packageName)))
-            .setContentText(getString(R.string.lent_text))
-            .setContentIntent(bringBack)
-            .addAction(
-                Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_swap), getString(R.string.bring_back), bringBack).build()
-            )
+            .setSmallIcon(icon)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setContentIntent(intent)
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, icon), actionLabel, intent).build())
             .setOngoing(true)
             .build()
     }
@@ -883,11 +958,21 @@ class KeeperService : Service() {
         /** A Mirror option changed. */
         const val ACTION_MIRROR_CHANGED = "com.backscreen.wallpaper.MIRROR_CHANGED"
 
+        /** Open camera on back screen, on the Camera tab. */
+        const val ACTION_OPEN_CAMERA = "com.backscreen.wallpaper.OPEN_CAMERA"
+
+        /** Close camera, in the notification or on the Camera tab. */
+        const val ACTION_CLOSE_CAMERA = "com.backscreen.wallpaper.CLOSE_CAMERA"
+
+        /** With the camera's actions: where it was asked from, for the log. */
+        const val EXTRA_WHY = "why"
+
         private const val ACTION_SUB_SCREEN_ON = "miui.intent.action.SUB_SCREEN_ON"
         private const val CHANNEL_ID = "keeper"
         private const val CHANNEL_LENT_ID = "lent"
         private const val NOTIFICATION_ID = 1
         private const val REQUEST_BRING_BACK = 1
+        private const val REQUEST_CLOSE_CAMERA = 2
 
         // How long a sent app's light waits for the main screen to turn upright or off.
         private const val LEND_LIGHT_WINDOW_MS = 30_000L
@@ -909,8 +994,11 @@ class KeeperService : Service() {
         var instance: KeeperService? = null
             private set
 
-        fun start(context: Context, action: String) {
-            context.startForegroundService(Intent(context, KeeperService::class.java).setAction(action))
+        /** [why] goes with the camera's actions, for the log. */
+        fun start(context: Context, action: String, why: String? = null) {
+            val intent = Intent(context, KeeperService::class.java).setAction(action)
+            why?.let { intent.putExtra(EXTRA_WHY, it) }
+            context.startForegroundService(intent)
         }
 
         /**

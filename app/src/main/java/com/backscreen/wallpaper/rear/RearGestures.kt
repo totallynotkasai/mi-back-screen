@@ -65,6 +65,23 @@ object Swipes {
 }
 
 /**
+ * A swipe left that starts on Xiaomi's back strip (from x 914) never reaches the host as a
+ * swipe: Xiaomi's strip takes it and sends BACK. In Phase 7, half the natural swipes left that
+ * opened the camera started there (5 of 10), so BACK on the wallpaper counts as a swipe left too
+ * (decided then). Plain Kotlin, so it's unit tested.
+ */
+object EdgeSwipe {
+    /**
+     * Not just after the wallpaper came back in front: a swipe on the strip that closed Xiaomi
+     * Camera can send a second BACK, which would open it again.
+     */
+    const val GRACE_MS = 2000L
+
+    /** Whether BACK on the wallpaper, [shownForMs] after it came back in front, opens the camera. */
+    fun opensCamera(shownForMs: Long) = shownForMs >= GRACE_MS
+}
+
+/**
  * Reads swipes on the back screen and passes on the ones that count (see [Swipes]). The back
  * screen sits under your fingers, so on top of that:
  *
@@ -148,9 +165,16 @@ class RearGestures(context: Context, private val listener: Listener) : SensorEve
                     listener.onPullEnd(Swipes.pullOpens(event.x - startX, event.y - startY, height))
                     return
                 }
-                val swipe = Swipes.classify(startX, startY, event.x, event.y, event.eventTime - startTime, width, height)
-                    ?: return
-                listener.onSwipe(swipe)
+                val ms = event.eventTime - startTime
+                val swipe = Swipes.classify(startX, startY, event.x, event.y, ms, width, height)
+                // For tuning: where each touch that moved went, and whether it counted.
+                if (abs(event.x - startX) > slop || abs(event.y - startY) > slop) {
+                    BackScreen.trace(
+                        "${swipe?.name?.lowercase() ?: "Not a swipe"}: (${startX.toInt()}, ${startY.toInt()}) " +
+                            "to (${event.x.toInt()}, ${event.y.toInt()}) in $ms ms"
+                    )
+                }
+                listener.onSwipe(swipe ?: return)
             }
         }
     }

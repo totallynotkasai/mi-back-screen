@@ -17,14 +17,16 @@ class LendMisses(private val limit: Int = MISSES_TO_END) {
     /**
      * One look at the task list: [inFront] if the lent app is in front on the back screen, or
      * null if the list couldn't be read, which counts for nothing. True once the lend is over.
+     * [wallpaperShowing]: the wallpaper came back in front on the back screen just now, which is
+     * the second sign, so one miss is enough.
      */
-    fun check(inFront: Boolean?): Boolean {
+    fun check(inFront: Boolean?, wallpaperShowing: Boolean = false): Boolean {
         when (inFront) {
             null -> return false
             true -> misses = 0
             false -> misses++
         }
-        return misses >= limit
+        return misses >= limit || (inFront == false && wallpaperShowing)
     }
 
     fun reset() {
@@ -59,6 +61,8 @@ class LendWatchdog(
     private val misses = LendMisses()
     private var watching: Lend? = null
     private var checking = false
+    // The next look was asked for because the wallpaper is showing again (see lookNow).
+    private var wallpaperShowing = false
     private val tick = Runnable { check() }
 
     /** Starts watching [lend], with a first look straight away if [now]: a lend saved before a restart. */
@@ -75,11 +79,24 @@ class LendWatchdog(
         BackScreen.mainHandler.removeCallbacks(tick)
     }
 
+    /**
+     * The wallpaper came back in front on the back screen while an app is lent: look now rather
+     * than at the next tick, and if the app isn't in front, that's enough to end the lend.
+     */
+    fun lookNow() {
+        if (watching == null || checking) return
+        wallpaperShowing = true
+        BackScreen.mainHandler.removeCallbacks(tick)
+        BackScreen.mainHandler.post(tick)
+    }
+
     private fun check() {
         val lend = watching ?: return
         if (checking) return schedule()
         val rear = rearDisplay() ?: return schedule()
         checking = true
+        val showing = wallpaperShowing
+        wallpaperShowing = false
         val started = SystemClock.elapsedRealtime()
         val unavailable = {
             checking = false
@@ -96,7 +113,7 @@ class LendWatchdog(
                     null -> "list unread"
                 }
                 BackScreen.trace("Lend check: ${lend.packageName} $seen (${SystemClock.elapsedRealtime() - started} ms)")
-                if (misses.check(inFront)) {
+                if (misses.check(inFront, wallpaperShowing = showing)) {
                     stop()
                     onGone(lend)
                 } else {

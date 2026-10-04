@@ -42,7 +42,8 @@ import java.lang.ref.WeakReference
  * - notifications ([NotificationLayer]): a banner when one arrives, and the list of the ones you
  *   haven't cleared, which you pull down from the top.
  *
- * [RearGestures] reads swipes on it.
+ * [RearGestures] reads swipes on it: down for the notification list, left for Xiaomi Camera,
+ * which opens over it as another app lent the back screen.
  *
  * KeeperService launches it straight onto the rear; if HyperOS won't allow that, it's launched
  * on the main display (transparent, so it doesn't flash) and its task moved to the rear, where
@@ -64,6 +65,7 @@ class RearHostActivity : Activity() {
     private var onRear = false
     private var popover = false
     private var started = false
+    private var startedAt = 0L
     private var finishRequested = false
     private var rearState = Display.STATE_UNKNOWN
 
@@ -89,7 +91,10 @@ class RearHostActivity : Activity() {
     private val swipes = object : RearGestures.Listener {
         override fun onSwipe(swipe: Swipe) {
             BackScreen.log(if (swipe == Swipe.LEFT) "Swiped left on the back screen" else "Swiped down on the back screen")
-            if (swipe == Swipe.DOWN && gestures.pullDown && startShade()) notifications?.openShade()
+            when (swipe) {
+                Swipe.LEFT -> openCamera("swipe left")
+                Swipe.DOWN -> if (gestures.pullDown && startShade()) notifications?.openShade()
+            }
         }
 
         override fun onPull(dy: Float) {
@@ -219,6 +224,7 @@ class RearHostActivity : Activity() {
     override fun onStart() {
         super.onStart()
         started = true
+        startedAt = SystemClock.uptimeMillis()
         if (onRear) {
             if (isCurrent()) visibleOnRear = true
             wallpaper?.showImage(advance = true)
@@ -229,6 +235,8 @@ class RearHostActivity : Activity() {
             updateMotion()
             playDueCharging()
             showDueNotification()
+            pushWhenDrawn()
+            if (RearState.owner(this) is RearOwner.Lent) KeeperService.instance?.onHostShownWhileLent()
         }
     }
 
@@ -286,15 +294,29 @@ class RearHostActivity : Activity() {
     }
 
     // Xiaomi's back gesture strip on the rear's right edge sends BACK: it closes the notification
-    // list if that's down, and otherwise the host stays put.
+    // list if that's down, and otherwise the host stays put. A swipe left that starts on the strip
+    // reaches us only as BACK, so that opens the camera, as a swipe left does (decided in Phase 7).
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (!onRear) {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        } else if (notifications?.isShadeOpen == true) {
-            notifications?.closeShade(animate = true)
+        when {
+            !onRear -> {
+                @Suppress("DEPRECATION")
+                super.onBackPressed()
+            }
+            notifications?.isShadeOpen == true -> notifications?.closeShade(animate = true)
+            !started || !isLit() -> {}
+            EdgeSwipe.opensCamera(SystemClock.uptimeMillis() - startedAt) -> {
+                BackScreen.log("Swiped left from Xiaomi's back strip")
+                openCamera("swipe left from the back strip")
+            }
+            else -> BackScreen.log("BACK just after the wallpaper came back; not opening the camera")
         }
+    }
+
+    /** A swipe left: Xiaomi Camera, while that section is on. */
+    private fun openCamera(why: String) {
+        if (popover || !CameraSettings.isEnabled(this)) return
+        KeeperService.instance?.openCamera(why)
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
@@ -516,6 +538,18 @@ class RearHostActivity : Activity() {
     }
 
     /**
+     * Back in front on a dimmed back screen, after another app such as Xiaomi Camera closed: once
+     * the wallpaper has drawn its first frame again, push it to the panel. Pushed straight away,
+     * the panel got the wallpaper as it was before the camera opened, minutes old (Phase 7).
+     */
+    private fun pushWhenDrawn() {
+        val state = display?.state
+        if (state == Display.STATE_ON || state == Display.STATE_OFF) return
+        window.decorView.viewTreeObserver.registerFrameCommitCallback { onShownChanged() }
+        window.decorView.invalidate()
+    }
+
+    /**
      * Gets the current frame onto a dimmed rear. In DOZE_SUSPEND the display driver refuses new
      * frames, and one drawn then is used up without reaching the panel, so it keeps the old one.
      * While a draw wake lock is held, the system switches the display to DOZE, where frames get
@@ -635,6 +669,14 @@ class RearHostActivity : Activity() {
             val host = showingWallpaper() ?: return
             host.updateGestures()
             if (host.notifications?.isShadeOpen == true) host.refreshShade()
+        }
+
+        /**
+         * Swipe left for Xiaomi Camera was switched. Like [notificationsChanged], there's nothing
+         * new to see, so the back screen isn't woken for it.
+         */
+        fun swipesChanged() {
+            showingWallpaper()?.updateGestures()
         }
 
         /** Loads the gallery's current image again. False if the wallpaper isn't up. */

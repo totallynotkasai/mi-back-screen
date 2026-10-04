@@ -15,8 +15,6 @@
     <string name="battery_switch">Charging animation</string>
     <string name="mirror_switch">Quick Switch</string>
     <string name="camera_switch">Swipe left for Xiaomi Camera</string>
-    <string name="coming_later">Coming in a later update</string>
-    <string name="camera_planned">Swipe left on the back screen to open Xiaomi Camera there, on the main cameras, for selfies with the best lenses.</string>
 
     <!-- Top bar and its menu. -->
     <string name="refresh">Refresh back screen</string>
@@ -26,7 +24,7 @@
     <string name="setup_help">Setup help</string>
     <string name="about_title">About</string>
     <string name="about">Mi Back Screen %1$s</string>
-    <string name="about_message">Shows your own images, GIFs, a clock, a charging animation and your notifications on the Xiaomi 17 Pro Max back screen, and moves the app you\'re using there with Quick Switch.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
+    <string name="about_message">Shows your own images, GIFs, a clock, a charging animation and your notifications on the Xiaomi 17 Pro Max back screen, moves the app you\'re using there with Quick Switch, and opens Xiaomi Camera there with a swipe.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
     <string name="website">Website</string>
     <string name="website_url" translatable="false">https://totallynotkasai.github.io/mi-back-screen/</string>
     <string name="close">Close</string>
@@ -293,13 +291,36 @@
     <string name="lent_title">%1$s is on the back screen</string>
     <string name="lent_text">Tap to bring it back here</string>
     <string name="setup_mirror_notifications_title">Notifications</string>
-    <string name="setup_mirror_notifications_text">Shows which app is on the back screen, with Bring back.</string>
+    <string name="setup_mirror_notifications_text">Shows what\'s on the back screen, with Bring back or Close camera.</string>
     <string name="allow">Allow</string>
     <string name="diag_mirror">Quick Switch: %1$s</string>
     <string name="diag_mirror_off">off</string>
     <string name="diag_mirror_on">on</string>
     <string name="diag_mirror_lent">on, %1$s on the back screen</string>
     <string name="diag_tweaks">Changed in Xiaomi\'s settings: %1$s</string>
+
+    <!-- Camera tab, and Xiaomi Camera on the back screen. -->
+    <string name="camera_on_ready">On · swipe left on the back screen</string>
+    <string name="camera_on_no_wallpaper">On · needs the wallpaper on</string>
+    <string name="camera_on_open">On · Xiaomi Camera is on the back screen</string>
+    <string name="camera_preview">Preview of the swipe left that opens Xiaomi Camera</string>
+    <string name="camera_caption">Swipe left across the back screen while it\'s lit. If it\'s dim, double-tap it first</string>
+    <string name="open_camera">Open camera on back screen</string>
+    <string name="close_camera">Close camera</string>
+    <string name="camera_opened_switch_off">Opened. Turn on the switch above to open it by swiping left too</string>
+    <string name="camera_wallpaper_off_title">The wallpaper is off</string>
+    <string name="camera_wallpaper_off">Swiping works on the Mi Back Screen wallpaper. While it\'s off, Xiaomi\'s own back screen gets the touches. Open camera works either way.</string>
+    <string name="turn_on_wallpaper">Turn on wallpaper</string>
+    <string name="camera_close_title">Closing it</string>
+    <string name="camera_close">• Swipe in from the back screen\'s right edge, Xiaomi\'s back strip.\n• Cover the camera for a moment.\n• Close camera, here or in the notification.\n• It also closes when the back screen dims.</string>
+    <string name="camera_limits_title">Good to know</string>
+    <string name="camera_limits">• Xiaomi Camera opens in its own back screen mode, on the main cameras. Photos and videos go to Gallery as usual.\n• While it\'s up, Xiaomi shows its own page on the main screen, and turns the main screen off after about 30 seconds.\n• Xiaomi Camera closes by itself when the back screen isn\'t touched for a while, even while recording. Tap it now and then during a long video.</string>
+    <string name="camera_notifications_denied">Without notifications, close the camera here or with Xiaomi\'s back strip</string>
+    <string name="camera_lent_title">Xiaomi Camera is on the back screen</string>
+    <string name="camera_lent_text">Tap to close it</string>
+    <string name="diag_camera">Swipe left for Xiaomi Camera: %1$s</string>
+    <string name="diag_camera_up">Xiaomi Camera on the back screen</string>
+    <string name="diag_camera_route">last opened by route %1$d</string>
 
     <!-- Outside the app. -->
     <string name="tile_label">Back screen wallpaper</string>

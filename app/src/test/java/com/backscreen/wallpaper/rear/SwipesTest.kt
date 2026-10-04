@@ -92,4 +92,13 @@ class SwipesTest {
     fun nothingOnAnUnmeasuredScreen() {
         assertNull(Swipes.classify(700f, 300f, 300f, 300f, 150, 0, 0))
     }
+
+    @Test
+    fun backFromXiaomisStripOpensTheCameraOnceTheWallpaperHasSettled() {
+        // A swipe on the strip that closed Xiaomi Camera can send a second BACK.
+        assertFalse(EdgeSwipe.opensCamera(shownForMs = 300))
+        assertFalse(EdgeSwipe.opensCamera(shownForMs = EdgeSwipe.GRACE_MS - 1))
+        assertTrue(EdgeSwipe.opensCamera(shownForMs = EdgeSwipe.GRACE_MS))
+        assertTrue(EdgeSwipe.opensCamera(shownForMs = 60_000))
+    }
 }

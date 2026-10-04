@@ -12,6 +12,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.backscreen.wallpaper.battery.BatteryFragment
+import com.backscreen.wallpaper.camera.CameraFragment
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.RearCommands
@@ -20,7 +21,6 @@ import com.backscreen.wallpaper.mirror.MirrorFragment
 import com.backscreen.wallpaper.notifications.NotificationsFragment
 import com.backscreen.wallpaper.ui.AppDialogs
 import com.backscreen.wallpaper.ui.Feature
-import com.backscreen.wallpaper.ui.PlannedFeatureFragment
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.wallpaper.WallpaperFragment
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
@@ -184,7 +184,7 @@ class MainActivity : AppCompatActivity() {
         Feature.NOTIFICATIONS -> NotificationsFragment()
         Feature.BATTERY -> BatteryFragment()
         Feature.MIRROR -> MirrorFragment()
-        else -> PlannedFeatureFragment.newInstance(feature)
+        Feature.CAMERA -> CameraFragment()
     }
 
     private fun refresh() {

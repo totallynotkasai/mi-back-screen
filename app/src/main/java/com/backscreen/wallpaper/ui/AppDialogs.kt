@@ -23,8 +23,10 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.camera.CameraSettings
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.HostMode
+import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.LendReason
 import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
@@ -87,6 +89,7 @@ object AppDialogs {
             context.getString(R.string.diag_rear_state, BackScreen.stateName(rear?.state)),
             context.getString(R.string.diag_notifications, notificationsStatus(context)),
             context.getString(R.string.diag_mirror, mirrorStatus(context)),
+            context.getString(R.string.diag_camera, cameraStatus(context)),
             RearTweaks.summary(context)?.let { context.getString(R.string.diag_tweaks, it) },
             ClockAlarm.summary(),
             "",
@@ -117,6 +120,18 @@ object AppDialogs {
         val lend = (RearState.owner(context) as? RearOwner.Lent)?.lend?.takeIf { it.reason == LendReason.QUICK_SWITCH }
             ?: return context.getString(R.string.diag_mirror_on)
         return context.getString(R.string.diag_mirror_lent, AppLabels.get(context, lend.packageName))
+    }
+
+    /** Whether swipe left is on, whether Xiaomi Camera is up, and which way it last opened. */
+    private fun cameraStatus(context: Context): String {
+        val state = context.getString(if (CameraSettings.isEnabled(context)) R.string.diag_mirror_on else R.string.diag_mirror_off)
+        val up = (RearState.owner(context) as? RearOwner.Lent)?.lend?.reason == LendReason.CAMERA
+        val route = KeeperService.instance?.camera?.route
+        return listOfNotNull(
+            state,
+            context.getString(R.string.diag_camera_up).takeIf { up },
+            route?.let { context.getString(R.string.diag_camera_route, it) },
+        ).joinToString(", ")
     }
 
     /** Shizuku's state, as a line for the app. */
@@ -163,8 +178,9 @@ object AppDialogs {
         // Notification access, only while that section is on.
         val notifications = NotificationSettings.isEnabled(activity)
         val notificationAccess = NotificationAccess.isGranted(activity)
-        // The app's own notifications, for Bring back, only while Quick Switch is on.
-        val mirror = MirrorSettings.isEnabled(activity)
+        // The app's own notifications, for Bring back or Close camera, only while Quick Switch or
+        // the camera's swipe is on.
+        val mirror = MirrorSettings.isEnabled(activity) || CameraSettings.isEnabled(activity)
         val posting = activity.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
         val state = listOf(shizukuStatus(), alarms, battery, notifications, notificationAccess, mirror, posting)
         if (state == shown) return state
