@@ -73,6 +73,25 @@
                 android:value="Shows a user-chosen image, a clock and a charging animation on the phone's rear display" />
         </service>
 
+        <!--
+            Notifications on the back screen. Reads new notifications only once you allow
+            Notification access (one tap through Shizuku, or in Settings), and only while that
+            section is on. Nothing is stored or sent anywhere. It asks for notifications that
+            alert or are conversations; silent and ongoing ones never reach it.
+        -->
+        <service
+            android:name=".notifications.RearNotificationListener"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="conversations|alerting" />
+        </service>
+
         <!-- Schedule alarms; the system broadcasts below mean the alarm must be set again. -->
         <receiver
             android:name=".ScheduleReceiver"

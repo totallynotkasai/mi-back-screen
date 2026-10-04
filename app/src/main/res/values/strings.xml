@@ -16,7 +16,6 @@
     <string name="mirror_switch">Quick Switch</string>
     <string name="camera_switch">Swipe left for Xiaomi Camera</string>
     <string name="coming_later">Coming in a later update</string>
-    <string name="notifications_planned">New notifications slide in at the top of the back screen, showing as much as you choose: just the app, who it\'s from, or the whole message. Swipe down on the back screen for the ones you haven\'t cleared.</string>
     <string name="mirror_planned">A Quick Settings tile that moves the app you\'re using to the back screen, and brings it back with another tap.</string>
     <string name="camera_planned">Swipe left on the back screen to open Xiaomi Camera there, on the main cameras, for selfies with the best lenses.</string>
 
@@ -28,7 +27,7 @@
     <string name="setup_help">Setup help</string>
     <string name="about_title">About</string>
     <string name="about">Mi Back Screen %1$s</string>
-    <string name="about_message">Shows your own images, GIFs, a clock and a charging animation on the Xiaomi 17 Pro Max back screen.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
+    <string name="about_message">Shows your own images, GIFs, a clock, a charging animation and your notifications on the Xiaomi 17 Pro Max back screen.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
     <string name="website">Website</string>
     <string name="website_url" translatable="false">https://totallynotkasai.github.io/mi-back-screen/</string>
     <string name="close">Close</string>
@@ -53,6 +52,7 @@
     <string name="setup_alarms_text">Lets schedules switch on time and the clock stay right while the phone sleeps.</string>
     <string name="setup_battery_title">Battery</string>
     <string name="setup_battery_text">HyperOS pauses apps in the background, which holds up schedules and the clock. In app settings, turn on Autostart and set Battery saver to No restrictions.</string>
+    <string name="setup_notifications_text">Lets the back screen show new notifications. They\'re read on the phone only, and never stored or sent anywhere.</string>
     <string name="setup_done">Done</string>
     <string name="setup_needed_short">Needed</string>
 
@@ -61,6 +61,14 @@
     <string name="diag_shizuku">Shizuku: %1$s</string>
     <string name="diag_owner">Back screen: %1$s</string>
     <string name="diag_rear_state">Back screen display: %1$s</string>
+    <string name="diag_notifications">Notifications: %1$s</string>
+    <string name="diag_notifications_off">off</string>
+    <string name="diag_notifications_no_access">on, but access isn\'t allowed</string>
+    <string name="diag_notifications_waiting">on, waiting for Android to connect</string>
+    <plurals name="diag_notifications_reading">
+        <item quantity="one">on, %d in the shade for the back screen</item>
+        <item quantity="other">on, %d in the shade for the back screen</item>
+    </plurals>
     <string name="owner_xiaomi">Xiaomi\'s screen</string>
     <string name="owner_wallpaper">wallpaper</string>
     <string name="owner_shade">notifications</string>
@@ -191,6 +199,55 @@
     <string name="charging">Charging</string>
     <string name="charging_wireless">Wireless charging</string>
     <string name="charged">Fully charged</string>
+
+    <!-- Notifications tab, and notifications on the back screen. -->
+    <string name="notifications_on_wallpaper">On · shows over the wallpaper</string>
+    <string name="notifications_on_xiaomi">On · Xiaomi\'s back screen shows them while the wallpaper is off</string>
+    <string name="notifications_on_no_access">On · needs notification access</string>
+    <string name="access_title">Notification access</string>
+    <string name="access_allowed">Allowed. Notifications are read on the phone to show them on the back screen, and never stored or sent anywhere.</string>
+    <string name="access_needed">Needed to show your notifications. Shizuku can allow it in one tap.</string>
+    <string name="access_needed_settings">Needed to show your notifications. In Settings, switch on Mi Back Screen. If it\'s greyed out, first open App info → ⋮ → Allow restricted settings.</string>
+    <string name="access_remove">Remove access</string>
+    <string name="open_settings">Open settings</string>
+    <string name="access_now_allowed">Notification access allowed</string>
+    <string name="access_now_removed">Notification access removed</string>
+    <string name="access_failed">Couldn\'t change notification access</string>
+    <string name="notifications_preview">Preview of a notification on the back screen</string>
+    <string name="notifications_caption">New notifications slide in at the top for about 5 seconds</string>
+    <string name="try_on_back_screen">Try on back screen</string>
+    <string name="try_preview_only">Shown in the preview. Turn on Show notifications on back screen to try it there too</string>
+    <string name="try_wallpaper_off">The wallpaper is off, so Xiaomi\'s own back screen shows notifications. Turn the wallpaper on to see these</string>
+    <string name="style_title">Style</string>
+    <string name="style_summary">How much shows. The back screen faces away from you, so anyone nearby can read it.</string>
+    <string name="style_discreet">Discreet</string>
+    <string name="style_normal">Normal</string>
+    <string name="style_full">Full</string>
+    <string name="style_discreet_summary">Just the app: people nearby see that something came, not what</string>
+    <string name="style_normal_summary">The app and the title, usually who it\'s from</string>
+    <string name="style_full_summary">The app, the title and up to 3 lines of the message</string>
+    <string name="swipe_down_title">Swipe down for recent notifications</string>
+    <string name="swipe_down_summary">Pull down from the top of the back screen while it\'s lit, for the ones you haven\'t cleared</string>
+    <string name="notifications_light_up">Light up back screen for new notifications</string>
+    <string name="notifications_light_up_summary">Each app at most once a minute. Not while you\'re using the phone or the back is covered</string>
+    <string name="notifications_notes">With the wallpaper off, Xiaomi\'s own back screen shows notifications while the phone is locked.\n\nWhile the phone is locked, the back screen follows your lock screen: if that hides sensitive content, only the app shows.</string>
+    <string name="notification_header">%1$s · %2$s</string>
+    <string name="ago_now">now</string>
+    <string name="ago_minutes">%d min</string>
+    <string name="ago_hours">%d h</string>
+    <string name="ago_days">%d d</string>
+    <plurals name="banner_more">
+        <item quantity="one">+%d more</item>
+        <item quantity="other">+%d more</item>
+    </plurals>
+    <plurals name="shade_more">
+        <item quantity="one">+%d more on your phone</item>
+        <item quantity="other">+%d more on your phone</item>
+    </plurals>
+    <string name="shade_empty">No notifications</string>
+    <string name="sample_app">Messages</string>
+    <string name="sample_title">Alex</string>
+    <string name="sample_text">Running about 10 minutes late, the bus is crawling. Save me a seat near the front?</string>
 
     <!-- Outside the app. -->
     <string name="tile_label">Back screen wallpaper</string>

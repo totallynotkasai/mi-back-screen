@@ -1,7 +1,9 @@
 package com.backscreen.wallpaper.rear
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SwipesTest {
@@ -60,6 +62,30 @@ class SwipesTest {
     @Test
     fun downOnlyFromTheTopHalf() {
         assertNull(swipe(500, 320, 500, 580))
+    }
+
+    @Test
+    fun aPullDownStartsInTheTopHalfAndGoesDown() {
+        assertTrue(Swipes.startsPull(500f, 40f, 505f, 60f, slop = 13f, height = h))
+        // Not yet past the slop, sideways, or from the bottom half.
+        assertFalse(Swipes.startsPull(500f, 40f, 500f, 50f, slop = 13f, height = h))
+        assertFalse(Swipes.startsPull(500f, 40f, 540f, 60f, slop = 13f, height = h))
+        assertFalse(Swipes.startsPull(500f, 320f, 500f, 400f, slop = 13f, height = h))
+    }
+
+    @Test
+    fun aPullOpensWhenItWentAsFarAsASwipe() {
+        assertTrue(Swipes.pullOpens(dx = 10f, dy = 160f, height = h))
+        assertFalse(Swipes.pullOpens(dx = 10f, dy = 120f, height = h))
+        assertFalse(Swipes.pullOpens(dx = 100f, dy = 160f, height = h))
+    }
+
+    @Test
+    fun aPushUpCloses() {
+        assertTrue(Swipes.pushCloses(dx = 5f, dy = -100f, height = h))
+        assertFalse(Swipes.pushCloses(dx = 5f, dy = -60f, height = h))
+        assertFalse(Swipes.pushCloses(dx = 5f, dy = 100f, height = h))
+        assertFalse(Swipes.pushCloses(dx = 80f, dy = -100f, height = h))
     }
 
     @Test

@@ -1,6 +1,6 @@
 # Mi Back Screen
 
-Show your own images, animated GIFs and a clock on the **Xiaomi 17 Pro Max** rear display.
+Show your own images, animated GIFs, a clock and your notifications on the **Xiaomi 17 Pro Max** rear display.
 
 **Website:** https://totallynotkasai.github.io/mi-back-screen/
 **Download:** [latest APK](https://github.com/totallynotkasai/mi-back-screen/releases/latest/download/MiBackScreen.apk)
@@ -15,6 +15,7 @@ Show your own images, animated GIFs and a clock on the **Xiaomi 17 Pro Max** rea
 - Optional clock (time and date) over the wallpaper, in five styles: drag it anywhere in the preview or align it to an edge; any text colour, or Auto to stand out from the image; optional background colour and opacity
 - The clock stays on time while the phone sleeps, including on the dimmed back screen
 - Charging animation: when you plug in, the back screen lights up and plays a short animation with the battery level (wired or wireless), then fades back to the wallpaper. It stays dark while the back is covered, and can also play over Xiaomi's back screen while the wallpaper is off
+- Notifications: a new one slides in at the top of the back screen for a few seconds, showing as much as you choose: just the app (Discreet), who it's from (Normal) or the message too (Full). Pull down from the top for the ones you haven't cleared. While the phone is locked it follows your lock screen, so sensitive content stays hidden if that's how your lock screen is set. With the wallpaper off, Xiaomi's own back screen shows notifications instead
 - Refresh button to put the wallpaper up afresh if something didn't update
 - Preview shaped like the rear display, with an option to keep clear of the camera
 - Quick Settings tile and home-screen widget to toggle it
@@ -34,6 +35,7 @@ Show your own images, animated GIFs and a clock on the **Xiaomi 17 Pro Max** rea
 3. Tap **Allow access** (or enable it in Shizuku → Authorized apps).
 4. Pick images (or a folder) and turn on **Show on back screen**.
 5. For schedules and the clock: if the app shows **Setup needed**, allow alarms, and in Settings → Apps → Mi Back Screen turn on **Autostart** and set **Battery saver** to **No restrictions**.
+6. For notifications: turn on **Show notifications on back screen** on the Notifications tab. Shizuku allows Notification access in the same tap. Without Shizuku, allow it in Settings; Android blocks that for sideloaded apps until you open App info → ⋮ → **Allow restricted settings**.
 
 ## Building
 
@@ -53,6 +55,7 @@ HyperOS doesn't let normal apps draw on the rear display, so Mi Back Screen uses
 - **Keeping it there.** Each time the rear dims, Xiaomi's back screen app brings its own launcher back and closes whatever was on top, but only if that launcher has been opened since Xiaomi's app started. So when the wallpaper goes up over Xiaomi's launcher, Xiaomi's app is restarted **once**; it comes straight back without the launcher and leaves the wallpaper alone. If anything closes the wallpaper anyway, it's put back. (Up to 1.3 the app stopped Xiaomi's app every time, which relit the rear about every 10 seconds.)
 - **Switching off** brings Xiaomi's launcher back.
 - **Charging.** The animation is drawn inside the wallpaper window that's already on the back screen, so it appears at once. With the wallpaper off, that window goes up over Xiaomi's screen just for the animation (only if you allow it). The back screen is only lit for it when it's dark, the back isn't covered, and the main screen isn't turned sideways: HyperOS treats a back-screen wake then as an accident and covers it with its own "Press the Power button" screen.
+- **Notifications.** A notification listener (Notification access, which Shizuku grants with `cmd notification allow_listener`) passes new notifications to the wallpaper window, which shows them as a banner at once. It skips ongoing ones, media players, downloads in progress, group summaries, silent ones, anything Do Not Disturb holds back, and the app you're using. The back screen is lit for a new one at most once a minute per app, not while you're using the phone or the back is covered; on a dimmed back screen the banner just appears, without lighting it.
 - **The clock.** A dimmed back screen keeps showing its last frame, and the phone sleeps between minutes. So while the clock is on the back screen and that screen is lit or dimmed, an exact alarm wakes the phone briefly at each minute, the new time is drawn, and a short draw wake lock sends the frame to the dimmed panel, as the system's own always-on displays do. While the back screen is off (for example when the back is covered), there's no alarm; the clock catches up as soon as it wakes.
 
 ## Battery
@@ -66,5 +69,7 @@ The charging animation runs for 3.5 seconds once per plug-in, using under a seco
 ## Privacy
 
 No internet permission and no storage permission. Only the images or folder you pick are shared with the app; chosen images are copied into the app's private storage, and **Remove images** deletes those copies. Nothing leaves the phone.
+
+Notifications are read only once you allow Notification access, and only while the Notifications section is on. Their text is read on the phone, shown on the back screen, kept in memory only while the notification is in your shade, and never stored or sent anywhere. **Remove access** on the Notifications tab takes the access away again.
 
 Not affiliated with Xiaomi.

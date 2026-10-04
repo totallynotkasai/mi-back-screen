@@ -27,6 +27,9 @@ import com.backscreen.wallpaper.core.HostMode
 import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
+import com.backscreen.wallpaper.notifications.NotificationAccess
+import com.backscreen.wallpaper.notifications.NotificationSettings
+import com.backscreen.wallpaper.notifications.RearNotificationListener
 import com.backscreen.wallpaper.wallpaper.ClockAlarm
 import com.google.android.material.R as MaterialR
 import com.google.android.material.color.MaterialColors
@@ -77,6 +80,7 @@ object AppDialogs {
             context.getString(R.string.diag_shizuku, context.getString(shizukuStatus())),
             context.getString(R.string.diag_owner, ownerName(context)),
             context.getString(R.string.diag_rear_state, BackScreen.stateName(rear?.state)),
+            context.getString(R.string.diag_notifications, notificationsStatus(context)),
             ClockAlarm.summary(),
             "",
             BackScreen.logText(),
@@ -88,6 +92,16 @@ object AppDialogs {
         is RearOwner.Host -> context.getString(if (owner.mode == HostMode.SHADE) R.string.owner_shade else R.string.owner_wallpaper)
         RearOwner.Popover -> context.getString(R.string.owner_popover)
         is RearOwner.Lent -> context.getString(R.string.owner_lent, owner.lend.packageName)
+    }
+
+    /** Whether notifications are being read for the back screen, and how many it has. */
+    private fun notificationsStatus(context: Context): String = when {
+        !NotificationSettings.isEnabled(context) -> context.getString(R.string.diag_notifications_off)
+        !NotificationAccess.isGranted(context) -> context.getString(R.string.diag_notifications_no_access)
+        !RearNotificationListener.isListening -> context.getString(R.string.diag_notifications_waiting)
+        else -> RearNotificationListener.recent().size.let {
+            context.resources.getQuantityString(R.plurals.diag_notifications_reading, it, it)
+        }
     }
 
     /** Shizuku's state, as a line for the app. */
@@ -131,7 +145,10 @@ object AppDialogs {
                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${activity.packageName}"))
             )
         }
-        val state = listOf(shizukuStatus(), alarms, battery)
+        // Notification access, only while that section is on.
+        val notifications = NotificationSettings.isEnabled(activity)
+        val notificationAccess = NotificationAccess.isGranted(activity)
+        val state = listOf(shizukuStatus(), alarms, battery, notifications, notificationAccess)
         if (state == shown) return state
         list.removeAllViews()
         addStep(
@@ -152,6 +169,14 @@ object AppDialogs {
             list, R.string.setup_battery_title, activity.getString(R.string.setup_battery_text), battery,
             R.string.open_app_settings, appSettings,
         )
+        if (notifications) {
+            addStep(
+                list, R.string.access_title, activity.getString(R.string.setup_notifications_text), notificationAccess,
+                if (shizukuReady) R.string.allow_access else R.string.open_settings,
+            ) {
+                if (shizukuReady) NotificationAccess.grant(activity) {} else NotificationAccess.openSettings(activity)
+            }
+        }
         return state
     }
 

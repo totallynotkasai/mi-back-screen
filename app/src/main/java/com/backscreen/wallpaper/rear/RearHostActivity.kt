@@ -15,10 +15,17 @@ import com.backscreen.wallpaper.battery.ChargingLayer
 import com.backscreen.wallpaper.battery.ChargingStatus
 import com.backscreen.wallpaper.camera.CameraSettings
 import com.backscreen.wallpaper.core.BackScreen
+import com.backscreen.wallpaper.core.HostMode
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
+import com.backscreen.wallpaper.notifications.NotificationAccess
+import com.backscreen.wallpaper.notifications.NotificationFormatter
+import com.backscreen.wallpaper.notifications.NotificationLayer
 import com.backscreen.wallpaper.notifications.NotificationSettings
+import com.backscreen.wallpaper.notifications.RearNotification
+import com.backscreen.wallpaper.notifications.RearNotificationListener
+import com.backscreen.wallpaper.notifications.ShownNotification
 import com.backscreen.wallpaper.wallpaper.ClockAlarm
 import com.backscreen.wallpaper.wallpaper.ClockLayer
 import com.backscreen.wallpaper.wallpaper.WallpaperLayer
@@ -31,7 +38,9 @@ import java.lang.ref.WeakReference
  *
  * - the wallpaper: the gallery's images ([WallpaperLayer]), panning if that's on, or black with none;
  * - the clock ([ClockLayer]);
- * - the charging animation ([ChargingLayer]), for a few seconds after you plug in.
+ * - the charging animation ([ChargingLayer]), for a few seconds after you plug in;
+ * - notifications ([NotificationLayer]): a banner when one arrives, and the list of the ones you
+ *   haven't cleared, which you pull down from the top.
  *
  * [RearGestures] reads swipes on it.
  *
@@ -50,6 +59,7 @@ class RearHostActivity : Activity() {
     private var wallpaper: WallpaperLayer? = null
     private var clock: ClockLayer? = null
     private var charging: ChargingLayer? = null
+    private var notifications: NotificationLayer? = null
 
     private var onRear = false
     private var popover = false
@@ -60,10 +70,41 @@ class RearHostActivity : Activity() {
     // A charging animation waiting for the back screen to light up: a dimmed one shows none of it.
     private var chargingDue: ChargingStatus? = null
 
+    // A banner waiting for the back screen to light up, as it was just woken for it.
+    private var notificationDue: ShownNotification? = null
+
+    // A pull down on the notification list is under way, so touches still go to the gestures.
+    private var pulling = false
+
+    // How much of the charging animation and the notification list shows; the clock fades out by as much.
+    private var chargingShown = 0f
+    private var shadeShown = 0f
+
     private val redraw = Runnable {
         if (!isDestroyed) window.decorView.invalidate()
     }
     private val chargingGiveUp = Runnable { giveUpCharging() }
+    private val notificationGiveUp = Runnable { showDueNotificationStill() }
+
+    private val swipes = object : RearGestures.Listener {
+        override fun onSwipe(swipe: Swipe) {
+            BackScreen.log(if (swipe == Swipe.LEFT) "Swiped left on the back screen" else "Swiped down on the back screen")
+            if (swipe == Swipe.DOWN && gestures.pullDown && startShade()) notifications?.openShade()
+        }
+
+        override fun onPull(dy: Float) {
+            if (!pulling && !startShade()) return
+            pulling = true
+            notifications?.pull(dy)
+        }
+
+        override fun onPullEnd(open: Boolean) {
+            if (!pulling) return
+            pulling = false
+            notifications?.endPull(open)
+            if (open) BackScreen.log("Notification list pulled down")
+        }
+    }
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
@@ -97,7 +138,8 @@ class RearHostActivity : Activity() {
         setContentView(root)
         if (!popover) addWallpaper(root, display)
         addCharging(root, display)
-        gestures = RearGestures(this, ::onSwipe)
+        if (!popover) addNotifications(root, display)
+        gestures = RearGestures(this, swipes)
 
         getSystemService(DisplayManager::class.java).registerDisplayListener(displayListener, BackScreen.mainHandler)
         onRearStateChanged()
@@ -141,9 +183,37 @@ class RearHostActivity : Activity() {
         charging = ChargingLayer(this).apply {
             setPadding(camera.left, camera.top, camera.right, camera.bottom)
             onDone = ::onChargingDone
-            onShown = { shown -> clock?.alpha = 1f - shown }
+            onShown = { shown ->
+                chargingShown = shown
+                fadeClock()
+            }
         }
         root.addView(charging)
+    }
+
+    /** Notifications, over everything, keeping clear of the camera like the clock. */
+    private fun addNotifications(root: FrameLayout, display: Display) {
+        val camera = BackScreen.cameraInsets(display)
+        notifications = NotificationLayer(this).apply {
+            setPadding(camera.left, camera.top, camera.right, camera.bottom)
+            isLit = { this@RearHostActivity.isLit() }
+            onShownChanged = { this@RearHostActivity.onShownChanged() }
+            onShadeShown = { shown ->
+                shadeShown = shown
+                fadeClock()
+            }
+            onShadeClosed = {
+                pulling = false
+                if (RearState.owner(this@RearHostActivity) == RearOwner.Host(HostMode.SHADE)) BackScreen.log("Notification list closed")
+                RearState.closeShade(this@RearHostActivity)
+            }
+        }
+        root.addView(notifications)
+    }
+
+    /** The clock fades out while the charging animation or the notification list shows over it. */
+    private fun fadeClock() {
+        clock?.alpha = (1f - chargingShown) * (1f - shadeShown)
     }
 
     override fun onStart() {
@@ -158,6 +228,7 @@ class RearHostActivity : Activity() {
             updateGestures()
             updateMotion()
             playDueCharging()
+            showDueNotification()
         }
     }
 
@@ -178,6 +249,8 @@ class RearHostActivity : Activity() {
         if (onRear) {
             updateGestures()
             updateMotion()
+            // Covered, or the back screen went off: the list doesn't stay down behind it.
+            notifications?.closeShade(animate = false)
             if (!isFinishing) KeeperService.instance?.onHostHidden()
         }
         super.onStop()
@@ -190,6 +263,7 @@ class RearHostActivity : Activity() {
         }
         BackScreen.mainHandler.removeCallbacks(redraw)
         BackScreen.mainHandler.removeCallbacks(chargingGiveUp)
+        BackScreen.mainHandler.removeCallbacks(notificationGiveUp)
         if (onRear) {
             getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
             wallpaper?.release()
@@ -211,24 +285,38 @@ class RearHostActivity : Activity() {
         finish()
     }
 
-    // Xiaomi's back gesture strip on the rear's right edge sends BACK; stay put.
+    // Xiaomi's back gesture strip on the rear's right edge sends BACK: it closes the notification
+    // list if that's down, and otherwise the host stays put.
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (!onRear) {
             @Suppress("DEPRECATION")
             super.onBackPressed()
+        } else if (notifications?.isShadeOpen == true) {
+            notifications?.closeShade(animate = true)
         }
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (onRear) gestures.onTouchEvent(event, window.decorView.width, window.decorView.height)
+        if (!onRear) return super.dispatchTouchEvent(event)
+        // While the notification list is down, it takes every touch: to go back up, or stay.
+        val layer = notifications
+        if (layer != null && layer.isShadeOpen && !pulling) return layer.onShadeTouch(event)
+        gestures.onTouchEvent(event, window.decorView.width, window.decorView.height)
         return super.dispatchTouchEvent(event)
     }
 
-    /** Swipes are read only while a section uses them, and touches only arrive while the rear is lit. */
+    /**
+     * Swipes are read only while a section uses them, and touches only arrive while the rear is
+     * lit. A pull down brings the notification list while that's on and notifications are read.
+     */
     private fun updateGestures() {
-        gestures.enabled = !popover && (CameraSettings.isEnabled(this) || NotificationSettings.isEnabled(this))
+        val shade = !popover && NotificationSettings.isEnabled(this) && NotificationSettings.swipeDown(this) &&
+            RearNotificationListener.isListening
+        gestures.enabled = !popover && (CameraSettings.isEnabled(this) || shade)
+        gestures.pullDown = shade
         gestures.setLit(started && isLit())
+        if (!shade) notifications?.closeShade(animate = false)
     }
 
     /** Images pan and GIFs play only while the rear is lit: a dimmed one shows none of it. */
@@ -236,8 +324,79 @@ class RearHostActivity : Activity() {
         wallpaper?.moving = started && isLit()
     }
 
-    private fun onSwipe(swipe: Swipe) {
-        BackScreen.log(if (swipe == Swipe.LEFT) "Swiped left on the back screen" else "Swiped down on the back screen")
+    /** The notification list starts coming down, if it may. */
+    private fun startShade(): Boolean {
+        if (!RearState.openShade(this)) return false
+        refreshShade()
+        return true
+    }
+
+    /** Fills the notification list with the ones in the phone's shade, as the style and privacy allow. */
+    private fun refreshShade() {
+        val layer = notifications ?: return
+        val style = NotificationSettings.style(this)
+        val locked = NotificationAccess.isLocked(this)
+        val lockScreen = NotificationAccess.lockScreen(this)
+        matchNotificationColors()
+        layer.setShadeItems(
+            RearNotificationListener.recent().mapNotNull { NotificationFormatter.format(it, style, locked, lockScreen) }
+        )
+    }
+
+    private fun format(n: RearNotification) = NotificationFormatter.format(
+        n, NotificationSettings.style(this), NotificationAccess.isLocked(this), NotificationAccess.lockScreen(this)
+    )
+
+    /**
+     * Shows [n] in the banner. While the back screen is lit it slides in; while it's dimmed it's
+     * just there, pushed to the panel; while it's off there's nothing to see. [woken]: the back
+     * screen was just woken for it, so it waits for it to light up, a few seconds at most.
+     * False if no banner goes up: the list is down and shows it already, or there's nothing to see.
+     */
+    private fun showNotification(n: ShownNotification, woken: Boolean): Boolean {
+        val layer = notifications ?: return false
+        if (layer.isShadeOpen) return false
+        BackScreen.mainHandler.removeCallbacks(notificationGiveUp)
+        notificationDue = null
+        when {
+            started && isLit() -> showBanner(n)
+            woken -> {
+                notificationDue = n
+                BackScreen.mainHandler.postDelayed(notificationGiveUp, LIGHT_UP_WAIT_MS)
+            }
+            !started || display?.state == Display.STATE_OFF -> {
+                BackScreen.log("The back screen is off; no banner")
+                return false
+            }
+            else -> showBanner(n)
+        }
+        return true
+    }
+
+    private fun showBanner(n: ShownNotification) {
+        matchNotificationColors()
+        notifications?.showBanner(n, NotificationFormatter.bannerMs(n))
+    }
+
+    private fun showDueNotification() {
+        val n = notificationDue ?: return
+        if (!started || !isLit()) return
+        notificationDue = null
+        BackScreen.mainHandler.removeCallbacks(notificationGiveUp)
+        showBanner(n)
+    }
+
+    /** The back screen didn't light up for it: shown dimmed, if it's on at all. */
+    private fun showDueNotificationStill() {
+        val n = notificationDue ?: return
+        notificationDue = null
+        if (started && display?.state != Display.STATE_OFF) showBanner(n) else BackScreen.log("Back screen didn't light up; no banner")
+    }
+
+    /** The clock's colours, so it matches the wallpaper; light on dark without one. */
+    private fun matchNotificationColors() {
+        val clock = clock?.takeIf { it.visibility == View.VISIBLE }
+        if (clock != null) notifications?.setColors(clock.textColor, clock.autoBgColor) else notifications?.setColors(Color.WHITE, Color.BLACK)
     }
 
     /** The back screen lit up, dimmed or went off. */
@@ -253,15 +412,21 @@ class RearHostActivity : Activity() {
         }
         val wasOff = rearState == Display.STATE_OFF
         val wasSuspended = rearState == Display.STATE_DOZE_SUSPEND
+        val wasLit = rearState == Display.STATE_ON
         rearState = state
         updateGestures()
         updateMotion()
         if (lit) {
             playDueCharging()
-        } else if (charging?.isPlaying == true) {
-            // A dimmed back screen would keep a half-faded frame of it; show the wallpaper.
-            charging?.cancel()
-            onShownChanged()
+            showDueNotification()
+        } else {
+            if (charging?.isPlaying == true) {
+                // A dimmed back screen would keep a half-faded frame of it; show the wallpaper.
+                charging?.cancel()
+                onShownChanged()
+            }
+            // No half-slid banner or half-open list either.
+            if (wasLit) notifications?.dimmed()
         }
         // It may have been asleep a while.
         clock?.updateTime()
@@ -440,6 +605,36 @@ class RearHostActivity : Activity() {
             val status = pendingCharging ?: return null
             pendingCharging = null
             return status.takeIf { SystemClock.elapsedRealtime() - pendingSince < PENDING_MS }
+        }
+
+        /**
+         * A new notification for the banner, as the style and privacy allow. [woken]: the back
+         * screen was just woken for it. False if no banner goes up: the wallpaper isn't up,
+         * nothing of it may show, or the back screen is off.
+         */
+        fun showNotification(n: RearNotification, woken: Boolean): Boolean {
+            val host = showingWallpaper() ?: return false
+            val shown = host.format(n) ?: return false
+            return host.showNotification(shown, woken)
+        }
+
+        /** A notification was cleared on the phone: off the banner and the list too. */
+        fun notificationRemoved(key: String) {
+            val host = showingWallpaper() ?: return
+            if (host.notificationDue?.key == key) host.notificationDue = null
+            host.notifications?.removeFromBanner(key)
+            if (host.notifications?.isShadeOpen == true) host.refreshShade()
+        }
+
+        /**
+         * The notifications in the phone's shade changed, reading them started or stopped, or a
+         * notification setting changed. Nothing new to see, so unlike [settingsChanged] the back
+         * screen isn't woken for it.
+         */
+        fun notificationsChanged() {
+            val host = showingWallpaper() ?: return
+            host.updateGestures()
+            if (host.notifications?.isShadeOpen == true) host.refreshShade()
         }
 
         /** Loads the gallery's current image again. False if the wallpaper isn't up. */

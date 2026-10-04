@@ -10,6 +10,7 @@ import rikka.shizuku.Shizuku
 object RearCommands {
     private const val AM = "/system/bin/am"
     private const val INPUT = "/system/bin/input"
+    private const val CMD = "/system/bin/cmd"
     private const val PACKAGE = "com.backscreen.wallpaper"
     const val XIAOMI_REAR_PACKAGE = "com.xiaomi.subscreencenter"
 
@@ -34,6 +35,17 @@ object RearCommands {
     /** Lights up just that display, as if it had been tapped. */
     fun wakeDisplay(displayId: Int) =
         run(INPUT, "-d", displayId.toString(), "keyevent", "KEYCODE_WAKEUP")
+
+    /**
+     * Gives [component], our notification listener, Notification access, as switching it on in
+     * Settings does. Works where Settings is blocked for sideloaded apps ("restricted settings").
+     */
+    fun allowNotificationListener(component: String) =
+        run(CMD, "notification", "allow_listener", component)
+
+    /** Takes Notification access away from [component] again. */
+    fun disallowNotificationListener(component: String) =
+        run(CMD, "notification", "disallow_listener", component)
 
     /** What `am stack list` prints (read it with [TaskList]), or null if it couldn't run. */
     fun taskList(): String? {

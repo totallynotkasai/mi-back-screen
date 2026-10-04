@@ -15,6 +15,7 @@ import com.backscreen.wallpaper.battery.BatteryFragment
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.RearCommands
+import com.backscreen.wallpaper.notifications.NotificationsFragment
 import com.backscreen.wallpaper.ui.AppDialogs
 import com.backscreen.wallpaper.ui.Feature
 import com.backscreen.wallpaper.ui.PlannedFeatureFragment
@@ -155,6 +156,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun newTab(feature: Feature): Fragment = when (feature) {
         Feature.WALLPAPER -> WallpaperFragment()
+        Feature.NOTIFICATIONS -> NotificationsFragment()
         Feature.BATTERY -> BatteryFragment()
         else -> PlannedFeatureFragment.newInstance(feature)
     }

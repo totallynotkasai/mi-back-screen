@@ -2,8 +2,6 @@ package com.backscreen.wallpaper.battery
 
 import android.content.Context
 import android.graphics.Color
-import android.graphics.drawable.Drawable
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -19,14 +17,10 @@ import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.wallpaper.ClockLayer
-import com.backscreen.wallpaper.wallpaper.Gallery
-import com.backscreen.wallpaper.wallpaper.RearPreviewLayout
-import com.backscreen.wallpaper.wallpaper.Scaling
+import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
-import com.backscreen.wallpaper.wallpaper.WallpaperView
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.snackbar.Snackbar
-import java.util.concurrent.Executors
 
 /**
  * The Battery tab: the charging animation's switch, a preview shaped like the back screen with
@@ -40,8 +34,7 @@ import java.util.concurrent.Executors
 class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
 
     private lateinit var mainSwitch: MainSwitchBar
-    private lateinit var previewFrame: RearPreviewLayout
-    private lateinit var preview: WallpaperView
+    private lateinit var backdrop: PreviewBackdrop
     private lateinit var clock: ClockLayer
     private lateinit var charging: ChargingLayer
     private lateinit var playButton: Button
@@ -50,15 +43,6 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
     private lateinit var lightUpSwitch: MaterialSwitch
     private lateinit var overXiaomiRow: View
     private lateinit var overXiaomiSwitch: MaterialSwitch
-
-    // Decoding the wallpaper for the preview can take a moment; it's done here, off the main
-    // thread, which the back screen shares.
-    private val loader = Executors.newSingleThreadExecutor()
-    private var previewLoads = 0
-
-    // What the preview was loaded for: whether the wallpaper was on, and its image.
-    private var previewWallpaper: Boolean? = null
-    private var previewUri: Uri? = null
 
     private var status = ChargingStatus(level = 100)
 
@@ -73,8 +57,6 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         mainSwitch = view.findViewById(R.id.mainSwitch)
-        previewFrame = view.findViewById(R.id.previewFrame)
-        preview = view.findViewById(R.id.preview)
         clock = view.findViewById(R.id.clock)
         charging = view.findViewById(R.id.charging)
         playButton = view.findViewById(R.id.playButton)
@@ -83,6 +65,8 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
         lightUpSwitch = view.findViewById(R.id.lightUpSwitch)
         overXiaomiRow = view.findViewById(R.id.overXiaomiRow)
         overXiaomiSwitch = view.findViewById(R.id.overXiaomiSwitch)
+        // The animation takes the clock's colours, as on the back screen.
+        backdrop = PreviewBackdrop(view.findViewById(R.id.previewFrame), view.findViewById(R.id.preview), clock, ::matchClockColors)
 
         mainSwitch.onCheckedChange = { on ->
             BatterySettings.setEnabled(ctx, on)
@@ -105,9 +89,6 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
         playButton.setOnClickListener { play() }
         charging.onDone = ::onPreviewPlayed
         charging.onShown = { shown -> clock.alpha = 1f - shown }
-        // The animation takes the clock's colours, as on the back screen.
-        clock.backdrop = preview
-        clock.onColorsChanged = ::matchClockColors
 
         status = ChargingStatus.read(ctx) ?: status
         charging.showStill(status)
@@ -131,12 +112,8 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
 
     override fun onDestroyView() {
         BackScreen.mainHandler.removeCallbacks(showStillAgain)
+        backdrop.release()
         super.onDestroyView()
-    }
-
-    override fun onDestroy() {
-        loader.shutdownNow()
-        super.onDestroy()
     }
 
     override fun refresh() {
@@ -156,8 +133,7 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
         optionsCard.alpha = if (on) 1f else DISABLED_ALPHA
         for (v in listOf(lightUpRow, lightUpSwitch, overXiaomiRow, overXiaomiSwitch)) v.isEnabled = on
 
-        if (wallpaperOn != previewWallpaper || (wallpaperOn && Gallery.shown(ctx) != previewUri)) loadPreview(wallpaperOn)
-        showClock(wallpaperOn)
+        backdrop.refresh()
 
         // The level now, while it's at rest.
         val now = ChargingStatus.read(ctx)
@@ -169,8 +145,7 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
 
     /** Shown again: the Wallpaper tab may have changed what's under it. */
     private fun reloadPreview() {
-        BackScreen.findRearDisplay(ctx)?.let { previewFrame.setRearDisplay(it, WallpaperSettings.avoidCamera(ctx)) }
-        previewWallpaper = null
+        backdrop.reload()
         refresh()
     }
 
@@ -210,63 +185,9 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
         charging.showStill(status)
     }
 
-    /**
-     * Loads the preview's backdrop: the wallpaper's image now, decoded as the back screen does,
-     * held where a pan starts; or black, with the wallpaper off or no images.
-     */
-    private fun loadPreview(wallpaperOn: Boolean) {
-        previewWallpaper = wallpaperOn
-        val load = ++previewLoads
-        if (!wallpaperOn) {
-            previewUri = null
-            showPreview(null, Scaling.FILL)
-            return
-        }
-        val display = BackScreen.findRearDisplay(ctx) ?: requireActivity().display ?: return
-        val app = ctx.applicationContext
-        previewUri = Gallery.shown(ctx)
-        loader.execute {
-            val uri = Gallery.current(app)
-            val scaling = WallpaperSettings.scalingInUse(app)
-            val drawable = try {
-                uri?.let { BackScreen.loadImage(app, it, display, scaling) }
-            } catch (e: Exception) {
-                BackScreen.log("Preview failed: ${e.message}")
-                null
-            }
-            BackScreen.mainHandler.post {
-                if (view == null || load != previewLoads) return@post
-                previewUri = uri
-                showPreview(drawable, scaling)
-            }
-        }
-    }
-
-    private fun showPreview(drawable: Drawable?, scaling: Scaling) {
-        preview.setBackgroundColor(Color.BLACK)
-        preview.scaling = scaling
-        // It doesn't move here; with panning on, it holds where a pan starts.
-        preview.pan = WallpaperSettings.pan(ctx)
-        preview.setImageDrawable(drawable)
-        clock.backdropChanged()
-        matchClockColors()
-    }
-
-    /** The clock, as the back screen shows it: only with the wallpaper, which a pop-over doesn't have. */
-    private fun showClock(wallpaperOn: Boolean) {
-        val show = wallpaperOn && WallpaperSettings.showClock(ctx)
-        val visibility = if (show) View.VISIBLE else View.GONE
-        if (clock.visibility != visibility) {
-            clock.visibility = visibility
-            matchClockColors()
-        }
-        val settings = WallpaperSettings.clockSettings(ctx)
-        if (clock.settings != settings) clock.settings = settings
-    }
-
     /** The clock's colours, so it matches the wallpaper; light on a dark veil without one. */
     private fun matchClockColors() {
-        if (clock.visibility == View.VISIBLE) charging.setColors(clock.textColor, clock.autoBgColor)
+        if (backdrop.clockShown) charging.setColors(clock.textColor, clock.autoBgColor)
         else charging.setColors(Color.WHITE, Color.BLACK)
     }
 

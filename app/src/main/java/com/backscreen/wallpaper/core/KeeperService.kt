@@ -21,6 +21,12 @@ import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.battery.BatterySettings
 import com.backscreen.wallpaper.battery.ChargingMonitor
 import com.backscreen.wallpaper.battery.ChargingStatus
+import com.backscreen.wallpaper.notifications.AppWakeLimit
+import com.backscreen.wallpaper.notifications.NotificationAccess
+import com.backscreen.wallpaper.notifications.NotificationFilter
+import com.backscreen.wallpaper.notifications.NotificationSettings
+import com.backscreen.wallpaper.notifications.RearNotification
+import com.backscreen.wallpaper.notifications.SampleNotification
 import com.backscreen.wallpaper.rear.BackSensor
 import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.wallpaper.ClockAlarm
@@ -54,9 +60,13 @@ import kotlin.math.max
  * pop-over itself, which just ends it early.
  *
  * Charging: while Battery is on, plugging in plays the charging animation in the wallpaper, or
- * in a pop-over if the wallpaper is off and that's allowed (see [onPluggedIn]). Everything that
- * lights the back screen goes through [lightRear], and [WakeThrottle] decides for the things
- * that want to be seen, so they can't light it in a burst.
+ * in a pop-over if the wallpaper is off and that's allowed (see [onPluggedIn]).
+ *
+ * Notifications: a new one goes in a banner in the wallpaper (see [onNotification]); with the
+ * wallpaper off, Xiaomi's own back screen shows it.
+ *
+ * Everything that lights the back screen goes through [lightRear], and [WakeThrottle] decides
+ * for the things that want to be seen, so they can't light it in a burst.
  *
  * Restarts: after the phone or this app restarts, it carries on. If Shizuku isn't running yet
  * (after a phone restart it isn't until you start it), the wallpaper waits for it rather than
@@ -81,6 +91,7 @@ class KeeperService : Service() {
 
     private val charging = ChargingMonitor(this, ::onPluggedIn, ::onUnplugged)
     private val wakes = WakeThrottle()
+    private val appWakes = AppWakeLimit()
 
     private val binderReceived = Shizuku.OnBinderReceivedListener {
         runWaiting()
@@ -149,6 +160,7 @@ class KeeperService : Service() {
             ACTION_SCHEDULED_ON -> turnOn(byYou = false)
             ACTION_UPDATE -> stopIfIdle()
             ACTION_PLAY_CHARGING -> playChargingNow()
+            ACTION_TRY_NOTIFICATION -> tryNotification()
             // ACTION_RESUME after the phone restarts or the app updates, or none: the system
             // restarted us after the process was killed.
             else -> {
@@ -437,9 +449,16 @@ class KeeperService : Service() {
      * HyperOS 3.0.319), so none of ours would be seen.
      */
     private fun hyperOsWouldCover(): Boolean {
-        val main = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY) ?: return false
+        val main = mainDisplay() ?: return false
         val sideways = main.rotation == Surface.ROTATION_90 || main.rotation == Surface.ROTATION_270
         return main.state == Display.STATE_ON && sideways
+    }
+
+    private fun mainDisplay(): Display? = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+
+    /** Keeps the CPU awake for [ms], for work that outlasts the broadcast or callback that started it. */
+    private fun stayAwake(ms: Long, tag: String) {
+        getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, tag).acquire(ms)
     }
 
     /** Where the charging animation goes now (see [RearSnapshot.routeOverlay]). */
@@ -457,9 +476,7 @@ class KeeperService : Service() {
         if (owner is RearOwner.Lent) return BackScreen.log("Plugged in; ${owner.lend.packageName} has the back screen")
         if (chargingRoute() == OverlayRoute.DROP) return BackScreen.log("Plugged in; no charging animation while the wallpaper is off")
         // The broadcast's wake lock ends when it returns; stay awake for the sensor and the launch.
-        getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BackScreen:charging")
-            .acquire(PLUG_IN_AWAKE_MS)
+        stayAwake(SENSOR_AWAKE_MS, "BackScreen:charging")
         BackSensor.check(this) { covered ->
             val lit = isRearLit()
             val sideways = hyperOsWouldCover()
@@ -497,6 +514,64 @@ class KeeperService : Service() {
                 showPopover(POPOVER_MAX_MS, wake)
             }
             OverlayRoute.DROP -> {}
+        }
+    }
+
+    /**
+     * A new notification that shows on the back screen, or an update to [previous]
+     * ([RearNotificationListener]). It goes in a banner in the wallpaper, unless the rules in
+     * [NotificationFilter] hold it back. With the wallpaper off, Xiaomi's own back screen shows
+     * it; with the list pulled down, the list shows it; with another app there, it's dropped.
+     *
+     * If the back screen is dark it's lit up for it, if that option is on, but not while you're
+     * using the phone (its own screen shows it), nor while the back is covered, and each app at
+     * most once a minute ([AppWakeLimit]). A banner shows on a dimmed back screen too.
+     */
+    fun onNotification(n: RearNotification, previous: RearNotification?) {
+        val owner = RearState.owner(this)
+        if (owner is RearOwner.Lent) return BackScreen.log("Notification; ${owner.lend.packageName} has the back screen")
+        if (owner != RearOwner.Host(HostMode.WALLPAPER)) return
+        NotificationFilter.heldBack(n, previous)?.let { return BackScreen.log("Notification held back: ${it.why}") }
+        if (mainDisplay()?.state == Display.STATE_ON) {
+            if (NotificationAccess.isLocked(this)) return showNotification(n, wake = false)
+            // Not from the app you're using, if it's open on the main screen.
+            return shell(onUnavailable = { showNotification(n, wake = false) }) {
+                val open = RearCommands.taskList()?.let { TaskList.packagesOn(it, Display.DEFAULT_DISPLAY).firstOrNull() }
+                BackScreen.trace("Open on the main screen: $open")
+                BackScreen.mainHandler.post {
+                    val held = NotificationFilter.heldBack(n, previous, open)
+                    if (held != null) BackScreen.log("Notification held back: ${held.why}") else showNotification(n, wake = false)
+                }
+            }
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (isRearLit() || !NotificationSettings.lightUp(this) || !appWakes.allows(n.packageName, now)) {
+            return showNotification(n, wake = false)
+        }
+        // The callback's over once this returns; stay awake for the sensor and the wake.
+        stayAwake(SENSOR_AWAKE_MS, "BackScreen:notification")
+        BackSensor.check(this) { covered ->
+            val at = SystemClock.elapsedRealtime()
+            val wake = !covered && wakes.allow(at, isRearLit())
+            if (wake) appWakes.woke(n.packageName, at)
+            if (covered) BackScreen.log("Notification; the back is covered, so it isn't lit up")
+            showNotification(n, wake)
+        }
+    }
+
+    /** Puts [n] in the banner, lighting the back screen for it if [wake]. */
+    private fun showNotification(n: RearNotification, wake: Boolean) {
+        BackScreen.trace("Banner for ${n.packageName}${if (wake) ", lighting the back screen" else ""}")
+        if (!RearHostActivity.showNotification(n, wake)) return
+        if (wake) lightRear("Wake back screen for a notification") else BackScreen.log("Notification banner")
+    }
+
+    /** Try it, on the Notifications tab: the sample in a banner, lighting the back screen since you asked. */
+    private fun tryNotification() {
+        if (!RearState.snapshot(this).guardsWallpaper) return stopIfIdle()
+        val wake = !isRearLit()
+        if (RearHostActivity.showNotification(SampleNotification.make(this), wake) && wake) {
+            lightRear("Wake back screen for the sample notification")
         }
     }
 
@@ -610,6 +685,9 @@ class KeeperService : Service() {
         /** The Battery tab's Play. */
         const val ACTION_PLAY_CHARGING = "com.backscreen.wallpaper.PLAY_CHARGING"
 
+        /** The Notifications tab's Try on back screen. */
+        const val ACTION_TRY_NOTIFICATION = "com.backscreen.wallpaper.TRY_NOTIFICATION"
+
         private const val ACTION_SUB_SCREEN_ON = "miui.intent.action.SUB_SCREEN_ON"
         private const val CHANNEL_ID = "keeper"
         private const val NOTIFICATION_ID = 1
@@ -621,7 +699,7 @@ class KeeperService : Service() {
         private const val SHIZUKU_WAIT_MS = 4000L
         private const val DIRECT_LAUNCH_TIMEOUT_MS = 1500L
         private const val SHOW_CHANGES_DELAY_MS = 400L
-        private const val PLUG_IN_AWAKE_MS = 2000L
+        private const val SENSOR_AWAKE_MS = 2000L
 
         // A pop-over closes when its animation ends; this is in case it never starts.
         private const val POPOVER_MAX_MS = 9000L

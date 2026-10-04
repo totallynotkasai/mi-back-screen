@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import com.backscreen.wallpaper.core.BackScreen
 import kotlin.math.abs
 
@@ -24,6 +25,7 @@ enum class Swipe { LEFT, DOWN }
 object Swipes {
     const val LEFT_TRAVEL = 0.30f
     const val DOWN_TRAVEL = 0.25f
+    const val UP_TRAVEL = 0.15f
     const val MAX_DURATION_MS = 1000L
     const val LEFT_START_MAX = 914f / 976
     const val HOME_STRIP = 90f / 596
@@ -41,6 +43,25 @@ object Swipes {
             else -> null
         }
     }
+
+    /**
+     * Whether a touch that started at ([x0], [y0]) and is now at ([x1], [y1]) has become a pull
+     * down, which then follows the finger: from the top half, clear of Xiaomi's Home strip,
+     * [slop] or more down and mostly downward.
+     */
+    fun startsPull(x0: Float, y0: Float, x1: Float, y1: Float, slop: Float, height: Int): Boolean {
+        val dy = y1 - y0
+        return height > 0 && y0 <= height / 2f && dy >= slop && dy >= 2 * abs(x1 - x0)
+    }
+
+    /**
+     * Whether a pull down that moved ([dx], [dy]) opens what it pulls when let go: as far as a
+     * swipe down, and mostly downward. There's no time limit, since you watch it come.
+     */
+    fun pullOpens(dx: Float, dy: Float, height: Int) = height > 0 && dy >= height * DOWN_TRAVEL && dy >= 2 * abs(dx)
+
+    /** Whether a push up that moved ([dx], [dy]) closes what was pulled down: 15% of the height, mostly upward. */
+    fun pushCloses(dx: Float, dy: Float, height: Int) = height > 0 && -dy >= height * UP_TRAVEL && -dy >= 2 * abs(dx)
 }
 
 /**
@@ -50,11 +71,24 @@ object Swipes {
  * - one finger only;
  * - nothing while the back proximity sensor is covered, by a palm or a table.
  *
+ * With [pullDown] on, a swipe down follows the finger instead ([Listener.onPull]), as the
+ * notification list comes down with it.
+ *
  * HyperOS already ignores the grip of a hand holding the phone, and this touchscreen doesn't
  * report how big a touch is, so there's no palm check by size. Touches only arrive while the
  * back screen is lit, so the sensor is only read then.
  */
-class RearGestures(context: Context, private val onSwipe: (Swipe) -> Unit) : SensorEventListener {
+class RearGestures(context: Context, private val listener: Listener) : SensorEventListener {
+
+    interface Listener {
+        fun onSwipe(swipe: Swipe)
+
+        /** A pull down from the top half, [dy] px so far. Only while [pullDown] is on. */
+        fun onPull(dy: Float)
+
+        /** The pull ended: [open] if it went far enough to open what it pulls. */
+        fun onPullEnd(open: Boolean)
+    }
 
     /** Off unless a section uses swipes; then the sensor isn't read at all. */
     var enabled = false
@@ -63,13 +97,18 @@ class RearGestures(context: Context, private val onSwipe: (Swipe) -> Unit) : Sen
             updateSensor()
         }
 
+    /** A swipe down follows the finger, as a pull (see [Listener.onPull]). */
+    var pullDown = false
+
     private var lit = false
     private val sensors = context.getSystemService(SensorManager::class.java)
     private val proximity: Sensor? = BackSensor.find(sensors)
+    private val slop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
     private var listening = false
     private var covered = false
 
     private var tracking = false
+    private var pulling = false
     private var startX = 0f
     private var startY = 0f
     private var startTime = 0L
@@ -86,18 +125,32 @@ class RearGestures(context: Context, private val onSwipe: (Swipe) -> Unit) : Sen
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 tracking = !covered
+                pulling = false
                 startX = event.x
                 startY = event.y
                 startTime = event.eventTime
             }
+            MotionEvent.ACTION_MOVE -> {
+                if (!tracking || !pullDown) return
+                if (!pulling) {
+                    if (startY > height * (1 - Swipes.HOME_STRIP)) return
+                    pulling = Swipes.startsPull(startX, startY, event.x, event.y, slop, height)
+                }
+                if (pulling) listener.onPull((event.y - startY).coerceAtLeast(0f))
+            }
             // A second finger: not a swipe.
-            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> tracking = false
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> stopTracking()
             MotionEvent.ACTION_UP -> {
-                if (!tracking || covered) return
+                if (!tracking || covered) return stopTracking()
                 tracking = false
+                if (pulling) {
+                    pulling = false
+                    listener.onPullEnd(Swipes.pullOpens(event.x - startX, event.y - startY, height))
+                    return
+                }
                 val swipe = Swipes.classify(startX, startY, event.x, event.y, event.eventTime - startTime, width, height)
                     ?: return
-                onSwipe(swipe)
+                listener.onSwipe(swipe)
             }
         }
     }
@@ -105,6 +158,15 @@ class RearGestures(context: Context, private val onSwipe: (Swipe) -> Unit) : Sen
     /** Stops reading the sensor, for good. */
     fun release() {
         enabled = false
+    }
+
+    /** The touch no longer counts; a pull under way goes back. */
+    private fun stopTracking() {
+        tracking = false
+        if (pulling) {
+            pulling = false
+            listener.onPullEnd(false)
+        }
     }
 
     private fun updateSensor() {
@@ -116,7 +178,7 @@ class RearGestures(context: Context, private val onSwipe: (Swipe) -> Unit) : Sen
         } else {
             sensors.unregisterListener(this)
             covered = false
-            tracking = false
+            stopTracking()
         }
     }
 
@@ -124,7 +186,7 @@ class RearGestures(context: Context, private val onSwipe: (Swipe) -> Unit) : Sen
         val nowCovered = BackSensor.isCovered(event)
         if (nowCovered == covered) return
         covered = nowCovered
-        if (nowCovered) tracking = false
+        if (nowCovered) stopTracking()
         BackScreen.trace(if (nowCovered) "Back sensor covered: ignoring swipes" else "Back sensor clear")
     }
 
