@@ -1,6 +1,7 @@
 package com.backscreen.wallpaper.ui
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -24,9 +25,13 @@ import androidx.appcompat.app.AppCompatActivity
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.HostMode
+import com.backscreen.wallpaper.core.LendReason
 import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
+import com.backscreen.wallpaper.core.RearTweaks
+import com.backscreen.wallpaper.mirror.AppLabels
+import com.backscreen.wallpaper.mirror.MirrorSettings
 import com.backscreen.wallpaper.notifications.NotificationAccess
 import com.backscreen.wallpaper.notifications.NotificationSettings
 import com.backscreen.wallpaper.notifications.RearNotificationListener
@@ -81,6 +86,8 @@ object AppDialogs {
             context.getString(R.string.diag_owner, ownerName(context)),
             context.getString(R.string.diag_rear_state, BackScreen.stateName(rear?.state)),
             context.getString(R.string.diag_notifications, notificationsStatus(context)),
+            context.getString(R.string.diag_mirror, mirrorStatus(context)),
+            RearTweaks.summary(context)?.let { context.getString(R.string.diag_tweaks, it) },
             ClockAlarm.summary(),
             "",
             BackScreen.logText(),
@@ -102,6 +109,14 @@ object AppDialogs {
         else -> RearNotificationListener.recent().size.let {
             context.resources.getQuantityString(R.plurals.diag_notifications_reading, it, it)
         }
+    }
+
+    /** Whether Quick Switch is on, and which app it has on the back screen. */
+    private fun mirrorStatus(context: Context): String {
+        if (!MirrorSettings.isEnabled(context)) return context.getString(R.string.diag_mirror_off)
+        val lend = (RearState.owner(context) as? RearOwner.Lent)?.lend?.takeIf { it.reason == LendReason.QUICK_SWITCH }
+            ?: return context.getString(R.string.diag_mirror_on)
+        return context.getString(R.string.diag_mirror_lent, AppLabels.get(context, lend.packageName))
     }
 
     /** Shizuku's state, as a line for the app. */
@@ -148,7 +163,10 @@ object AppDialogs {
         // Notification access, only while that section is on.
         val notifications = NotificationSettings.isEnabled(activity)
         val notificationAccess = NotificationAccess.isGranted(activity)
-        val state = listOf(shizukuStatus(), alarms, battery, notifications, notificationAccess)
+        // The app's own notifications, for Bring back, only while Quick Switch is on.
+        val mirror = MirrorSettings.isEnabled(activity)
+        val posting = activity.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+        val state = listOf(shizukuStatus(), alarms, battery, notifications, notificationAccess, mirror, posting)
         if (state == shown) return state
         list.removeAllViews()
         addStep(
@@ -175,6 +193,16 @@ object AppDialogs {
                 if (shizukuReady) R.string.allow_access else R.string.open_settings,
             ) {
                 if (shizukuReady) NotificationAccess.grant(activity) {} else NotificationAccess.openSettings(activity)
+            }
+        }
+        if (mirror) {
+            addStep(
+                list, R.string.setup_mirror_notifications_title, activity.getString(R.string.setup_mirror_notifications_text),
+                posting, R.string.allow,
+            ) {
+                activity.startActivity(
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+                )
             }
         }
         return state

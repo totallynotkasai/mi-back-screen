@@ -10,7 +10,6 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.util.AttributeSet
-import android.util.DisplayMetrics
 import android.view.Display
 import android.view.View
 import android.widget.FrameLayout
@@ -46,13 +45,16 @@ class RearPreviewLayout @JvmOverloads constructor(
         setWillNotDraw(false)
     }
 
-    @Suppress("DEPRECATION")
+    /**
+     * Takes [display]'s shape as the wallpaper has it, in its natural landscape, even while an
+     * app lent the back screen has it turned.
+     */
     fun setRearDisplay(display: Display, avoidCamera: Boolean) {
-        val m = DisplayMetrics().also { display.getRealMetrics(it) }
-        rearWidth = m.widthPixels
-        rearHeight = m.heightPixels
-        cameraRects = display.cutout?.boundingRects.orEmpty()
-        cameraInsets = BackScreen.cameraInsets(display)
+        val size = BackScreen.naturalSize(display)
+        rearWidth = size.width
+        rearHeight = size.height
+        cameraRects = BackScreen.naturalCameraRects(display)
+        cameraInsets = BackScreen.naturalCameraInsets(display)
         this.avoidCamera = avoidCamera
         requestLayout()
         invalidate()

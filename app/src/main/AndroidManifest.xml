@@ -18,6 +18,22 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- The back screen clock: a moment awake each minute to draw the new time. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!--
+        Quick Switch: the notification while an app is on the back screen, with Bring back.
+        Asked for once, when Quick Switch is switched on; the app works without it.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+        Quick Switch says which app it moved ("YouTube is on the back screen"). This lets the
+        app read the names of apps with a launcher icon; it can't see anything else about them.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:name=".App"
@@ -70,7 +86,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Shows a user-chosen image, a clock and a charging animation on the phone's rear display" />
+                android:value="Shows a user-chosen image, a clock and a charging animation on the phone's rear display, and moves the app in use there and back when the user asks" />
         </service>
 
         <!--
@@ -129,6 +145,21 @@
             android:exported="true"
             android:icon="@drawable/ic_tile"
             android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- Quick Settings tile for Quick Switch: the app in use to the back screen and back. -->
+        <service
+            android:name=".mirror.QuickSwitchTile"
+            android:exported="true"
+            android:icon="@drawable/ic_swap"
+            android:label="@string/mirror_switch"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

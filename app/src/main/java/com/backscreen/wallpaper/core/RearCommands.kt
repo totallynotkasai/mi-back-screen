@@ -13,6 +13,8 @@ object RearCommands {
     private const val CMD = "/system/bin/cmd"
     private const val PACKAGE = "com.backscreen.wallpaper"
     const val XIAOMI_REAR_PACKAGE = "com.xiaomi.subscreencenter"
+    private const val REAR_TIMEOUT = "subscreen_display_time"
+    private val FIXED_ROTATION_MODES = setOf("default", "enabled", "disabled", "enabled_if_no_auto_rotation")
 
     // Xiaomi's back screen launcher has had different names across HyperOS builds; the first
     // one that starts wins.
@@ -48,10 +50,52 @@ object RearCommands {
         run(CMD, "notification", "disallow_listener", component)
 
     /** What `am stack list` prints (read it with [TaskList]), or null if it couldn't run. */
-    fun taskList(): String? {
+    fun taskList(): String? = read(AM, "stack", "list")
+
+    /** Closes the notification shade, once the Quick Switch tile has been tapped. */
+    fun collapseShade() = run(CMD, "statusbar", "collapse")
+
+    // Xiaomi's settings that a lend changes, and always puts back (see RearTweaks). The setting
+    // names and the display are fixed; only the values vary, and those are numbers or one of
+    // a few fixed words.
+
+    /** How long Xiaomi keeps the back screen lit after the last touch, in ms; "null" if unset. */
+    fun rearTimeout() = read(CMD, "settings", "get", "system", REAR_TIMEOUT)
+
+    fun setRearTimeout(ms: Int) = run(CMD, "settings", "put", "system", REAR_TIMEOUT, ms.toString())
+
+    fun clearRearTimeout() = run(CMD, "settings", "delete", "system", REAR_TIMEOUT)
+
+    /** The back screen's density: "Physical density: 450", then "Override density: 260" if set. */
+    fun rearDensity(displayId: Int) = read(CMD, "window", "density", "-d", displayId.toString())
+
+    fun setRearDensity(displayId: Int, dpi: Int) =
+        run(CMD, "window", "density", dpi.toString(), "-d", displayId.toString())
+
+    /** Only to put back a display that had no override; Xiaomi's back screen has one (260, not 450). */
+    fun resetRearDensity(displayId: Int) = run(CMD, "window", "density", "reset", "-d", displayId.toString())
+
+    /** "free", or "lock" and the rotation it's locked to. */
+    fun rearUserRotation(displayId: Int) = read(CMD, "window", "user-rotation", "-d", displayId.toString())
+
+    fun lockRearRotation(displayId: Int, rotation: Int) =
+        run(CMD, "window", "user-rotation", "-d", displayId.toString(), "lock", rotation.coerceIn(0, 3).toString())
+
+    fun freeRearRotation(displayId: Int) = run(CMD, "window", "user-rotation", "-d", displayId.toString(), "free")
+
+    /** Whether the display turns to the locked rotation: "default", "enabled", "disabled" and so on. */
+    fun rearFixedRotation(displayId: Int) = read(CMD, "window", "fixed-to-user-rotation", "-d", displayId.toString())
+
+    fun setRearFixedRotation(displayId: Int, mode: String): String {
+        if (mode !in FIXED_ROTATION_MODES) return "failed: unknown mode $mode"
+        return run(CMD, "window", "fixed-to-user-rotation", "-d", displayId.toString(), mode)
+    }
+
+    /** What [command] prints, or null if it couldn't run. */
+    private fun read(vararg command: String): String? {
         if (!isReady()) return null
         return try {
-            val process = newProcess(arrayOf(AM, "stack", "list"))
+            val process = newProcess(arrayOf(*command))
             val output = process.inputStream.bufferedReader().readText()
             process.errorStream.bufferedReader().readText()
             if (process.waitFor() == 0) output else null

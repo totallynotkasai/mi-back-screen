@@ -1,8 +1,10 @@
 package com.backscreen.wallpaper.core
 
 import android.content.Context
+import android.provider.Settings
 import androidx.annotation.MainThread
 import com.backscreen.wallpaper.battery.BatterySettings
+import com.backscreen.wallpaper.mirror.MirrorSettings
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 
 /** Why another app has the back screen. */
@@ -70,8 +72,13 @@ data class RearSnapshot(
     /** Whether the keeper keeps the wallpaper up: on top of Xiaomi's screen, and put back if closed. */
     val guardsWallpaper get() = owner is RearOwner.Host
 
-    /** Whether KeeperService has anything to do. [batteryOn]: its plug-in receiver needs it running. */
-    fun keeperNeeded(batteryOn: Boolean) = wallpaperOn || batteryOn || lend != null || popover
+    /**
+     * Whether KeeperService has anything to do. [batteryOn]: its plug-in receiver needs it
+     * running. [mirrorOn]: the Quick Switch tile asks it directly, which is quicker and works
+     * where the tile may not start it.
+     */
+    fun keeperNeeded(batteryOn: Boolean, mirrorOn: Boolean = false) =
+        wallpaperOn || batteryOn || mirrorOn || lend != null || popover
 
     /** Where a charging animation goes; [popoverAllowed] if it may go over Xiaomi's screen. */
     fun routeOverlay(popoverAllowed: Boolean) = when (owner) {
@@ -107,6 +114,10 @@ data class RearSnapshot(
  * Wallpaper switch is read from its setting each time. A lent app is saved, so restarting this
  * app doesn't "repair" the back screen by covering it; a pop-over and the shade don't outlive
  * the process.
+ *
+ * A lend is saved with the phone's boot count and forgotten after a restart, since no app's
+ * task survives one. Not on BOOT_COMPLETED: on Android 15 and later that also arrives when this
+ * app comes back from a force stop, with the lent app still on the back screen (Phase 6).
  */
 @MainThread
 object RearState {
@@ -114,6 +125,7 @@ object RearState {
     private const val KEY_REASON = "lend_reason"
     private const val KEY_TASK = "lend_task"
     private const val KEY_PACKAGE = "lend_package"
+    private const val KEY_BOOT = "lend_boot"
 
     private var popover = false
     private var shadeOpen = false
@@ -125,7 +137,10 @@ object RearState {
 
     fun owner(context: Context) = snapshot(context).owner
 
-    fun keeperNeeded(context: Context) = snapshot(context).keeperNeeded(BatterySettings.isEnabled(context))
+    /** Also while Xiaomi's settings are still changed from an earlier lend, until they're put back. */
+    fun keeperNeeded(context: Context) =
+        snapshot(context).keeperNeeded(BatterySettings.isEnabled(context), MirrorSettings.isEnabled(context)) ||
+            RearTweaks.pending(context)
 
     fun wallpaperChanged(context: Context, on: Boolean) = apply(context, snapshot(context).withWallpaper(on))
 
@@ -157,7 +172,8 @@ object RearState {
         val p = prefs(context)
         val reason = LendReason.entries.firstOrNull { it.name == p.getString(KEY_REASON, null) }
         val pkg = p.getString(KEY_PACKAGE, null)
-        lend = if (reason != null && pkg != null) Lend(reason, p.getInt(KEY_TASK, -1), pkg) else null
+        val sameBoot = p.getInt(KEY_BOOT, UNKNOWN_BOOT) == bootCount(context)
+        lend = if (reason != null && pkg != null && sameBoot) Lend(reason, p.getInt(KEY_TASK, -1), pkg) else null
         loaded = true
         return lend
     }
@@ -172,7 +188,14 @@ object RearState {
                 putString(KEY_REASON, value.reason.name)
                 putInt(KEY_TASK, value.taskId)
                 putString(KEY_PACKAGE, value.packageName)
+                putInt(KEY_BOOT, bootCount(context))
             }
         }.apply()
     }
+
+    /** How many times the phone has started; any app may read it. */
+    private fun bootCount(context: Context) =
+        Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, UNKNOWN_BOOT)
+
+    private const val UNKNOWN_BOOT = -1
 }

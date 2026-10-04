@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -11,6 +12,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.hardware.display.DisplayManager
 import android.os.IBinder
 import android.os.PowerManager
@@ -21,12 +23,17 @@ import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.battery.BatterySettings
 import com.backscreen.wallpaper.battery.ChargingMonitor
 import com.backscreen.wallpaper.battery.ChargingStatus
+import com.backscreen.wallpaper.mirror.AppLabels
+import com.backscreen.wallpaper.mirror.MirrorSettings
+import com.backscreen.wallpaper.mirror.QuickSwitch
+import com.backscreen.wallpaper.mirror.QuickSwitchTile
 import com.backscreen.wallpaper.notifications.AppWakeLimit
 import com.backscreen.wallpaper.notifications.NotificationAccess
 import com.backscreen.wallpaper.notifications.NotificationFilter
 import com.backscreen.wallpaper.notifications.NotificationSettings
 import com.backscreen.wallpaper.notifications.RearNotification
 import com.backscreen.wallpaper.notifications.SampleNotification
+import com.backscreen.wallpaper.rear.BackCover
 import com.backscreen.wallpaper.rear.BackSensor
 import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.wallpaper.ClockAlarm
@@ -68,6 +75,11 @@ import kotlin.math.max
  * Everything that lights the back screen goes through [lightRear], and [WakeThrottle] decides
  * for the things that want to be seen, so they can't light it in a burst.
  *
+ * Quick Switch ([QuickSwitch]): while an app is lent the back screen, a watchdog checks it's
+ * still there ([LendWatchdog]), the app's notification says so with Bring back, and covering the
+ * back can bring it back ([BackCover]). Whatever the lend changed in Xiaomi's settings
+ * ([RearTweaks]) is put back when it ends, or when this starts with nothing lent.
+ *
  * Restarts: after the phone or this app restarts, it carries on. If Shizuku isn't running yet
  * (after a phone restart it isn't until you start it), the wallpaper waits for it rather than
  * switching off (see [waitForShizuku]).
@@ -93,12 +105,31 @@ class KeeperService : Service() {
     private val wakes = WakeThrottle()
     private val appWakes = AppWakeLimit()
 
+    /** Moving the app you're using to the back screen and back. */
+    val quickSwitch = QuickSwitch(this)
+    private val watchdog = LendWatchdog(::shell, ::rearDisplayId, ::onLentAppGone)
+    // Lazy: it finds the sensor, which needs the service's context.
+    private val backCover by lazy { BackCover(this) { quickSwitch.bringBack("the back was covered") } }
+
+    // After an app is sent, the back screen is lit for it once that won't bring up HyperOS's
+    // cover: until then (elapsedRealtime), and not before Xiaomi's app has settled.
+    private var lightForLendUntil = 0L
+    private var lightForLendSettled = 0L
+    private var lightForLendWaitLogged = false
+    private val lightForLendAgain = Runnable { tryLightForLend() }
+
     private val binderReceived = Shizuku.OnBinderReceivedListener {
         runWaiting()
-        BackScreen.mainHandler.post { applyIfWaiting() }
+        BackScreen.mainHandler.post {
+            applyIfWaiting()
+            putBackTweaksIfIdle()
+        }
     }
     private val permissionResult = Shizuku.OnRequestPermissionResultListener { _, result ->
-        if (result == PackageManager.PERMISSION_GRANTED) BackScreen.mainHandler.post { applyIfWaiting() }
+        if (result == PackageManager.PERMISSION_GRANTED) BackScreen.mainHandler.post {
+            applyIfWaiting()
+            putBackTweaksIfIdle()
+        }
     }
     private val shizukuTimeout = Runnable { runWaiting() }
     private val directLaunchTimeout = Runnable { onDirectLaunchFailed() }
@@ -115,10 +146,13 @@ class KeeperService : Service() {
         override fun onDisplayAdded(displayId: Int) {}
         override fun onDisplayRemoved(displayId: Int) {}
         override fun onDisplayChanged(displayId: Int) {
+            // The main screen turning off or upright may be what a sent app's light waits for.
+            if (displayId == Display.DEFAULT_DISPLAY) return tryLightForLend()
             val rear = BackScreen.findRearDisplay(this@KeeperService) ?: return
             if (displayId != rear.displayId) return
             val woke = rear.state == Display.STATE_ON && rearState != Display.STATE_ON
             rearState = rear.state
+            tryLightForLend()
             if (rear.state != Display.STATE_ON) return
             // The gallery doesn't move on while the phone sleeps; catch up now it can be seen.
             // Only on waking: the lit rear reports other changes several times a second, and
@@ -149,6 +183,15 @@ class KeeperService : Service() {
             .registerDisplayListener(displayListener, BackScreen.mainHandler)
         registerReceiver(subScreenOn, IntentFilter(ACTION_SUB_SCREEN_ON), RECEIVER_EXPORTED)
         charging.start()
+        val lend = (RearState.owner(this) as? RearOwner.Lent)?.lend
+        if (lend != null) {
+            // Saved before this process last stopped: make sure it's still there before trusting it.
+            BackScreen.log("Checking ${lend.packageName} is still on the back screen")
+            watchdog.watch(lend, now = true)
+            updateCover()
+        } else {
+            putBackTweaksIfIdle()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -158,9 +201,15 @@ class KeeperService : Service() {
             ACTION_TOGGLE -> if (WallpaperSettings.isEnabled(this)) restore() else turnOn()
             ACTION_APPLY -> turnOn()
             ACTION_SCHEDULED_ON -> turnOn(byYou = false)
-            ACTION_UPDATE -> stopIfIdle()
+            ACTION_UPDATE -> {
+                mirrorChanged()
+                stopIfIdle()
+            }
             ACTION_PLAY_CHARGING -> playChargingNow()
             ACTION_TRY_NOTIFICATION -> tryNotification()
+            ACTION_QUICK_SWITCH -> quickSwitch.toggle()
+            ACTION_BRING_BACK -> quickSwitch.bringBack("the notification")
+            ACTION_MIRROR_CHANGED -> mirrorChanged()
             // ACTION_RESUME after the phone restarts or the app updates, or none: the system
             // restarted us after the process was killed.
             else -> {
@@ -180,6 +229,9 @@ class KeeperService : Service() {
         BackScreen.mainHandler.removeCallbacks(shizukuTimeout)
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.mainHandler.removeCallbacks(popoverDone)
+        BackScreen.mainHandler.removeCallbacks(lightForLendAgain)
+        watchdog.stop()
+        backCover.stop()
         Shizuku.removeBinderReceivedListener(binderReceived)
         Shizuku.removeRequestPermissionResultListener(permissionResult)
         getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
@@ -399,19 +451,120 @@ class KeeperService : Service() {
         BackScreen.mainHandler.removeCallbacks(checkRearLate)
         BackScreen.log("${lend.packageName} has the back screen (${lend.reason.name.lowercase()})")
         ClockAlarm.update(this)
+        watchdog.watch(lend)
+        updateCover()
+        lentChanged()
         return true
     }
 
-    /** The lent app left the back screen: it goes to the wallpaper or Xiaomi's screen, whichever is on now. */
+    /**
+     * The lent app left the back screen: it goes to the wallpaper or Xiaomi's screen, whichever
+     * is on now, and whatever the lend changed in Xiaomi's settings is put back.
+     */
     fun onLendEnded() {
         if (!RearState.endLend(this)) return
         BackScreen.log("Back screen returned")
+        watchdog.stop()
+        backCover.stop()
+        lightForLendUntil = 0L
+        BackScreen.mainHandler.removeCallbacks(lightForLendAgain)
         ClockAlarm.update(this)
+        lentChanged()
+        putBackTweaksIfIdle()
         if (RearState.snapshot(this).guardsWallpaper) {
             // Usually still underneath, and showing again; put back if not.
             scheduleRearCheck()
         } else {
             restoreXiaomi()
+        }
+    }
+
+    /** The watchdog found the lent app gone: closed, moved back, or sent behind. */
+    private fun onLentAppGone(lend: Lend) {
+        BackScreen.log("${lend.packageName} left the back screen")
+        onLendEnded()
+    }
+
+    /** An app came or went: the notification and the tile say so. */
+    private fun lentChanged() {
+        updateNotification()
+        QuickSwitchTile.requestUpdate(this)
+    }
+
+    /** Puts back what an earlier lend changed in Xiaomi's settings, once nothing is lent. */
+    private fun putBackTweaksIfIdle() {
+        if (RearState.owner(this) is RearOwner.Lent || !RearTweaks.pending(this)) return
+        val rear = rearDisplayId() ?: return
+        // If Shizuku isn't ready, it's tried again when it connects.
+        shell(onUnavailable = {}) {
+            if (RearState.owner(this) is RearOwner.Lent) return@shell
+            RearTweaks.putBackAll(this, rear)
+            BackScreen.mainHandler.post { stopIfIdle() }
+        }
+    }
+
+    /**
+     * Mirror was switched on or off, or one of its options changed. Switching it off brings back
+     * an app that's there; an option takes effect on it at once.
+     */
+    private fun mirrorChanged() {
+        if (quickSwitch.lend != null) {
+            if (MirrorSettings.isEnabled(this)) quickSwitch.settingsChanged() else quickSwitch.bringBack("Quick Switch was switched off")
+        }
+        updateCover()
+        QuickSwitchTile.requestUpdate(this)
+    }
+
+    /** Covering the back brings a Quick Switch app back, while that option is on. */
+    private fun updateCover() {
+        if (quickSwitch.lend != null && MirrorSettings.coverReturn(this)) backCover.start() else backCover.stop()
+    }
+
+    fun rearDisplayId() = BackScreen.findRearDisplay(this)?.displayId
+
+    /**
+     * An app was just sent to the back screen: light it up, once that won't bring up HyperOS's
+     * "Press the Power button" cover. While the main screen is on and turned sideways, as for a
+     * video, it waits for the main screen to turn upright (you turning the phone over) or off
+     * (you pressing Power), for up to 30 s. [settleMs]: Xiaomi's app was just restarted, which
+     * sends the back screen briefly to its dimmed state; wait for that first.
+     */
+    fun lightForLend(settleMs: Long) {
+        val now = SystemClock.elapsedRealtime()
+        lightForLendUntil = now + LEND_LIGHT_WINDOW_MS
+        lightForLendSettled = now + settleMs
+        lightForLendWaitLogged = false
+        tryLightForLend()
+    }
+
+    private fun tryLightForLend() {
+        if (lightForLendUntil == 0L) return
+        BackScreen.mainHandler.removeCallbacks(lightForLendAgain)
+        val now = SystemClock.elapsedRealtime()
+        val lend = (RearState.owner(this) as? RearOwner.Lent)?.lend
+        if (lend == null || now > lightForLendUntil) {
+            lightForLendUntil = 0L
+            return
+        }
+        if (now < lightForLendSettled) {
+            BackScreen.mainHandler.postDelayed(lightForLendAgain, lightForLendSettled - now)
+            return
+        }
+        if (hyperOsWouldCover()) {
+            if (!lightForLendWaitLogged) BackScreen.log("Main screen is on sideways; the back screen lights once it's upright or off")
+            lightForLendWaitLogged = true
+            return
+        }
+        // Lit already, or in the moments Xiaomi dims it before suspending, when a wake key is
+        // ignored: the next change looks again.
+        if (isRearLit()) return
+        val until = lightForLendUntil
+        lightForLendUntil = 0L
+        BackSensor.check(this) { covered ->
+            if (!covered) return@check lightRear("Wake back screen for ${lend.packageName}")
+            // Lying on its back, say: nobody's looking at it. Look again in a moment, while there's time.
+            lightForLendUntil = until
+            BackScreen.mainHandler.postDelayed(lightForLendAgain, COVERED_RETRY_MS)
         }
     }
 
@@ -627,8 +780,12 @@ class KeeperService : Service() {
         apply()
     }
 
-    /** Runs [block] with Shizuku, waiting briefly for its connection if needed. */
-    private fun shell(onUnavailable: () -> Unit = ::fail, block: () -> Unit) {
+    /**
+     * Runs [block] with Shizuku on the shell thread, waiting briefly for its connection if needed.
+     * If Shizuku isn't ready, [onUnavailable] runs instead, on the main thread; by default that
+     * switches the wallpaper off.
+     */
+    fun shell(onUnavailable: () -> Unit = ::fail, block: () -> Unit) {
         val task = {
             if (RearCommands.isReady()) {
                 executor.execute(block)
@@ -655,7 +812,33 @@ class KeeperService : Service() {
         }
     }
 
+    /**
+     * The service's one notification. Minimised, unless an app is on the back screen: then it
+     * says which, with Bring back, on a quiet channel of its own that isn't tucked away.
+     */
     private fun buildNotification(): Notification {
+        val lend = quickSwitch.lend ?: return buildKeeperNotification()
+        getSystemService(NotificationManager::class.java).createNotificationChannel(
+            NotificationChannel(CHANNEL_LENT_ID, getString(R.string.lent_channel), NotificationManager.IMPORTANCE_LOW)
+        )
+        // Tapping it brings the app back too: that's what you'd expect it to do (Phase 6).
+        val bringBack = PendingIntent.getForegroundService(
+            this, REQUEST_BRING_BACK, Intent(this, KeeperService::class.java).setAction(ACTION_BRING_BACK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return Notification.Builder(this, CHANNEL_LENT_ID)
+            .setSmallIcon(R.drawable.ic_swap)
+            .setContentTitle(getString(R.string.lent_title, AppLabels.get(this, lend.packageName)))
+            .setContentText(getString(R.string.lent_text))
+            .setContentIntent(bringBack)
+            .addAction(
+                Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_swap), getString(R.string.bring_back), bringBack).build()
+            )
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun buildKeeperNotification(): Notification {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, getString(R.string.keeper_channel), NotificationManager.IMPORTANCE_MIN)
         )
@@ -667,7 +850,10 @@ class KeeperService : Service() {
             .build()
     }
 
-    /** Shows whether it's waiting for Shizuku. Through the service, which needs no notification permission. */
+    /**
+     * Shows whether it's waiting for Shizuku, or which app is on the back screen. Through the
+     * service, which needs no notification permission.
+     */
     private fun updateNotification() {
         startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
     }
@@ -688,9 +874,24 @@ class KeeperService : Service() {
         /** The Notifications tab's Try on back screen. */
         const val ACTION_TRY_NOTIFICATION = "com.backscreen.wallpaper.TRY_NOTIFICATION"
 
+        /** The Quick Switch tile, when the service wasn't running to ask directly. */
+        const val ACTION_QUICK_SWITCH = "com.backscreen.wallpaper.QUICK_SWITCH"
+
+        /** Bring back, in the notification while an app is on the back screen. */
+        const val ACTION_BRING_BACK = "com.backscreen.wallpaper.BRING_BACK"
+
+        /** A Mirror option changed. */
+        const val ACTION_MIRROR_CHANGED = "com.backscreen.wallpaper.MIRROR_CHANGED"
+
         private const val ACTION_SUB_SCREEN_ON = "miui.intent.action.SUB_SCREEN_ON"
         private const val CHANNEL_ID = "keeper"
+        private const val CHANNEL_LENT_ID = "lent"
         private const val NOTIFICATION_ID = 1
+        private const val REQUEST_BRING_BACK = 1
+
+        // How long a sent app's light waits for the main screen to turn upright or off.
+        private const val LEND_LIGHT_WINDOW_MS = 30_000L
+        private const val COVERED_RETRY_MS = 1000L
         private const val CHECK_DELAY_MS = 600L
         private const val LATE_CHECK_DELAY_MS = 1500L
         private const val HIDDEN_CHECK_DELAY_MS = 300L

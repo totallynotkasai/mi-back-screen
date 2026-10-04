@@ -16,7 +16,6 @@
     <string name="mirror_switch">Quick Switch</string>
     <string name="camera_switch">Swipe left for Xiaomi Camera</string>
     <string name="coming_later">Coming in a later update</string>
-    <string name="mirror_planned">A Quick Settings tile that moves the app you\'re using to the back screen, and brings it back with another tap.</string>
     <string name="camera_planned">Swipe left on the back screen to open Xiaomi Camera there, on the main cameras, for selfies with the best lenses.</string>
 
     <!-- Top bar and its menu. -->
@@ -27,7 +26,7 @@
     <string name="setup_help">Setup help</string>
     <string name="about_title">About</string>
     <string name="about">Mi Back Screen %1$s</string>
-    <string name="about_message">Shows your own images, GIFs, a clock, a charging animation and your notifications on the Xiaomi 17 Pro Max back screen.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
+    <string name="about_message">Shows your own images, GIFs, a clock, a charging animation and your notifications on the Xiaomi 17 Pro Max back screen, and moves the app you\'re using there with Quick Switch.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
     <string name="website">Website</string>
     <string name="website_url" translatable="false">https://totallynotkasai.github.io/mi-back-screen/</string>
     <string name="close">Close</string>
@@ -248,6 +247,59 @@
     <string name="sample_app">Messages</string>
     <string name="sample_title">Alex</string>
     <string name="sample_text">Running about 10 minutes late, the bus is crawling. Save me a seat near the front?</string>
+
+    <!-- Mirror tab, the Quick Switch tile, and an app on the back screen. -->
+    <string name="mirror_on_ready">On · use the Quick Switch tile</string>
+    <string name="mirror_on_lent">On · %1$s is on the back screen</string>
+    <string name="mirror_how">Open an app, pull down Quick Settings and tap Quick Switch: the app moves to the back screen. Tap the tile again to bring it back.</string>
+    <string name="add_tile">Add Quick Switch to Quick Settings</string>
+    <string name="tile_added">Quick Switch is in Quick Settings</string>
+    <string name="tile_added_now">Quick Switch added to Quick Settings</string>
+    <string name="tile_add_failed">Couldn\'t add the tile. Edit Quick Settings and drag Quick Switch in</string>
+    <string name="lent_now">%1$s is on the back screen</string>
+    <string name="lent_now_detail">Bring it back here, or use the tile or Xiaomi\'s back strip on the back screen</string>
+    <string name="bring_back">Bring back</string>
+    <string name="keep_lit_title">Back screen stays lit</string>
+    <string name="keep_lit_summary">After your last touch on it. Apps like YouTube keep it lit anyway while they play</string>
+    <string name="keep_lit_as_set">As set</string>
+    <string name="keep_lit_30s">30 s</string>
+    <string name="keep_lit_2min">2 min</string>
+    <string name="keep_lit_10min">10 min</string>
+    <string name="cover_return_title">Cover the back to bring it back</string>
+    <string name="cover_return_summary">Cover the camera for a moment, or lay the phone on its back</string>
+    <string name="size_title">App size</string>
+    <string name="size_summary">Smaller fits more on the back screen</string>
+    <string name="size_default">Default</string>
+    <string name="size_smaller">Smaller</string>
+    <string name="size_smallest">Smallest</string>
+    <string name="orientation_title">Orientation</string>
+    <string name="orientation_summary">Portrait turns the back screen upright: hold the phone sideways, camera at the top</string>
+    <string name="orientation_landscape">Landscape</string>
+    <string name="orientation_portrait">Portrait</string>
+    <string name="mirror_options_note">These apply only while an app is on the back screen, and Xiaomi\'s settings are put back when it leaves.</string>
+    <string name="mirror_limits_title">Good to know</string>
+    <string name="mirror_limits">• With the main screen on sideways, the back screen lights once you turn the phone over or press Power. Touching it before then brings up Xiaomi\'s \"Press the Power button\" message.\n• A video playing full screen may start again from the app\'s home page.\n• The keyboard may open on the main screen.\n• Some video apps show black on a second screen.\n• The main screen stays as it was, and turns off as usual.</string>
+    <string name="mirror_notifications_denied">Without notifications, bring apps back with the tile or this tab</string>
+    <string name="qs_tile_off">Off in Mi Back Screen</string>
+    <string name="qs_tile_camera">Xiaomi Camera is there</string>
+    <string name="qs_tile_ready">Send to back screen</string>
+    <string name="qs_no_app">No app open</string>
+    <string name="qs_busy">Another app is there</string>
+    <string name="qs_off">Quick Switch is off</string>
+    <string name="qs_no_back_screen">No back screen</string>
+    <string name="qs_failed">Couldn\'t move it</string>
+    <string name="qs_was_asleep">Mi Back Screen was asleep. Go back to your app and tap Quick Switch again</string>
+    <string name="lent_channel">App on the back screen</string>
+    <string name="lent_title">%1$s is on the back screen</string>
+    <string name="lent_text">Tap to bring it back here</string>
+    <string name="setup_mirror_notifications_title">Notifications</string>
+    <string name="setup_mirror_notifications_text">Shows which app is on the back screen, with Bring back.</string>
+    <string name="allow">Allow</string>
+    <string name="diag_mirror">Quick Switch: %1$s</string>
+    <string name="diag_mirror_off">off</string>
+    <string name="diag_mirror_on">on</string>
+    <string name="diag_mirror_lent">on, %1$s on the back screen</string>
+    <string name="diag_tweaks">Changed in Xiaomi\'s settings: %1$s</string>
 
     <!-- Outside the app. -->
     <string name="tile_label">Back screen wallpaper</string>

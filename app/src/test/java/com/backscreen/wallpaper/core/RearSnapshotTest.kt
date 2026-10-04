@@ -99,5 +99,7 @@ class RearSnapshotTest {
         assertTrue(wallpaper.keeperNeeded(batteryOn = false))
         assertTrue(xiaomi.lent(youtube)!!.keeperNeeded(batteryOn = false))
         assertTrue(xiaomi.startPopover()!!.keeperNeeded(batteryOn = false))
+        // Quick Switch on: the tile asks the running keeper.
+        assertTrue(xiaomi.keeperNeeded(batteryOn = false, mirrorOn = true))
     }
 }

@@ -12,7 +12,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.Log
+import android.util.Size
 import android.view.Display
+import android.view.Surface
 import com.backscreen.wallpaper.wallpaper.Scaling
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -34,10 +36,50 @@ object BackScreen {
 
     val mainHandler = Handler(Looper.getMainLooper())
 
-    /** How far the camera reaches into each edge of [display], in its pixels. */
+    /** How far the camera reaches into each edge of [display], in its pixels, as it's turned now. */
     fun cameraInsets(display: Display): Insets =
         display.cutout?.let { Insets.of(it.safeInsetLeft, it.safeInsetTop, it.safeInsetRight, it.safeInsetBottom) }
             ?: Insets.NONE
+
+    // The wallpaper always shows on the back screen in its natural landscape (976 x 596, camera
+    // on the left), but an app lent the back screen may turn it to portrait (Quick Switch's
+    // Orientation). Previews, decoding and the pan's maths go by the natural shape.
+
+    /** [display]'s size in its natural orientation, however it's turned just now. */
+    @Suppress("DEPRECATION")
+    fun naturalSize(display: Display): Size {
+        val m = DisplayMetrics().also { display.getRealMetrics(it) }
+        return if (isTurned(display)) Size(m.heightPixels, m.widthPixels) else Size(m.widthPixels, m.heightPixels)
+    }
+
+    /** [cameraInsets] in [display]'s natural orientation. */
+    fun naturalCameraInsets(display: Display): Insets {
+        val i = cameraInsets(display)
+        return when (display.rotation) {
+            Surface.ROTATION_90 -> Insets.of(i.bottom, i.left, i.top, i.right)
+            Surface.ROTATION_180 -> Insets.of(i.right, i.bottom, i.left, i.top)
+            Surface.ROTATION_270 -> Insets.of(i.top, i.right, i.bottom, i.left)
+            else -> i
+        }
+    }
+
+    /** Where the camera covers [display], in its natural orientation. */
+    fun naturalCameraRects(display: Display): List<Rect> {
+        val rects = display.cutout?.boundingRects.orEmpty()
+        val natural = naturalSize(display)
+        return rects.map { r ->
+            when (display.rotation) {
+                // Turned a quarter: the natural x runs back up the turned y, and so on.
+                Surface.ROTATION_90 -> Rect(natural.width - r.bottom, r.left, natural.width - r.top, r.right)
+                Surface.ROTATION_180 -> Rect(natural.width - r.right, natural.height - r.bottom, natural.width - r.left, natural.height - r.top)
+                Surface.ROTATION_270 -> Rect(r.top, natural.height - r.right, r.bottom, natural.height - r.left)
+                else -> r
+            }
+        }
+    }
+
+    private fun isTurned(display: Display) =
+        display.rotation == Surface.ROTATION_90 || display.rotation == Surface.ROTATION_270
 
     fun findRearDisplay(context: Context): Display? {
         val dm = context.getSystemService(DisplayManager::class.java)
@@ -46,12 +88,11 @@ object BackScreen {
     }
 
     /**
-     * Decodes [uri] sized for [display] and [scaling]. Works off the main thread; [start] it
-     * once shown.
+     * Decodes [uri] sized for [display] in its natural orientation and [scaling]. Works off the
+     * main thread; [start] it once shown.
      */
-    @Suppress("DEPRECATION")
     fun loadImage(context: Context, uri: Uri, display: Display, scaling: Scaling): Drawable {
-        val m = DisplayMetrics().also { display.getRealMetrics(it) }
+        val screen = naturalSize(display)
         val source = ImageDecoder.createSource(context.contentResolver, uri)
         return ImageDecoder.decodeDrawable(source) { decoder, info, _ ->
             // In memory the clock can read, to pick a colour that stands out from the image.
@@ -60,14 +101,14 @@ object BackScreen {
             val h = info.size.height
             if (scaling == Scaling.NONE) {
                 // Shown at its own size, centred: keep just the middle that fits on the screen.
-                val left = max(0, (w - m.widthPixels) / 2)
-                val top = max(0, (h - m.heightPixels) / 2)
-                decoder.crop = Rect(left, top, left + min(w, m.widthPixels), top + min(h, m.heightPixels))
+                val left = max(0, (w - screen.width) / 2)
+                val top = max(0, (h - screen.height) / 2)
+                decoder.crop = Rect(left, top, left + min(w, screen.width), top + min(h, screen.height))
                 return@decodeDrawable
             }
             // Downscale large images to just what's shown; saves memory and battery.
-            val sx = m.widthPixels.toFloat() / w
-            val sy = m.heightPixels.toFloat() / h
+            val sx = screen.width.toFloat() / w
+            val sy = screen.height.toFloat() / h
             val scale = if (scaling == Scaling.FIT) min(sx, sy) else max(sx, sy)
             if (scale < 1f) {
                 decoder.setTargetSize(

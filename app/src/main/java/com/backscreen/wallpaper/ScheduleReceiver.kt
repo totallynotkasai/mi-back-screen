@@ -25,8 +25,10 @@ class ScheduleReceiver : BroadcastReceiver() {
         Schedules.update(context)
         ClockAlarm.update(context)
         when (intent.action) {
-            // No app's task outlives a restart, so an app that had the back screen doesn't now.
-            Intent.ACTION_BOOT_COMPLETED -> RearState.endLend(context)
+            // A lend from before a restart is forgotten by RearState itself. This also arrives
+            // when the app comes back from a force stop (Android 15 and later), with the lent
+            // app still on the back screen, so it mustn't clear the lend.
+            Intent.ACTION_BOOT_COMPLETED -> {}
             // The widget's button names the service; make sure it names this version's.
             Intent.ACTION_MY_PACKAGE_REPLACED -> ToggleWidget.updateAll(context)
             else -> return

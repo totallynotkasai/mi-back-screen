@@ -1,6 +1,6 @@
 # Mi Back Screen
 
-Show your own images, animated GIFs, a clock and your notifications on the **Xiaomi 17 Pro Max** rear display.
+Show your own images, animated GIFs, a clock and your notifications on the **Xiaomi 17 Pro Max** rear display, and move the app you're using there with one tap.
 
 **Website:** https://totallynotkasai.github.io/mi-back-screen/
 **Download:** [latest APK](https://github.com/totallynotkasai/mi-back-screen/releases/latest/download/MiBackScreen.apk)
@@ -16,6 +16,7 @@ Show your own images, animated GIFs, a clock and your notifications on the **Xia
 - The clock stays on time while the phone sleeps, including on the dimmed back screen
 - Charging animation: when you plug in, the back screen lights up and plays a short animation with the battery level (wired or wireless), then fades back to the wallpaper. It stays dark while the back is covered, and can also play over Xiaomi's back screen while the wallpaper is off
 - Notifications: a new one slides in at the top of the back screen for a few seconds, showing as much as you choose: just the app (Discreet), who it's from (Normal) or the message too (Full). Pull down from the top for the ones you haven't cleared. While the phone is locked it follows your lock screen, so sensitive content stays hidden if that's how your lock screen is set. With the wallpaper off, Xiaomi's own back screen shows notifications instead
+- Quick Switch: a Quick Settings tile that moves the app you're using to the back screen, and brings it back with another tap, from its notification, or by covering the back if you turn that on. The back screen stays lit for as long as you choose after your last touch (2 minutes by default), and apps can show smaller or in portrait there. Xiaomi's settings are put back when the app leaves
 - Refresh button to put the wallpaper up afresh if something didn't update
 - Preview shaped like the rear display, with an option to keep clear of the camera
 - Quick Settings tile and home-screen widget to toggle it
@@ -36,6 +37,7 @@ Show your own images, animated GIFs, a clock and your notifications on the **Xia
 4. Pick images (or a folder) and turn on **Show on back screen**.
 5. For schedules and the clock: if the app shows **Setup needed**, allow alarms, and in Settings → Apps → Mi Back Screen turn on **Autostart** and set **Battery saver** to **No restrictions**.
 6. For notifications: turn on **Show notifications on back screen** on the Notifications tab. Shizuku allows Notification access in the same tap. Without Shizuku, allow it in Settings; Android blocks that for sideloaded apps until you open App info → ⋮ → **Allow restricted settings**.
+7. For Quick Switch: turn on **Quick Switch** on the Mirror tab (allow notifications when asked, for the one that brings the app back), and tap **Add Quick Switch to Quick Settings**.
 
 ## Building
 
@@ -49,13 +51,14 @@ The APK is written to `app/build/outputs/apk/debug/`. Unit tests run with `./gra
 
 ## How it works
 
-HyperOS doesn't let normal apps draw on the rear display, so Mi Back Screen uses Shizuku to run a fixed set of `am` / `input` commands (see [`RearCommands.kt`](app/src/main/java/com/backscreen/wallpaper/core/RearCommands.kt)):
+HyperOS doesn't let normal apps draw on the rear display, so Mi Back Screen uses Shizuku to run a fixed set of `am`, `input` and `cmd` commands (see [`RearCommands.kt`](app/src/main/java/com/backscreen/wallpaper/core/RearCommands.kt)):
 
 - **Putting the wallpaper up.** It's launched straight onto the rear display while the phone is unlocked. While it's locked, HyperOS only allows its own apps there, so the wallpaper is opened on the main display and its task moved to the rear.
 - **Keeping it there.** Each time the rear dims, Xiaomi's back screen app brings its own launcher back and closes whatever was on top, but only if that launcher has been opened since Xiaomi's app started. So when the wallpaper goes up over Xiaomi's launcher, Xiaomi's app is restarted **once**; it comes straight back without the launcher and leaves the wallpaper alone. If anything closes the wallpaper anyway, it's put back. (Up to 1.3 the app stopped Xiaomi's app every time, which relit the rear about every 10 seconds.)
 - **Switching off** brings Xiaomi's launcher back.
 - **Charging.** The animation is drawn inside the wallpaper window that's already on the back screen, so it appears at once. With the wallpaper off, that window goes up over Xiaomi's screen just for the animation (only if you allow it). The back screen is only lit for it when it's dark, the back isn't covered, and the main screen isn't turned sideways: HyperOS treats a back-screen wake then as an accident and covers it with its own "Press the Power button" screen.
 - **Notifications.** A notification listener (Notification access, which Shizuku grants with `cmd notification allow_listener`) passes new notifications to the wallpaper window, which shows them as a banner at once. It skips ongoing ones, media players, downloads in progress, group summaries, silent ones, anything Do Not Disturb holds back, and the app you're using. The back screen is lit for a new one at most once a minute per app, not while you're using the phone or the back is covered; on a dimmed back screen the banner just appears, without lighting it.
+- **Quick Switch.** The tile finds the app in front on the main screen (`am stack list`) and moves its task to the back screen (`am display move-stack`). While it's there, the app raises Xiaomi's own back-screen timeout (`settings put system subscreen_display_time`), and the back screen's density and rotation if you chose a smaller size or portrait (`wm density`, `wm user-rotation`), saving each value first and putting it back when the app leaves, after a crash or a restart too, and only if you haven't changed it yourself meanwhile. With the wallpaper off, Xiaomi's app is restarted once, as above, so it doesn't take the back screen back. A check every 3 seconds notices when the app is closed or leaves. The back screen is lit for the app once the main screen is upright or off, to keep clear of HyperOS's "Press the Power button" screen.
 - **The clock.** A dimmed back screen keeps showing its last frame, and the phone sleeps between minutes. So while the clock is on the back screen and that screen is lit or dimmed, an exact alarm wakes the phone briefly at each minute, the new time is drawn, and a short draw wake lock sends the frame to the dimmed panel, as the system's own always-on displays do. While the back screen is off (for example when the back is covered), there's no alarm; the clock catches up as soon as it wakes.
 
 ## Battery
@@ -71,5 +74,7 @@ The charging animation runs for 3.5 seconds once per plug-in, using under a seco
 No internet permission and no storage permission. Only the images or folder you pick are shared with the app; chosen images are copied into the app's private storage, and **Remove images** deletes those copies. Nothing leaves the phone.
 
 Notifications are read only once you allow Notification access, and only while the Notifications section is on. Their text is read on the phone, shown on the back screen, kept in memory only while the notification is in your shade, and never stored or sent anywhere. **Remove access** on the Notifications tab takes the access away again.
+
+Quick Switch reads the names of apps that have a launcher icon, to say which one is on the back screen. It can't see anything else about them.
 
 Not affiliated with Xiaomi.

@@ -15,6 +15,8 @@ import com.backscreen.wallpaper.battery.BatteryFragment
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.RearCommands
+import com.backscreen.wallpaper.core.RearState
+import com.backscreen.wallpaper.mirror.MirrorFragment
 import com.backscreen.wallpaper.notifications.NotificationsFragment
 import com.backscreen.wallpaper.ui.AppDialogs
 import com.backscreen.wallpaper.ui.Feature
@@ -100,6 +102,11 @@ class MainActivity : AppCompatActivity() {
 
         Shizuku.addRequestPermissionResultListener(permissionListener)
         Shizuku.addBinderReceivedListenerSticky(binderListener)
+        // After the app is force stopped nothing starts the service again, so opening the app
+        // carries on where it was: the wallpaper, an app lent the back screen, Xiaomi's settings.
+        if (KeeperService.instance == null && RearState.keeperNeeded(this)) {
+            KeeperService.start(this, KeeperService.ACTION_RESUME)
+        }
         if (savedInstanceState == null) handleIntent(intent)
     }
 
@@ -113,9 +120,27 @@ class MainActivity : AppCompatActivity() {
         handleIntent(intent)
     }
 
-    /** The Quick Settings tile opens us to toggle when it isn't allowed to itself. */
+    /**
+     * The wallpaper's tile opens us to toggle when it isn't allowed to itself, and the Quick
+     * Switch tile when the service wasn't running.
+     */
     private fun handleIntent(intent: Intent?) {
-        if (intent?.action != KeeperService.ACTION_TOGGLE) return
+        when (intent?.action) {
+            KeeperService.ACTION_TOGGLE -> toggleWallpaper()
+            KeeperService.ACTION_QUICK_SWITCH -> {
+                // We're in front now, so there's nothing to send; start the service for the next tap.
+                selectTab(Feature.MIRROR)
+                KeeperService.start(this, KeeperService.ACTION_UPDATE)
+                snackbar(R.string.qs_was_asleep, Snackbar.LENGTH_LONG)
+            }
+        }
+    }
+
+    private fun selectTab(feature: Feature) {
+        bottomNav.selectedItemId = feature.navId
+    }
+
+    private fun toggleWallpaper() {
         val on = !WallpaperSettings.isEnabled(this)
         if (on && !RearCommands.isReady()) {
             snackbar(R.string.need_shizuku)
@@ -158,6 +183,7 @@ class MainActivity : AppCompatActivity() {
         Feature.WALLPAPER -> WallpaperFragment()
         Feature.NOTIFICATIONS -> NotificationsFragment()
         Feature.BATTERY -> BatteryFragment()
+        Feature.MIRROR -> MirrorFragment()
         else -> PlannedFeatureFragment.newInstance(feature)
     }
 

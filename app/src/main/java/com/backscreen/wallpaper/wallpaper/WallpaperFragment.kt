@@ -11,7 +11,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import android.util.DisplayMetrics
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -651,13 +650,12 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private fun describePan(speed: PanSpeed): String? {
         val image = preview.drawable ?: return null
         val rear = BackScreen.findRearDisplay(ctx) ?: return null
-        @Suppress("DEPRECATION")
-        val m = DisplayMetrics().also { rear.getRealMetrics(it) }
-        val inset = if (WallpaperSettings.avoidCamera(ctx)) BackScreen.cameraInsets(rear) else Insets.NONE
+        val screen = BackScreen.naturalSize(rear)
+        val inset = if (WallpaperSettings.avoidCamera(ctx)) BackScreen.naturalCameraInsets(rear) else Insets.NONE
         val plan = PanPlanner.plan(
             image.intrinsicWidth, image.intrinsicHeight,
-            m.widthPixels - inset.left - inset.right, m.heightPixels - inset.top - inset.bottom,
-            m.heightPixels, speed
+            screen.width - inset.left - inset.right, screen.height - inset.top - inset.bottom,
+            screen.height, speed
         )
         val sweep = formatDuration(plan.sweepMs)
         return when (plan.axis) {
