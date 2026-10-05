@@ -61,7 +61,10 @@ class RearPreviewLayout @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = MeasureSpec.getSize(widthMeasureSpec)
+        // As wide as there's room for, but no taller than part of the window, so in landscape
+        // the whole preview fits with the tab's switch and buttons (its card wraps it, centred).
+        val maxHeight = resources.configuration.screenHeightDp * resources.displayMetrics.density * MAX_HEIGHT_SHARE
+        val width = minOf(MeasureSpec.getSize(widthMeasureSpec), (maxHeight * rearWidth / rearHeight).toInt())
         val scale = width.toFloat() / rearWidth
         // Same padding as the rear wallpaper gets, scaled down, so the crop matches.
         val inset = if (avoidCamera) cameraInsets else Insets.NONE
@@ -71,15 +74,15 @@ class RearPreviewLayout @JvmOverloads constructor(
             (inset.right * scale).toInt(), (inset.bottom * scale).toInt()
         )
         // The clock, the charging animation and notifications always keep clear of the camera,
-        // as on the rear display.
-        for (id in intArrayOf(R.id.clock, R.id.charging, R.id.notifications)) {
+        // as on the rear display, and so does the no-wallpaper note.
+        for (id in intArrayOf(R.id.clock, R.id.charging, R.id.notifications, R.id.emptyState)) {
             findViewById<View>(id)?.setPadding(
                 (cameraInsets.left * scale).toInt(), (cameraInsets.top * scale).toInt(),
                 (cameraInsets.right * scale).toInt(), (cameraInsets.bottom * scale).toInt()
             )
         }
         super.onMeasure(
-            widthMeasureSpec,
+            MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec((rearHeight * scale).toInt(), MeasureSpec.EXACTLY)
         )
     }
@@ -119,6 +122,8 @@ class RearPreviewLayout @JvmOverloads constructor(
     }
 
     private companion object {
+        /** Of the window's height: never reached in portrait, about 180 dp on the 17 Pro Max in landscape. */
+        const val MAX_HEIGHT_SHARE = 0.45f
         val LENS_COLORS = intArrayOf(
             0xFF0A0D15.toInt(), 0xFF151923.toInt(), 0xFF2A2E38.toInt(),
             0xFF0C0D11.toInt(), 0xFF3A3E48.toInt(), 0xFF111318.toInt(),

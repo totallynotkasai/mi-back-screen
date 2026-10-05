@@ -26,17 +26,18 @@ import com.backscreen.wallpaper.wallpaper.WallpaperFragment
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.navigation.NavigationBarView
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.snackbar.Snackbar
 import rikka.shizuku.Shizuku
 
 /**
  * The app: a top bar with the menu, a banner while Shizuku isn't ready, and a bottom bar with
- * a tab per section. A dot on a tab means that section is on.
+ * a tab per section (a rail down the side in landscape). A dot on a tab means that section is on.
  */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var bottomNav: BottomNavigationView
+    private lateinit var nav: NavigationBarView
     private lateinit var banner: View
     private lateinit var bannerTitle: TextView
     private lateinit var bannerText: TextView
@@ -65,7 +66,7 @@ class MainActivity : AppCompatActivity() {
         createdAt = SystemClock.uptimeMillis()
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
-        bottomNav = findViewById(R.id.bottomNav)
+        nav = findViewById(R.id.nav)
         banner = findViewById(R.id.shizukuBanner)
         bannerTitle = findViewById(R.id.shizukuBannerTitle)
         bannerText = findViewById(R.id.shizukuBannerText)
@@ -73,11 +74,14 @@ class MainActivity : AppCompatActivity() {
 
         // Drawn edge to edge: the top bar keeps clear of the status bar, and the bottom bar of
         // the navigation bar by itself, its colour running on behind the buttons with no scrim.
+        // In landscape the rail keeps clear of both by itself, and the section of the navigation bar.
         window.isNavigationBarContrastEnforced = false
+        val content = findViewById<View>(R.id.content)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { root, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             toolbar.setPadding(0, bars.top, 0, 0)
             root.setPadding(bars.left, 0, bars.right, 0)
+            content.setPadding(0, 0, 0, if (nav is BottomNavigationView) 0 else bars.bottom)
             insets
         }
 
@@ -93,9 +97,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         current = savedInstanceState?.getString(KEY_TAB)?.let(Feature::valueOf) ?: Feature.WALLPAPER
-        bottomNav.selectedItemId = current.navId
+        nav.selectedItemId = current.navId
         showTab(current)
-        bottomNav.setOnItemSelectedListener { item ->
+        nav.setOnItemSelectedListener { item ->
             Feature.forNavId(item.itemId)?.let(::showTab)
             true
         }
@@ -137,7 +141,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectTab(feature: Feature) {
-        bottomNav.selectedItemId = feature.navId
+        nav.selectedItemId = feature.navId
     }
 
     private fun toggleWallpaper() {
@@ -190,16 +194,16 @@ class MainActivity : AppCompatActivity() {
     private fun refresh() {
         refreshBanner()
         // A dot on each tab whose section is on.
-        val dot = MaterialColors.getColor(bottomNav, com.google.android.material.R.attr.colorPrimary)
+        val dot = MaterialColors.getColor(nav, com.google.android.material.R.attr.colorPrimary)
         for (feature in Feature.entries) {
             if (feature.settings.isEnabled(this)) {
-                bottomNav.getOrCreateBadge(feature.navId).apply {
+                nav.getOrCreateBadge(feature.navId).apply {
                     isVisible = true
                     backgroundColor = dot
                     setContentDescriptionNumberless(getString(R.string.feature_on))
                 }
             } else {
-                bottomNav.getBadge(feature.navId)?.isVisible = false
+                nav.getBadge(feature.navId)?.isVisible = false
             }
         }
         (supportFragmentManager.findFragmentByTag(current.name) as? Refreshable)?.refresh()
@@ -248,9 +252,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Shows [text] just above the bottom bar. */
+    /** Shows [text] just above the bottom bar, or at the bottom in landscape. */
     fun snackbar(text: Int, length: Int = Snackbar.LENGTH_SHORT): Snackbar =
-        Snackbar.make(findViewById(R.id.content), text, length).setAnchorView(bottomNav).also { it.show() }
+        Snackbar.make(findViewById(R.id.content), text, length)
+            .apply { if (nav is BottomNavigationView) anchorView = nav }
+            .also { it.show() }
 
     private companion object {
         const val REQUEST_SHIZUKU = 2

@@ -58,6 +58,8 @@ class MainSwitchBar @JvmOverloads constructor(
         summary = findViewById(R.id.mainSwitchSummary)
         toggle = findViewById(R.id.mainSwitchToggle)
         toggle.isSaveEnabled = false
+        // The bar is the switch for screen readers; the toggle inside only shows it.
+        toggle.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         context.obtainStyledAttributes(attrs, intArrayOf(android.R.attr.text)).apply {
             title.text = getText(0)
             recycle()

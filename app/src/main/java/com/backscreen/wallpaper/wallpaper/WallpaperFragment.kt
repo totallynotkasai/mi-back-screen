@@ -31,6 +31,7 @@ import com.backscreen.wallpaper.core.Schedules
 import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
+import com.backscreen.wallpaper.ui.SwitchRow
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -165,7 +166,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         view.findViewById<View>(R.id.folderButton).setOnClickListener { pickFolder.launch(Gallery.folder(ctx)) }
 
         view.findViewById<View>(R.id.intervalRow).setOnClickListener { chooseInterval() }
-        view.findViewById<View>(R.id.shuffleRow).setOnClickListener { shuffleSwitch.toggle() }
+        SwitchRow.bind(view.findViewById(R.id.shuffleRow), shuffleSwitch)
         shuffleSwitch.isChecked = Gallery.shuffle(ctx)
         shuffleSwitch.setOnCheckedChangeListener { _, checked -> Gallery.setShuffle(ctx, checked) }
         view.findViewById<View>(R.id.nextButton).setOnClickListener {
@@ -187,7 +188,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         setUpPanning(view)
 
         setUpClock(view)
-        cameraCard.setOnClickListener { cameraSwitch.toggle() }
+        SwitchRow.bind(view.findViewById(R.id.cameraRow), cameraSwitch)
         cameraSwitch.isChecked = WallpaperSettings.avoidCamera(ctx)
         cameraSwitch.setOnCheckedChangeListener { _, checked ->
             WallpaperSettings.setAvoidCamera(ctx, checked)
@@ -292,13 +293,17 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         scheduleList.removeAllViews()
         for (schedule in schedules.sortedBy { it.start }) {
             val row = layoutInflater.inflate(R.layout.item_schedule, scheduleList, false)
-            row.findViewById<TextView>(R.id.scheduleTimes).text = getString(
+            val times = getString(
                 R.string.schedule_times,
                 ScheduleEditor.formatTime(ctx, schedule.start),
                 ScheduleEditor.formatTime(ctx, schedule.end)
             )
-            row.findViewById<TextView>(R.id.scheduleDays).text = ScheduleEditor.formatDays(ctx, schedule.days)
+            val days = ScheduleEditor.formatDays(ctx, schedule.days)
+            row.findViewById<TextView>(R.id.scheduleTimes).text = times
+            row.findViewById<TextView>(R.id.scheduleDays).text = days
             val switch = row.findViewById<MaterialSwitch>(R.id.scheduleSwitch)
+            // The row opens the schedule and the switch turns it on or off, so the switch needs a name of its own.
+            switch.contentDescription = getString(R.string.schedule_switch_description, times, days)
             switch.isChecked = schedule.enabled
             switch.setOnCheckedChangeListener { _, checked ->
                 saveSchedules(schedules.map { if (it.id == schedule.id) it.copy(enabled = checked) else it })
@@ -440,7 +445,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     }
 
     private fun setUpClock(view: View) {
-        view.findViewById<View>(R.id.clockRow).setOnClickListener { clockSwitch.toggle() }
+        SwitchRow.bind(view.findViewById(R.id.clockRow), clockSwitch)
         clockSwitch.isChecked = WallpaperSettings.showClock(ctx)
         clockSwitch.setOnCheckedChangeListener { _, checked ->
             WallpaperSettings.setShowClock(ctx, checked)
@@ -614,7 +619,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     }
 
     private fun setUpPanning(view: View) {
-        view.findViewById<View>(R.id.panRow).setOnClickListener { panSwitch.toggle() }
+        SwitchRow.bind(view.findViewById(R.id.panRow), panSwitch)
         panSwitch.isChecked = WallpaperSettings.pan(ctx) != null
         panSwitch.setOnCheckedChangeListener { _, checked ->
             WallpaperSettings.setPan(ctx, checked)

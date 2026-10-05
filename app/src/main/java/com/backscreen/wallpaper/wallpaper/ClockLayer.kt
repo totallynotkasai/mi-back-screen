@@ -379,7 +379,9 @@ class ClockLayer @JvmOverloads constructor(
         val src = backdrop ?: return
         if (box.width == 0 || src.width == 0) return
         sampled.set(box.left, box.top, box.right, box.bottom)
-        val average = averageColor(src, Rect(sampled).apply { offset(left - src.left, top - src.top) }) ?: return
+        // Where the clock is, in the image's own coordinates (they're side by side in one frame).
+        val region = Rect(sampled).apply { offset(this@ClockLayer.left - src.left, this@ClockLayer.top - src.top) }
+        val average = averageColor(src, region) ?: return
         val hsl = FloatArray(3).also { ColorUtils.colorToHSL(average, it) }
         // A tint of the image's colour, not so strong that it's hard to read.
         val saturation = min(hsl[1], 0.45f)

@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mi Back Screen · Rear display wallpaper for Xiaomi 17 Pro Max</title>
-<meta name="description" content="Show your own images, GIFs and a clock on the Xiaomi 17 Pro Max rear display. Free, open source, no internet permission.">
+<title>Mi Back Screen · More from the Xiaomi 17 Pro Max back screen</title>
+<meta name="description" content="Your own wallpaper and clock, your notifications, a charging animation, any app with one tap, and a swipe for Xiaomi Camera, on the Xiaomi 17 Pro Max back screen. Free, open source, no internet permission.">
 <meta property="og:title" content="Mi Back Screen">
-<meta property="og:description" content="Your own image or GIF on the Xiaomi 17 Pro Max rear display.">
+<meta property="og:description" content="Wallpaper, clock, notifications, charging, Quick Switch and Xiaomi Camera on the Xiaomi 17 Pro Max back screen.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23D3E3FD'/%3E%3Crect x='18' y='10' width='28' height='44' rx='6' fill='none' stroke='%230B57D0' stroke-width='4'/%3E%3Crect x='23' y='28' width='18' height='20' rx='3' fill='%230B57D0'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,6 +114,15 @@
   .w2::after { content: ""; position: absolute; left: 45%; right: 8%; bottom: 18%; height: 30%; border-radius: 50% 50% 0 0; background: #0b1d24; box-shadow: -30px 10px 0 -6px #0e252e, 30px 12px 0 -8px #0e252e; }
   .w3 { background: conic-gradient(from 90deg at 50% 50%, #0b57d0, #6ba4ff, #d3e3fd, #6ba4ff, #0b57d0); animation: spin 8s linear infinite; }
   @keyframes spin { to { filter: hue-rotate(360deg); } }
+  .mock-clock { position: absolute; z-index: 2; right: 9%; top: 50%; transform: translateY(-50%); color: #fff; text-align: right;
+                font: 700 34px/.92 Inter, sans-serif; letter-spacing: -.03em; text-shadow: 0 1px 8px rgba(0,0,0,.35); }
+  .mock-clock small { display: block; margin-top: 6px; font: 500 9px/1 Inter, sans-serif; letter-spacing: 0; }
+  .mock-banner { position: absolute; z-index: 3; left: 47%; right: 6%; top: 7%; padding: 6px 8px; border-radius: 10px;
+                 background: rgba(22, 24, 32, .86); color: #fff; font: 500 8px/1.35 Inter, sans-serif;
+                 transform: translateY(-160%); transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+  .mock-banner.on { transform: none; }
+  .mock-banner b { display: block; font-size: 9px; }
+  .mock-banner span { opacity: .7; }
   .gif-tag { position: absolute; right: 7px; bottom: 7px; font: 700 9px/1 Inter, sans-serif; letter-spacing: .06em; background: rgba(0,0,0,.55); color: #fff; padding: 3px 5px; border-radius: 4px; opacity: 0; transition: opacity .4s; }
   .gif-tag.on { opacity: 1; }
   .logo-strip { position: absolute; left: 0; right: 0; bottom: 18%; text-align: center; color: var(--phone-edge); font-weight: 700; letter-spacing: .3em; font-size: 11px; }
@@ -129,6 +138,13 @@
   .card p { margin: 0; color: var(--muted); font-size: 15px; }
   .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--primary-container); color: var(--on-primary-container); }
   .ico svg { width: 22px; height: 22px; }
+
+  .shots-back { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+  .shots-back figure, .shots-app figure { margin: 0; }
+  .shots-back img { display: block; width: 100%; height: auto; border-radius: 22px; background: #000; box-shadow: var(--shadow); }
+  .shots-app { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  .shots-app img { display: block; width: 100%; height: auto; border-radius: 18px; border: 1px solid var(--border); }
+  figcaption { margin-top: 8px; font-size: 13px; color: var(--muted); text-align: center; }
 
   .steps { counter-reset: step; list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
   .steps li { counter-increment: step; position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 24px 22px 76px; }
@@ -155,7 +171,10 @@
 
   @media (max-width: 860px) {
     .hero { grid-template-columns: 1fr; padding-top: 16px; gap: 56px; }
-    .features, .split { grid-template-columns: 1fr; }
+    .features, .split, .shots-back { grid-template-columns: 1fr; }
+    /* The five tabs scroll sideways inside their own strip; the page itself doesn't. */
+    .shots-app { grid-template-columns: repeat(5, 44%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; }
+    .shots-app figure { scroll-snap-align: start; }
     nav .links { display: none; }
   }
   @media (max-width: 480px) {
@@ -180,6 +199,7 @@
     </a>
     <div class="links">
       <a href="#features">Features</a>
+      <a href="#screens">Screens</a>
       <a href="#setup">Setup</a>
       <a href="#faq">FAQ</a>
       <a href="https://github.com/totallynotkasai/mi-back-screen">GitHub</a>
@@ -189,8 +209,8 @@
   <div class="hero">
     <div>
       <span class="eyebrow">For the Xiaomi 17 Pro Max</span>
-      <h1>Your own wallpaper on the back screen.</h1>
-      <p class="lede">Pick any image or animated GIF and keep it on the rear display. No ads, no account, no internet permission.</p>
+      <h1>Make the back screen yours.</h1>
+      <p class="lede">Your own wallpaper and clock, your notifications, a charging animation, the app you're using with one tap, and a swipe for Xiaomi Camera. No ads, no account, no internet permission.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/totallynotkasai/mi-back-screen/releases/latest/download/MiBackScreen.apk">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 5-5m-5 5-5-5M5 20h14"/></svg>
@@ -201,7 +221,7 @@
           View source
         </a>
       </div>
-      <p class="meta">Version 1.4 · Android 13+ · Requires <a href="https://shizuku.rikka.app/">Shizuku</a></p>
+      <p class="meta">Version 2.0 · Android 13+ · Requires <a href="https://shizuku.rikka.app/">Shizuku</a></p>
     </div>
 
     <div class="phone-stage" aria-hidden="true">
@@ -212,6 +232,8 @@
             <div class="wall w1 on"></div>
             <div class="wall w2"></div>
             <div class="wall w3"></div>
+            <div class="mock-clock"><span class="mock-h">20</span><br><span class="mock-m">48</span><small class="mock-date">Sun, Oct 4</small></div>
+            <div class="mock-banner"><span>Messages · now</span><b>Alex</b></div>
             <span class="gif-tag">GIF</span>
           </div>
         </div>
@@ -224,39 +246,73 @@
 <main>
   <section id="features">
     <div class="wrap">
-      <h2>Small app, one job.</h2>
-      <p class="section-lede">HyperOS only lets you choose from Xiaomi's own rear-screen styles. Mi Back Screen puts whatever you like there instead, and keeps it there.</p>
+      <h2>Five things, one back screen.</h2>
+      <p class="section-lede">HyperOS only lets you choose from Xiaomi's own back-screen styles. Mi Back Screen puts whatever you like there, and adds what Xiaomi's screen doesn't do. Each section has its own switch, so turn on only what you want.</p>
       <div class="features">
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></div>
           <h3>Images, GIFs and galleries</h3>
-          <p>Choose one image or several, or point it at a folder, and it moves on to the next every few minutes or hours. GIFs loop forever. No images? It shows black, with the clock if it's on.</p>
-        </div>
-        <div class="card">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg></div>
-          <h3>Camera-aware preview</h3>
-          <p>The preview matches the shape of the rear display. Optionally fit the image beside the camera instead of behind it.</p>
-        </div>
-        <div class="card">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg></div>
-          <h3>Quick toggle</h3>
-          <p>Turn it on or off from a Quick Settings tile or a Material You home-screen widget. A small background service keeps it there whenever HyperOS tries to take it back.</p>
+          <p>Choose one image or several, or point it at a folder, and it moves on to the next every few minutes or hours. GIFs loop. Images that don't fit the screen's shape can glide slowly across it. No images? It shows black, with the clock.</p>
         </div>
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M8 10v4M12 10v4M16 10v4"/></svg></div>
-          <h3>Clock</h3>
-          <p>Show the time and date over your wallpaper, in one of five styles. It stays on time while the phone sleeps, even on the dimmed back screen, and always keeps clear of the camera.</p>
+          <h3>A clock that keeps time</h3>
+          <p>The time and date over your wallpaper, in one of five styles, anywhere you drag it. It stays right while the phone sleeps, even on the dimmed back screen, and keeps clear of the camera.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+          <h3>Notifications</h3>
+          <p>New ones slide in at the top, showing just the app, who it's from, or the message too: your choice. Pull down for the ones you haven't cleared. While locked, it follows your lock screen's privacy.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2"/><path d="m11 9-2 3h3l-2 3"/></svg></div>
+          <h3>Charging animation</h3>
+          <p>Plug in and the back screen lights up with the battery level, wired or wireless, then fades back to your wallpaper. It stays dark while the back is covered.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h14l-4-4"/><path d="M20 15H6l4 4"/></svg></div>
+          <h3>Quick Switch</h3>
+          <p>A Quick Settings tile moves the app you're using to the back screen, and brings it back. It stays lit as long as you choose, and apps can show smaller or upright. Xiaomi's settings are always put back.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg></div>
+          <h3>Swipe for Xiaomi Camera</h3>
+          <p>Swipe left on the wallpaper and Xiaomi Camera opens on the back screen, on the main cameras, locked or not. It closes with Xiaomi's back strip, by covering the camera, or when the screen dims.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg></div>
+          <h3>Previews shaped like the back screen</h3>
+          <p>Every tab shows what the back screen will, over your own wallpaper, with the camera where it really is. Fit the image beside the camera instead of behind it if you like.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Tile, widget and schedules</h3>
+          <p>Turn the wallpaper on or off from a Quick Settings tile or a home-screen widget, or at set times, such as off overnight. It comes back by itself after a restart, once Shizuku runs.</p>
         </div>
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
           <h3>Private by design</h3>
-          <p>No internet permission and no storage permission. Only the images or folder you pick are shared with the app.</p>
+          <p>No internet permission, no storage permission and no camera permission. Notification text is shown on the back screen and never stored or sent anywhere.</p>
         </div>
-        <div class="card">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-          <h3>Schedules</h3>
-          <p>Set times for it to turn on and off by itself, such as off overnight. Add as many as you like, each with its own days.</p>
-        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <h2>On the back screen, and in the app.</h2>
+      <p class="section-lede">Captured on a Xiaomi 17 Pro Max. The back screen is landscape, with the cameras on the left; each tab's preview shows it the same way, over your own wallpaper.</p>
+      <div class="shots-back">
+        <figure><img src="screenshots/back-wallpaper.png" width="976" height="596" loading="lazy" alt="The back screen showing a sunset wallpaper with the time and date"><figcaption>Your wallpaper and clock</figcaption></figure>
+        <figure><img src="screenshots/back-notification.png" width="976" height="596" loading="lazy" alt="The back screen with a message notification at the top"><figcaption>A notification arriving</figcaption></figure>
+        <figure><img src="screenshots/back-charging.png" width="976" height="596" loading="lazy" alt="The back screen showing the charging animation at 95%"><figcaption>Plugging in</figcaption></figure>
+      </div>
+      <div class="shots-app">
+        <figure><img src="screenshots/app-wallpaper.png" width="540" height="1174" loading="lazy" alt="The Wallpaper tab"><figcaption>Wallpaper</figcaption></figure>
+        <figure><img src="screenshots/app-notifications.png" width="540" height="1174" loading="lazy" alt="The Notifications tab"><figcaption>Notifications</figcaption></figure>
+        <figure><img src="screenshots/app-battery.png" width="540" height="1174" loading="lazy" alt="The Battery tab"><figcaption>Battery</figcaption></figure>
+        <figure><img src="screenshots/app-mirror.png" width="540" height="1174" loading="lazy" alt="The Mirror tab"><figcaption>Mirror</figcaption></figure>
+        <figure><img src="screenshots/app-camera.png" width="540" height="1174" loading="lazy" alt="The Camera tab"><figcaption>Camera</figcaption></figure>
       </div>
     </div>
   </section>
@@ -282,6 +338,10 @@
           <h3>Pick an image and switch it on</h3>
           <p>Tap the preview to choose an image or GIF, then turn on <b>Show on back screen</b>. Add the tile or widget if you want a faster toggle.</p>
         </li>
+        <li>
+          <h3>Turn on the rest as you like</h3>
+          <p><b>Notifications:</b> switch it on and Shizuku allows Notification access in the same tap. <b>Battery:</b> switch on the charging animation. <b>Mirror:</b> switch on Quick Switch, allow notifications when asked, and tap <b>Add Quick Switch to Quick Settings</b>. <b>Camera:</b> switch on <b>Swipe left for Xiaomi Camera</b>; it works on the Mi Back Screen wallpaper. A dimmed back screen takes no touches, so double-tap it first.</p>
+        </li>
       </ol>
     </div>
   </section>
@@ -297,7 +357,7 @@
           <li><b>Phone</b><span>Xiaomi 17 Pro Max (rear display)</span></li>
           <li><b>System</b><span>HyperOS, Android 13 or newer</span></li>
           <li><b>Helper</b><span>Shizuku, running and authorised</span></li>
-          <li><b>Permissions</b><span>Foreground service; alarms and start-after-restart for schedules; alarms and a brief wake lock for the clock. No internet, no storage.</span></li>
+          <li><b>Permissions</b><span>Foreground service; alarms and start-after-restart for schedules; alarms and a brief wake lock for the clock; notifications, for the one that brings an app back or closes the camera; Notification access only if you turn Notifications on. No internet, no storage, no camera.</span></li>
         </ul>
       </div>
     </div>
@@ -309,15 +369,23 @@
       <p class="section-lede">Short answers to what people usually ask.</p>
       <details>
         <summary>What does Shizuku actually do here?</summary>
-        <p>It runs a small, fixed set of shell commands: start the wallpaper screen on the rear display, move it there if needed, wake that display, list what's on it, restart Xiaomi's back screen app once when the wallpaper goes up, and bring Xiaomi's launcher back when you switch off. You can read every one of them in <code>RearCommands.kt</code>. Arguments are passed straight to the process, so nothing can be injected.</p>
+        <p>It runs a small, fixed set of shell commands: start the wallpaper screen on the rear display, move it or another app there and back, wake that display, list what's on it, restart Xiaomi's back screen app once when the wallpaper goes up, bring Xiaomi's launcher back when you switch off, allow Notification access, open and close Xiaomi Camera, and change Xiaomi's back-screen timeout, size and rotation while an app is there, always putting them back. You can read every one of them in <code>RearCommands.kt</code>. Arguments are passed straight to the process, so nothing can be injected.</p>
+      </details>
+      <details>
+        <summary>Can it read my messages?</summary>
+        <p>Only if you turn Notifications on, which allows Notification access. The text is read on the phone, shown on the back screen in the style you choose, kept in memory only while the notification is in your shade, and never stored or sent anywhere. The app has no internet permission at all. <b>Remove access</b> on the Notifications tab takes it away again.</p>
+      </details>
+      <details>
+        <summary>Why does a page appear on the main screen when the camera opens?</summary>
+        <p>That's Xiaomi Camera's own page, the same one Xiaomi's back screen shows. It closes with the camera, and turns the main screen off after about 30 seconds. Mi Back Screen has no camera permission: Xiaomi Camera takes the photos and saves them to Gallery as usual.</p>
       </details>
       <details>
         <summary>Do I need to re-start Shizuku after a reboot?</summary>
-        <p>Usually yes, unless your phone is rooted. That's a Shizuku limitation. Once Shizuku is running again, Mi Back Screen picks up where it left off.</p>
+        <p>Usually yes, unless your phone is rooted. That's a Shizuku limitation. Mi Back Screen waits for it, saying <b>On · waiting for Shizuku</b>, and once Shizuku is running again it picks up where it left off.</p>
       </details>
       <details>
         <summary>Does it drain the battery?</summary>
-        <p>Very little. The service sleeps until the rear display changes state, and only puts the wallpaper back if something closed it. With the clock on, the phone wakes for a moment each minute while the back screen is lit or dimmed, as always-on displays do, but not while it's off. Measured over an hour locked with the clock on the dimmed back screen, that came to about 1.5 mAh, or 0.02% of the battery. The rear display itself uses power when lit, just as it does with Xiaomi's own wallpapers.</p>
+        <p>Very little. The service sleeps until the rear display changes state, and only puts the wallpaper back if something closed it. With the clock on, the phone wakes for a moment each minute while the back screen is lit or dimmed, as always-on displays do, but not while it's off. Measured over an hour locked with the clock on the dimmed back screen, that came to about 1.5 mAh, or 0.02% of the battery. Panning and GIFs only move while the back screen is lit; panning costs about 20 mAh per lit hour. The charging animation lasts 3.5 seconds per plug-in, and a notification lights the back screen at most once a minute per app. The rear display itself uses power when lit, just as it does with Xiaomi's own wallpapers.</p>
       </details>
       <details>
         <summary>My schedule didn't turn it on, or the clock is late. Why?</summary>
@@ -343,10 +411,24 @@
 </footer>
 
 <script>
-  // Cycle the mock rear-screen wallpapers.
+  // The mock back screen: today's time and date, and the wallpapers cycling, with a
+  // notification sliding in over the second.
   (function () {
+    function tick() {
+      var now = new Date();
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      document.querySelector('.mock-h').textContent = pad(now.getHours());
+      document.querySelector('.mock-m').textContent = pad(now.getMinutes());
+      document.querySelector('.mock-date').textContent =
+        now.toLocaleDateString('en-GB', { weekday: 'short' }) + ', ' +
+        now.toLocaleDateString('en-GB', { month: 'short' }) + ' ' + now.getDate();
+    }
+    tick();
+    setInterval(tick, 15000);
+
     var walls = document.querySelectorAll('.wall');
     var tag = document.querySelector('.gif-tag');
+    var banner = document.querySelector('.mock-banner');
     if (!walls.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     var i = 0;
     setInterval(function () {
@@ -354,6 +436,7 @@
       i = (i + 1) % walls.length;
       walls[i].classList.add('on');
       tag.classList.toggle('on', i === walls.length - 1);
+      banner.classList.toggle('on', i === 1);
     }, 3000);
   })();
 </script>

@@ -19,6 +19,7 @@ import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
+import com.backscreen.wallpaper.ui.SwitchRow
 import com.backscreen.wallpaper.wallpaper.ClockLayer
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
@@ -99,13 +100,13 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
             showStyle()
         }
 
-        swipeDownRow.setOnClickListener { swipeDownSwitch.toggle() }
+        SwitchRow.bind(swipeDownRow, swipeDownSwitch)
         swipeDownSwitch.isChecked = NotificationSettings.swipeDown(ctx)
         swipeDownSwitch.setOnCheckedChangeListener { _, checked ->
             NotificationSettings.setSwipeDown(ctx, checked)
             RearHostActivity.notificationsChanged()
         }
-        lightUpRow.setOnClickListener { lightUpSwitch.toggle() }
+        SwitchRow.bind(lightUpRow, lightUpSwitch)
         lightUpSwitch.isChecked = NotificationSettings.lightUp(ctx)
         lightUpSwitch.setOnCheckedChangeListener { _, checked -> NotificationSettings.setLightUp(ctx, checked) }
 

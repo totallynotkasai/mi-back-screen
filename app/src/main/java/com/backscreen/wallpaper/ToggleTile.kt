@@ -8,13 +8,24 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
+import java.lang.ref.WeakReference
 
 /** Quick Settings tile: tap to turn the back screen wallpaper on or off. */
 class ToggleTile : TileService() {
 
     override fun onStartListening() {
+        showing = WeakReference(this)
+        refresh()
+    }
+
+    override fun onStopListening() {
+        if (showing.get() === this) showing = WeakReference(null)
+    }
+
+    private fun refresh() {
         val tile = qsTile ?: return
         val enabled = WallpaperSettings.isEnabled(this)
         tile.state = if (enabled) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
@@ -46,7 +57,16 @@ class ToggleTile : TileService() {
     }
 
     companion object {
-        fun requestUpdate(context: Context) =
+        /** The tile while Quick Settings shows it. */
+        private var showing = WeakReference<ToggleTile>(null)
+
+        /**
+         * The switch changed: a tile on show is redrawn at once, since asking Android to listen
+         * again does nothing while it's already listening; otherwise it's redrawn next time it's seen.
+         */
+        fun requestUpdate(context: Context) {
+            BackScreen.mainHandler.post { showing.get()?.refresh() }
             requestListeningState(context, ComponentName(context, ToggleTile::class.java))
+        }
     }
 }

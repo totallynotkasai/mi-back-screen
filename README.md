@@ -5,7 +5,24 @@ Show your own images, animated GIFs, a clock and your notifications on the **Xia
 **Website:** https://totallynotkasai.github.io/mi-back-screen/
 **Download:** [latest APK](https://github.com/totallynotkasai/mi-back-screen/releases/latest/download/MiBackScreen.apk)
 
+<p align="center">
+  <img src="docs/screenshots/back-wallpaper.png" width="32%" alt="The back screen: your wallpaper with the clock">
+  <img src="docs/screenshots/back-notification.png" width="32%" alt="The back screen: a notification sliding in at the top">
+  <img src="docs/screenshots/back-charging.png" width="32%" alt="The back screen: the charging animation at 95%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/app-wallpaper.png" width="19%" alt="The Wallpaper tab">
+  <img src="docs/screenshots/app-notifications.png" width="19%" alt="The Notifications tab">
+  <img src="docs/screenshots/app-battery.png" width="19%" alt="The Battery tab">
+  <img src="docs/screenshots/app-mirror.png" width="19%" alt="The Mirror tab">
+  <img src="docs/screenshots/app-camera.png" width="19%" alt="The Camera tab">
+</p>
+
 ## Features
+
+The app has five sections, one per tab, each with its own switch. A dot on a tab shows that section is on.
+
+### Wallpaper
 
 - Images and looping GIFs, chosen with the system photo picker
 - Gallery: pick several images or a folder and it changes image every 1 minute to 1 day, in order or shuffled
@@ -14,16 +31,34 @@ Show your own images, animated GIFs, a clock and your notifications on the **Xia
 - Panning: images that don't fit the screen's shape glide slowly up and down or side to side, at Slow, Medium or Fast. It only moves while the back screen is lit
 - Optional clock (time and date) over the wallpaper, in five styles: drag it anywhere in the preview or align it to an edge; any text colour, or Auto to stand out from the image; optional background colour and opacity
 - The clock stays on time while the phone sleeps, including on the dimmed back screen
-- Charging animation: when you plug in, the back screen lights up and plays a short animation with the battery level (wired or wireless), then fades back to the wallpaper. It stays dark while the back is covered, and can also play over Xiaomi's back screen while the wallpaper is off
-- Notifications: a new one slides in at the top of the back screen for a few seconds, showing as much as you choose: just the app (Discreet), who it's from (Normal) or the message too (Full). Pull down from the top for the ones you haven't cleared. While the phone is locked it follows your lock screen, so sensitive content stays hidden if that's how your lock screen is set. With the wallpaper off, Xiaomi's own back screen shows notifications instead
-- Quick Switch: a Quick Settings tile that moves the app you're using to the back screen, and brings it back with another tap, from its notification, or by covering the back if you turn that on. The back screen stays lit for as long as you choose after your last touch (2 minutes by default), and apps can show smaller or in portrait there. Xiaomi's settings are put back when the app leaves
-- Camera: swipe left on the wallpaper (from anywhere, the right edge included) and Xiaomi Camera opens on the back screen in its own back-screen mode, on the main cameras, locked or unlocked. Close it with Xiaomi's back strip, by covering the camera for a moment, or from its notification; it also closes when the back screen dims. **Open camera on back screen** on the Camera tab opens it without a swipe, with the wallpaper off too
-- Refresh button to put the wallpaper up afresh if something didn't update
-- Preview shaped like the rear display, with an option to keep clear of the camera
-- Quick Settings tile and home-screen widget to toggle it
-- Schedules to turn it on and off at set times (e.g. off overnight), as many as you like
-- Background service keeps the wallpaper on the rear display, and puts it back after the phone restarts as soon as Shizuku is running again
-- No internet permission, no storage permission
+- Preview shaped like the rear display, with an option to keep the image clear of the camera
+- Quick Settings tile and home-screen widget to turn it on and off, and schedules to do it at set times (e.g. off overnight), as many as you like
+- It stays on the back screen by itself, and comes back after the phone restarts as soon as Shizuku is running again. **Refresh back screen**, in the menu, puts it up afresh if something didn't update
+
+### Notifications
+
+- A new notification slides in at the top of the back screen for a few seconds, showing as much as you choose: just the app (Discreet), who it's from (Normal) or the message too (Full)
+- Pull down from the top of the back screen for the ones you haven't cleared
+- While the phone is locked it follows your lock screen, so sensitive content stays hidden if that's how your lock screen is set
+- With the wallpaper off, Xiaomi's own back screen shows notifications instead
+
+### Battery
+
+- When you plug in, the back screen lights up and plays a short animation with the battery level (wired or wireless), then fades back to the wallpaper
+- It stays dark while the back is covered, and can also play over Xiaomi's back screen while the wallpaper is off
+
+### Mirror
+
+- **Quick Switch**, a Quick Settings tile, moves the app you're using to the back screen. Bring it back with another tap, from its notification, or by covering the back if you turn that on
+- The back screen stays lit for as long as you choose after your last touch (2 minutes by default), and apps can show smaller or in portrait there. Xiaomi's settings are put back when the app leaves
+
+### Camera
+
+- Swipe left on the wallpaper (from anywhere, the right edge included) and Xiaomi Camera opens on the back screen in its own back-screen mode, on the main cameras, locked or unlocked
+- Close it with Xiaomi's back strip, by covering the camera for a moment, or from its notification; it also closes when the back screen dims
+- **Open camera on back screen** on the Camera tab opens it without a swipe, with the wallpaper off too
+
+No internet permission, no storage permission.
 
 ## Requirements
 
@@ -40,6 +75,14 @@ Show your own images, animated GIFs, a clock and your notifications on the **Xia
 6. For notifications: turn on **Show notifications on back screen** on the Notifications tab. Shizuku allows Notification access in the same tap. Without Shizuku, allow it in Settings; Android blocks that for sideloaded apps until you open App info → ⋮ → **Allow restricted settings**.
 7. For Quick Switch: turn on **Quick Switch** on the Mirror tab (allow notifications when asked, for the one that brings the app back), and tap **Add Quick Switch to Quick Settings**.
 8. For the camera: turn on **Swipe left for Xiaomi Camera** on the Camera tab. It works on the Mi Back Screen wallpaper, so turn that on too. A dimmed back screen takes no touches: double-tap it first, then swipe left.
+
+## Good to know
+
+- **A dimmed back screen takes no touches.** Double-tap it to light it, then swipe.
+- **Quick Switch from a video playing sideways:** with the main screen on and sideways, the back screen lights once you turn the phone over or press Power. Touching it before then brings up Xiaomi's "Press the Power button" message.
+- **Apps on the back screen:** a video playing full screen may start again from the app's home page; the keyboard may open on the main screen; some video apps show black on a second screen; and the main screen stays as it was, turning off as usual.
+- **Xiaomi Camera** shows its own page on the main screen while it's up, and turns the main screen off after about 30 seconds. It closes by itself when the back screen isn't touched for a while, even while recording, so tap it now and then during a long video.
+- **After a restart** Shizuku has to be started again (unless your phone is rooted). Mi Back Screen waits for it, then carries on.
 
 ## Building
 

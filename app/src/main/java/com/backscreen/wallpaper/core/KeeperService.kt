@@ -802,6 +802,9 @@ class KeeperService : Service() {
     /** Makes sure the back screen is showing our wallpaper, or will be once it's lit. */
     private fun checkRearDisplay() {
         if (!RearState.snapshot(this).guardsWallpaper || RearHostActivity.visibleOnRear) return
+        // It goes up as soon as Shizuku is ready ([applyIfWaiting]). Trying meanwhile would only
+        // wait for it again and give up, every few seconds for as long as it's stopped.
+        if (isWaitingForShizuku) return
         val rear = BackScreen.findRearDisplay(this)
         if (RearHostActivity.isOnRear()) {
             // Hidden only because the rear is dimmed or off: still there when it lights up.

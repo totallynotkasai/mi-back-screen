@@ -40,7 +40,8 @@
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/previewCard"
                 style="@style/Widget.Material3.CardView.Filled"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
+                android:layout_gravity="center_horizontal"
                 android:layout_height="wrap_content"
                 android:contentDescription="@string/battery_preview"
                 app:cardBackgroundColor="?attr/colorSurfaceContainerHighest"

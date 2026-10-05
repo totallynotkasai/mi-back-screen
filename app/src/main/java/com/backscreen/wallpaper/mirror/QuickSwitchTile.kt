@@ -10,10 +10,12 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.backscreen.wallpaper.MainActivity
 import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.LendReason
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
+import java.lang.ref.WeakReference
 
 /**
  * The Quick Switch tile: tap it while using an app to move that app to the back screen, and
@@ -32,6 +34,15 @@ class QuickSwitchTile : TileService() {
     }
 
     override fun onStartListening() {
+        showing = WeakReference(this)
+        refresh()
+    }
+
+    override fun onStopListening() {
+        if (showing.get() === this) showing = WeakReference(null)
+    }
+
+    private fun refresh() {
         val tile = qsTile ?: return
         val owner = RearState.owner(this)
         val lend = (owner as? RearOwner.Lent)?.lend
@@ -94,7 +105,17 @@ class QuickSwitchTile : TileService() {
     companion object {
         fun component(context: Context) = ComponentName(context, QuickSwitchTile::class.java)
 
-        /** Mirror was switched, or an app came or went: the tile shows it next time it's seen. */
-        fun requestUpdate(context: Context) = requestListeningState(context, component(context))
+        /** The tile while Quick Settings shows it. */
+        private var showing = WeakReference<QuickSwitchTile>(null)
+
+        /**
+         * Mirror was switched, or an app came or went: a tile on show is redrawn at once, since
+         * asking Android to listen again does nothing while it's already listening; otherwise
+         * it's redrawn next time it's seen.
+         */
+        fun requestUpdate(context: Context) {
+            BackScreen.mainHandler.post { showing.get()?.refresh() }
+            requestListeningState(context, component(context))
+        }
     }
 }

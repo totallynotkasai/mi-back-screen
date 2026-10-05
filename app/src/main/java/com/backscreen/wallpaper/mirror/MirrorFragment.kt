@@ -21,6 +21,7 @@ import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
+import com.backscreen.wallpaper.ui.SwitchRow
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -88,7 +89,7 @@ class MirrorFragment : Fragment(R.layout.fragment_mirror), Refreshable {
             BackScreen.log("Back screen orientation: ${it.name.lowercase()}")
             optionChanged()
         }
-        coverRow.setOnClickListener { coverSwitch.toggle() }
+        SwitchRow.bind(coverRow, coverSwitch)
         coverSwitch.isChecked = MirrorSettings.coverReturn(ctx)
         coverSwitch.setOnCheckedChangeListener { _, checked ->
             MirrorSettings.setCoverReturn(ctx, checked)

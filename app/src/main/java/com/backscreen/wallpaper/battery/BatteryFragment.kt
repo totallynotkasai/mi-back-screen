@@ -16,6 +16,7 @@ import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
+import com.backscreen.wallpaper.ui.SwitchRow
 import com.backscreen.wallpaper.wallpaper.ClockLayer
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
@@ -76,10 +77,10 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
             refresh()
         }
 
-        lightUpRow.setOnClickListener { lightUpSwitch.toggle() }
+        SwitchRow.bind(lightUpRow, lightUpSwitch)
         lightUpSwitch.isChecked = BatterySettings.lightUp(ctx)
         lightUpSwitch.setOnCheckedChangeListener { _, checked -> BatterySettings.setLightUp(ctx, checked) }
-        overXiaomiRow.setOnClickListener { overXiaomiSwitch.toggle() }
+        SwitchRow.bind(overXiaomiRow, overXiaomiSwitch)
         overXiaomiSwitch.isChecked = BatterySettings.overXiaomi(ctx)
         overXiaomiSwitch.setOnCheckedChangeListener { _, checked ->
             BatterySettings.setOverXiaomi(ctx, checked)

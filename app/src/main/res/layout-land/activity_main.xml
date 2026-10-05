@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The app's frame in landscape: the sections in a rail down the side, since a bottom bar
+    would take a fifth of the short screen. Otherwise as in portrait.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:orientation="horizontal">
+
+    <!-- Wider than the usual 80 dp, so "Notifications" fits at larger font sizes. -->
+    <com.google.android.material.navigationrail.NavigationRailView
+        android:id="@+id/nav"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:minWidth="112dp"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/bottom_nav"
+        app:menuGravity="center"
+        app:paddingStartSystemWindowInsets="false" />
+
+    <!-- Takes the rest of the width; no weight here, so the content's weight isn't nested. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
+            app:menu="@menu/main"
+            app:title="@string/title" />
+
+        <include layout="@layout/view_shizuku_banner" />
+
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/content"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+</LinearLayout>

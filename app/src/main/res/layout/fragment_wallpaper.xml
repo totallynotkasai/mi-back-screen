@@ -38,9 +38,11 @@
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/previewCard"
                 style="@style/Widget.Material3.CardView.Filled"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
+                android:layout_gravity="center_horizontal"
                 android:layout_height="wrap_content"
                 android:clickable="true"
+                android:contentDescription="@string/wallpaper_preview"
                 android:focusable="true"
                 app:cardBackgroundColor="?attr/colorSurfaceContainerHighest"
                 app:cardCornerRadius="28dp">
@@ -54,15 +56,14 @@
                         android:id="@+id/preview"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:contentDescription="@string/title" />
+                        android:importantForAccessibility="no" />
 
-                    <!-- No images: the back screen is black. Under the clock, which still shows. -->
+                    <!-- No images: the back screen is black. Under the clock, which still shows. Centred beside the camera. -->
                     <LinearLayout
                         android:id="@+id/emptyState"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center"
-                        android:gravity="center_horizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
                         android:orientation="vertical">
 
                         <ImageView
@@ -294,6 +295,7 @@
                             <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
+                                android:layout_marginEnd="16dp"
                                 android:layout_weight="1"
                                 android:text="@string/shuffle"
                                 android:textAppearance="?attr/textAppearanceBodyLarge"
@@ -481,6 +483,7 @@
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_marginEnd="16dp"
                             android:layout_weight="1"
                             android:orientation="vertical">
 
@@ -726,20 +729,25 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:clickable="true"
-                android:focusable="true"
+                android:clipToOutline="true"
                 android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
+                app:cardBackgroundColor="?attr/colorSurfaceContainer"
+                app:contentPadding="0dp">
 
+                <!-- The row, not the card, is the switch: the card would tell screen readers it's a card. -->
                 <LinearLayout
+                    android:id="@+id/cameraRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    android:padding="20dp">
 
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_marginEnd="16dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 

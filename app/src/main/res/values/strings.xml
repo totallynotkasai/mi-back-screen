@@ -73,6 +73,7 @@
     <string name="owner_lent">%1$s</string>
 
     <!-- Wallpaper tab. -->
+    <string name="wallpaper_preview">Preview of the back screen. Opens the photo picker</string>
     <string name="no_wallpaper">No wallpaper</string>
     <string name="no_wallpaper_summary">The back screen shows black.</string>
     <string name="no_wallpaper_caption">No wallpaper. The back screen shows black.</string>
@@ -162,6 +163,7 @@
     <string name="schedule_turns_off">Turns off at %s</string>
     <string name="schedule_no_change">No change coming up</string>
     <string name="schedule_times">%1$s – %2$s</string>
+    <string name="schedule_switch_description">Schedule %1$s, %2$s</string>
     <string name="schedule_on_at">On at</string>
     <string name="schedule_off_at">Off at</string>
     <string name="schedule_overnight">Turns off the next day</string>

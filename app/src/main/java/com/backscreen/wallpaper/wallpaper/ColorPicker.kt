@@ -25,6 +25,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.widget.doAfterTextChanged
 import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.ui.SwitchRow
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -76,8 +77,8 @@ object ColorPicker {
                     com.google.android.material.R.attr.colorOnSurfaceVariant))
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             addView(autoSwitch)
-            setOnClickListener { autoSwitch.toggle() }
         }
+        SwitchRow.bind(autoRow, autoSwitch)
         content.addView(autoRow)
 
         // Everything below is the manual choice; dimmed while Auto is on.

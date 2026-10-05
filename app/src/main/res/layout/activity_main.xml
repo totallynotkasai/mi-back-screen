@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     The app's frame: the top bar, a banner while Shizuku isn't ready, the section showing, and
-    the bottom bar to switch sections. Each section is a fragment.
+    the bottom bar to switch sections. Each section is a fragment. In landscape it's
+    layout-land's: a rail down the side instead, which leaves the short screen to the section.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -19,63 +20,7 @@
         app:menu="@menu/main"
         app:title="@string/title" />
 
-    <!-- Only while Shizuku isn't ready, on every tab. -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/shizukuBanner"
-        style="@style/Widget.BackScreen.Card"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginBottom="8dp"
-        android:visibility="gone"
-        app:cardBackgroundColor="?attr/colorErrorContainer"
-        app:contentPadding="16dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_marginEnd="16dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_warning"
-                app:tint="?attr/colorOnErrorContainer" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/shizukuBannerTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceTitleSmall"
-                    android:textColor="?attr/colorOnErrorContainer" />
-
-                <TextView
-                    android:id="@+id/shizukuBannerText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?attr/colorOnErrorContainer" />
-
-                <Button
-                    android:id="@+id/shizukuBannerButton"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="-12dp"
-                    android:layout_marginBottom="-8dp"
-                    android:textColor="?attr/colorOnErrorContainer" />
-            </LinearLayout>
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+    <include layout="@layout/view_shizuku_banner" />
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/content"
@@ -84,7 +29,7 @@
         android:layout_weight="1" />
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottomNav"
+        android:id="@+id/nav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:labelVisibilityMode="labeled"
