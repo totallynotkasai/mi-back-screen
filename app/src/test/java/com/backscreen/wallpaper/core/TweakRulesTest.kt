@@ -41,6 +41,34 @@ class TweakRulesTest {
     }
 
     @Test
+    fun staysLitForChangedDuringALendIsWhatTheLendPutsBack() {
+        // Quick Switch raised Xiaomi's 10 s to 2 min; Stays lit for is now 30 s. The app keeps its
+        // 2 min, and 30 s goes back when it leaves.
+        val lend = Tweak("10000", "120000")
+        assertEquals(BaseChange.PutBackLater(Tweak("30000", "120000")), TweakRules.baseChanged(lend, "120000", "30000"))
+        // Then As set, still during the lend: Xiaomi's own 10 s goes back instead.
+        assertEquals(
+            BaseChange.PutBackLater(Tweak("10000", "120000")),
+            TweakRules.baseChanged(Tweak("30000", "120000"), "120000", "10000"),
+        )
+        // What it puts back already.
+        assertEquals(BaseChange.None, TweakRules.baseChanged(lend, "120000", "10000"))
+    }
+
+    @Test
+    fun withNoLendStaysLitForIsSetAtOnce() {
+        assertEquals(BaseChange.Write("30000"), TweakRules.baseChanged(null, "10000", "30000"))
+        assertEquals(BaseChange.None, TweakRules.baseChanged(null, "30000", "30000"))
+        // A lend whose value you changed yourself meanwhile won't put anything back, so it's set now.
+        assertEquals(BaseChange.Write("30000"), TweakRules.baseChanged(Tweak("10000", "120000"), "60000", "30000"))
+        // Xiaomi's own value: the one saved first, else what a lend would put back, else what it holds.
+        assertEquals("10000", TweakRules.xiaomiOwn(Saved("10000"), null, "30000"))
+        assertNull(TweakRules.xiaomiOwn(Saved(null), null, "30000"))
+        assertEquals("10000", TweakRules.xiaomiOwn(null, Tweak("10000", "120000"), "120000"))
+        assertEquals("10000", TweakRules.xiaomiOwn(null, null, "10000"))
+    }
+
+    @Test
     fun readsXiaomisTimeout() {
         assertEquals("10000", TweakRules.timeout("10000\n"))
         assertNull(TweakRules.timeout("null\n"))

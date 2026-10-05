@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The top bar's overflow menu, the same on every tab. -->
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
+<!--
+    The top bar's menu: the tab's help, always shown beside the overflow, then the overflow menu,
+    the same on every tab.
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/menu_help"
+        android:icon="@drawable/ic_help"
+        android:title="@string/help"
+        app:showAsAction="always" />
     <item
         android:id="@+id/menu_refresh"
         android:title="@string/refresh" />

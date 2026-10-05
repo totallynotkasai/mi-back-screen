@@ -52,6 +52,17 @@ class WallpaperView @JvmOverloads constructor(
             replan(restart = false)
         }
 
+    /**
+     * Images that would pan less than this share of the screen stay still and centred instead
+     * (Skip short pans); 0 pans them all.
+     */
+    var minTravel = 0.0
+        set(value) {
+            if (field == value) return
+            field = value
+            replan(restart = false)
+        }
+
     /** Whether the pan and a GIF play. Off while it can't be seen, which saves battery. */
     var moving = false
         set(value) {
@@ -130,16 +141,23 @@ class WallpaperView @JvmOverloads constructor(
         val w = width - paddingLeft - paddingRight
         val h = height - paddingTop - paddingBottom
         val new = if (speed == null || d == null || w <= 0 || h <= 0) null
-        else PanPlanner.plan(d.intrinsicWidth, d.intrinsicHeight, w, h, height, speed)
+        else PanPlanner.plan(d.intrinsicWidth, d.intrinsicHeight, w, h, height, speed, minTravel)
         val old = plan
         if (new == old && !restart) return updateMatrix()
         val time = panTime()
         plan = new
         panned = if (restart || new == null) 0 else new.matching(old, time)
         if (runningSince != NOT_RUNNING) runningSince = SystemClock.uptimeMillis()
-        if (new != null && new != old) BackScreen.trace("Pan: ${new.axis}, ${new.overflow.roundToInt()} px, ${new.sweepMs} ms each way")
+        if (new != null && new != old) {
+            BackScreen.trace(
+                if (new.skipped) "Pan: skipped, only ${(new.travel * 100).roundToInt()}%"
+                else "Pan: ${new.axis}, ${new.overflow.roundToInt()} px, ${new.sweepMs} ms each way"
+            )
+        }
         updateMatrix()
         scheduleTick()
+        // The same image, somewhere else (skipped and centred, or panning again): the clock looks again.
+        if (!restart && old != null && new != null) onPanned?.invoke()
     }
 
     private fun panTime(): Long =
@@ -160,7 +178,7 @@ class WallpaperView @JvmOverloads constructor(
     private fun scheduleTick() {
         removeCallbacks(tick)
         val plan = plan ?: return
-        if (!moving || plan.axis == PanAxis.NONE || !isAttachedToWindow) return
+        if (!moving || !plan.moves || !isAttachedToWindow) return
         val time = panTime()
         // On a frame, so each new pixel shows as soon as it's due.
         postOnAnimationDelayed(tick, max(1, plan.nextMoveAt(time) - time))

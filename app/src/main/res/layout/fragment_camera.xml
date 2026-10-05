@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     The Camera tab: its main switch, pinned, then a preview of the swipe over your wallpaper,
-    Open camera (or Close camera), a note while the wallpaper is off, and the ways out.
+    Open camera (or Close camera), and a note while the wallpaper is off. The ways out and the
+    known limits are in its help, behind the top bar's ?.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -59,6 +60,12 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:visibility="gone" />
+
+                    <!-- The Edge glow's faint glow while charging, as on the back screen. -->
+                    <com.backscreen.wallpaper.battery.ChargingLayer
+                        android:id="@+id/glow"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
 
                     <com.backscreen.wallpaper.camera.SwipeHint
                         android:id="@+id/swipeHint"
@@ -125,57 +132,6 @@
                         android:layout_marginTop="12dp"
                         android:text="@string/turn_on_wallpaper"
                         app:icon="@drawable/ic_image" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                style="@style/Widget.BackScreen.Card"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/camera_close_title"
-                        android:textAppearance="?attr/textAppearanceTitleMedium"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:lineSpacingExtra="4dp"
-                        android:text="@string/camera_close"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-
-                    <com.google.android.material.divider.MaterialDivider
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginVertical="16dp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/camera_limits_title"
-                        android:textAppearance="?attr/textAppearanceTitleMedium"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:lineSpacingExtra="4dp"
-                        android:text="@string/camera_limits"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>

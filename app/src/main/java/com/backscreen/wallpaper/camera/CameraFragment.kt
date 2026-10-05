@@ -27,8 +27,9 @@ import com.google.android.material.snackbar.Snackbar
 
 /**
  * The Camera tab: the switch for swipe left, a preview of the swipe over your wallpaper, Open
- * camera on back screen (Close camera while it's up), a note while the wallpaper is off, and the
- * ways out. There are no options. Open camera works while the switch is off, like Battery's Play.
+ * camera on back screen (Close camera while it's up), and a note while the wallpaper is off; the
+ * ways out are in its help. There are no options. Open camera works while the switch is off,
+ * like Battery's Play.
  */
 class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
 
@@ -53,7 +54,10 @@ class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
         openButton = view.findViewById(R.id.openButton)
         wallpaperCard = view.findViewById(R.id.wallpaperCard)
         // Nothing is drawn in the clock's colours here, so there's nothing to match.
-        backdrop = PreviewBackdrop(view.findViewById(R.id.previewFrame), view.findViewById(R.id.preview), view.findViewById(R.id.clock)) {}
+        backdrop = PreviewBackdrop(
+            view.findViewById(R.id.previewFrame), view.findViewById(R.id.preview), view.findViewById(R.id.clock), {},
+            view.findViewById(R.id.glow),
+        )
 
         mainSwitch.onCheckedChange = ::switched
         openButton.setOnClickListener { openOrClose() }

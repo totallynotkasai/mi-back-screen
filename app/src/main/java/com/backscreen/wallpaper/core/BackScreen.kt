@@ -14,6 +14,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.util.Size
 import android.view.Display
+import android.view.RoundedCorner
 import android.view.Surface
 import com.backscreen.wallpaper.wallpaper.Scaling
 import java.text.SimpleDateFormat
@@ -76,6 +77,15 @@ object BackScreen {
                 else -> r
             }
         }
+    }
+
+    /**
+     * How rounded [display]'s corners are, as a share of its natural height: 101 of 596 on the
+     * back screen, the same at every corner (first check 5, Phase 9). Null if it doesn't say.
+     */
+    fun cornerShare(display: Display): Float? {
+        val radius = display.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)?.radius ?: return null
+        return radius.toFloat() / naturalSize(display).height
     }
 
     private fun isTurned(display: Display) =

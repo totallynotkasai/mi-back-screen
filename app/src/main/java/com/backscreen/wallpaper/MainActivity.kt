@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.MenuItem
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
@@ -32,8 +33,9 @@ import com.google.android.material.snackbar.Snackbar
 import rikka.shizuku.Shizuku
 
 /**
- * The app: a top bar with the menu, a banner while Shizuku isn't ready, and a bottom bar with
- * a tab per section (a rail down the side in landscape). A dot on a tab means that section is on.
+ * The app: a top bar with the tab's help (?) and the menu, a banner while Shizuku isn't ready,
+ * and a bottom bar with a tab per section (a rail down the side in landscape). A dot on a tab
+ * means that section is on.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -42,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bannerTitle: TextView
     private lateinit var bannerText: TextView
     private lateinit var bannerButton: Button
+    private lateinit var helpItem: MenuItem
 
     private var current = Feature.WALLPAPER
     private var createdAt = 0L
@@ -85,8 +88,10 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        helpItem = toolbar.menu.findItem(R.id.menu_help)
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.menu_help -> AppDialogs.help(this, current)
                 R.id.menu_refresh -> refreshBackScreen()
                 R.id.menu_diagnostics -> AppDialogs.diagnostics(this)
                 R.id.menu_setup_help -> showSetupHelp()
@@ -172,6 +177,10 @@ class MainActivity : AppCompatActivity() {
     /** Shows [feature]'s tab. Each is made the first time it's shown, then kept, so it keeps its place. */
     private fun showTab(feature: Feature) {
         current = feature
+        // TalkBack and the long-press tooltip name the section: "Help with Mirror".
+        val help = getString(R.string.help_with, getString(feature.label))
+        helpItem.contentDescription = help
+        helpItem.tooltipText = help
         val fm = supportFragmentManager
         val tx = fm.beginTransaction().setReorderingAllowed(true)
         for (other in Feature.entries) {

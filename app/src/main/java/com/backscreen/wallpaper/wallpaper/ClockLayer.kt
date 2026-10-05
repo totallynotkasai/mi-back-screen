@@ -92,6 +92,10 @@ class ClockLayer @JvmOverloads constructor(
     /** Called when the time or date shown changes. */
     var onTextChanged: (() -> Unit)? = null
 
+    /** Called when the time and date move or change size ([boxBounds]). */
+    var onPlaced: (() -> Unit)? = null
+    private val placed = Rect()
+
     /** The colours Auto gives right now, and the colours in use. */
     val autoTextColor get() = if (lightText) shadeLight else shadeDark
     val textColor get() = settings.color ?: autoTextColor
@@ -333,9 +337,19 @@ class ClockLayer @JvmOverloads constructor(
         running.cancel()
     }
 
+    /**
+     * Where the time and date are, in this layer's coordinates, into [out]: the charging
+     * animation's Minimal style sits just below. False while they aren't laid out.
+     */
+    fun boxBounds(out: Rect): Boolean {
+        if (box.width == 0) return false
+        out.set(box.left, box.top, box.right, box.bottom)
+        return true
+    }
+
     /** The space the clock can move in: inside the padding, less a margin. */
     private fun area(): Rect {
-        val margin = (0.07f * height).toInt()
+        val margin = (MARGIN * height).toInt()
         return Rect(
             paddingLeft + margin, paddingTop + margin,
             max(paddingLeft + margin, width - paddingRight - margin),
@@ -350,6 +364,10 @@ class ClockLayer @JvmOverloads constructor(
         val x = area.left + (max(0, area.width() - w) * settings.x).roundToInt()
         val y = area.top + (max(0, area.height() - h) * settings.y).roundToInt()
         box.layout(x, y, x + w, y + h)
+        if (!placed.equals(x, y, x + w, y + h)) {
+            placed.set(x, y, x + w, y + h)
+            onPlaced?.invoke()
+        }
         // Moved onto a different part of the image.
         if (!dragging && !sampled.equals(x, y, x + w, y + h)) post { sampleBackdrop() }
     }
@@ -495,10 +513,13 @@ class ClockLayer @JvmOverloads constructor(
         canvas.drawRoundRect(scratch, corner, corner, outline)
     }
 
-    private companion object {
-        const val SAMPLE_SIZE = 48f
-        const val COLOR_FADE_MS = 600L
-        const val SNAP_DISTANCE = 0.04f
-        val SNAP_POINTS = listOf(0f, 0.5f, 1f)
+    companion object {
+        /** How far the clock keeps from the edges of the space inside the padding, as a share of the height. */
+        const val MARGIN = 0.07f
+
+        private const val SAMPLE_SIZE = 48f
+        private const val COLOR_FADE_MS = 600L
+        private const val SNAP_DISTANCE = 0.04f
+        private val SNAP_POINTS = listOf(0f, 0.5f, 1f)
     }
 }

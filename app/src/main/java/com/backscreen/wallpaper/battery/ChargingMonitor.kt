@@ -32,12 +32,14 @@ class ChargingGate(private val minGapMs: Long = MIN_GAP_MS) {
 /**
  * Hears you plug in and unplug, while KeeperService runs: since Android 8, only a receiver
  * registered by a running app gets these. A plug-in is passed on with the battery's level and
- * where the power comes from, unless [ChargingGate] holds it back.
+ * where the power comes from, unless [ChargingGate] holds it back; then [onHeldBack] hears of it,
+ * since it's charging all the same (the Edge glow's faint glow).
  */
 class ChargingMonitor(
     private val context: Context,
     private val onPlugged: (ChargingStatus) -> Unit,
     private val onUnplugged: () -> Unit,
+    private val onHeldBack: () -> Unit,
 ) {
     private val gate = ChargingGate()
 
@@ -48,6 +50,7 @@ class ChargingMonitor(
                     if (!BatterySettings.isEnabled(context)) return
                     if (!gate.onPlugged(SystemClock.elapsedRealtime())) {
                         BackScreen.log("Plugged in again within moments; no animation")
+                        onHeldBack()
                         return
                     }
                     onPlugged(ChargingStatus.read(context) ?: return)

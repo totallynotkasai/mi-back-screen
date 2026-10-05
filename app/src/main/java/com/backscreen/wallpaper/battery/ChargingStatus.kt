@@ -41,12 +41,18 @@ data class ChargingStatus(
 
         /** The battery now, from the system's last battery broadcast (no permission needed). */
         fun read(context: Context): ChargingStatus? {
-            val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
+            val intent = lastBroadcast(context) ?: return null
             return of(
                 intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1),
                 intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100),
                 intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0),
             )
         }
+
+        /** Whether it's plugged in now, wired or wireless: the Edge glow stays faint while it is. */
+        fun isPlugged(context: Context) = (lastBroadcast(context)?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+
+        private fun lastBroadcast(context: Context) =
+            context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     }
 }

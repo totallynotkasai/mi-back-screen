@@ -29,6 +29,9 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
 
+    // Picks the charging animation's Auto colour from the wallpaper image, on the phone. No network code.
+    implementation("androidx.palette:palette:1.0.0")
+
     // Shizuku client library: talks to the Shizuku app you installed. No network code.
     val shizuku = "13.1.5"
     implementation("dev.rikka.shizuku:api:$shizuku")

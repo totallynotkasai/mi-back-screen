@@ -30,6 +30,13 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
     /** The image under the clock moved, as it pans. */
     var onBackdropMoved: (() -> Unit)? = null
 
+    /** The image showing has a different colour for the charging animation's Auto ([WallpaperColour]), or none. */
+    var onColourChanged: ((Int?) -> Unit)? = null
+
+    /** The image showing's colour for the charging animation's Auto, or null for none. */
+    var colour: Int? = null
+        private set
+
     /**
      * Whether images pan and GIFs play. Only while the back screen is lit: a dimmed one keeps
      * showing the last frame, and moving would just use battery.
@@ -57,7 +64,8 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
             if (uri == null) {
                 BackScreen.log("No images; the back screen shows black")
             } else {
-                setImage(uri, BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context)), fade = false)
+                val drawable = BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context))
+                setImage(uri, drawable, WallpaperColour.of(drawable), fade = false)
                 BackScreen.log("Wallpaper showing on back screen")
             }
         } catch (e: Exception) {
@@ -81,11 +89,12 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
                 val uri = Gallery.current(context, advance)
                 val drawable = if (uri == null || (uri == shown && !reload)) null
                 else BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context))
+                val colour = drawable?.let(WallpaperColour::of)
                 val next = Gallery.nextChangeAt(context)
                 BackScreen.mainHandler.post {
                     if (released || load != loads) return@post
                     reloadPending = false
-                    if (uri != null && drawable != null) setImage(uri, drawable, fade = true)
+                    if (uri != null && drawable != null) setImage(uri, drawable, colour, fade = true)
                     if (uri == null) clearImage()
                     setNextImage(next)
                 }
@@ -116,10 +125,17 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         BackScreen.mainHandler.postDelayed(nextImage, max(MIN_DELAY_MS, at - System.currentTimeMillis()))
     }
 
-    /** The pan speed changed: the image showing carries on from where it is, at the new speed. */
+    /**
+     * The pan speed or Skip short pans changed: the image showing carries on from where it is, at
+     * the new speed, or stays still if it's now too short a pan (or pans again, from the start).
+     */
     fun panChanged() {
         val pan = WallpaperSettings.pan(context)
-        for (image in images()) image.pan = pan
+        val minTravel = WallpaperSettings.panMinTravel(context)
+        for (image in images()) {
+            image.pan = pan
+            image.minTravel = minTravel
+        }
     }
 
     /** Stops loading and animating, for good. */
@@ -130,12 +146,17 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         moving = false
     }
 
-    /** Puts [drawable] on top, fading it in over the old image (if [fade] and lit), which is then removed. */
-    private fun setImage(uri: Uri, drawable: Drawable, fade: Boolean) {
+    /**
+     * Puts [drawable] on top, fading it in over the old image (if [fade] and lit), which is then
+     * removed. [colour] is its colour for the charging animation's Auto.
+     */
+    private fun setImage(uri: Uri, drawable: Drawable, colour: Int?, fade: Boolean) {
         shown = uri
+        setColour(colour)
         val view = WallpaperView(context).apply {
             scaling = WallpaperSettings.scalingInUse(context)
             pan = WallpaperSettings.pan(context)
+            minTravel = WallpaperSettings.panMinTravel(context)
             setImageDrawable(drawable)
             onPanned = { onBackdropMoved?.invoke() }
             moving = this@WallpaperLayer.moving
@@ -163,6 +184,7 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
     private fun clearImage() {
         if (shown == null && childCount == 0) return
         shown = null
+        setColour(null)
         for (o in images()) {
             val remove = Runnable {
                 o.moving = false
@@ -173,6 +195,12 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         }
         BackScreen.log("No images; the back screen shows black")
         onShownChanged?.invoke()
+    }
+
+    private fun setColour(value: Int?) {
+        if (value == colour) return
+        colour = value
+        onColourChanged?.invoke(value)
     }
 
     private fun images() = (0 until childCount).map { getChildAt(it) as WallpaperView }

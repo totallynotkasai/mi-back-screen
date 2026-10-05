@@ -43,10 +43,12 @@ import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
+import kotlin.math.roundToInt
 
 /**
  * The Wallpaper tab: the switch, a preview shaped like the back screen, the images and gallery,
- * scaling and panning, the clock, keeping clear of the camera, and schedules.
+ * the back screen's display ([DisplayCard]), scaling and panning, the clock, keeping clear of the
+ * camera, and schedules.
  */
 class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
@@ -62,6 +64,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private lateinit var setupCard: View
     private lateinit var alarmWarning: View
     private lateinit var batteryWarning: View
+    private lateinit var displayCard: DisplayCard
 
     private lateinit var clock: ClockLayer
     private lateinit var galleryCard: View
@@ -76,6 +79,9 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private lateinit var panOptions: View
     private lateinit var panSpeeds: ChipGroup
     private lateinit var panImageNote: TextView
+    private lateinit var skipShortSwitch: MaterialSwitch
+    private lateinit var skipShortOptions: View
+    private lateinit var panMinChips: ChipGroup
     private lateinit var clockSwitch: MaterialSwitch
     private lateinit var clockOptions: View
     private lateinit var clockStyles: ChipGroup
@@ -124,6 +130,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         setupCard = view.findViewById(R.id.setupCard)
         alarmWarning = view.findViewById(R.id.alarmWarning)
         batteryWarning = view.findViewById(R.id.batteryWarning)
+        displayCard = DisplayCard(view.findViewById(R.id.displayCard), layoutInflater)
         clock = view.findViewById(R.id.clock)
         galleryCard = view.findViewById(R.id.galleryCard)
         gallerySummary = view.findViewById(R.id.gallerySummary)
@@ -137,6 +144,9 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         panOptions = view.findViewById(R.id.panOptions)
         panSpeeds = view.findViewById(R.id.panSpeeds)
         panImageNote = view.findViewById(R.id.panImageNote)
+        skipShortSwitch = view.findViewById(R.id.skipShortSwitch)
+        skipShortOptions = view.findViewById(R.id.skipShortOptions)
+        panMinChips = view.findViewById(R.id.panMinChips)
         clockSwitch = view.findViewById(R.id.clockSwitch)
         clockOptions = view.findViewById(R.id.clockOptions)
         clockStyles = view.findViewById(R.id.clockStyles)
@@ -180,7 +190,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             }
         }
 
-        addChips(scalingChips, Scaling.entries, Gallery.scaling(ctx), Scaling::label) { scaling ->
+        addChips(scalingChips, Scaling.entries, Gallery.scaling(ctx), { getString(it.label) }) { scaling ->
             Gallery.setScaling(ctx, scaling)
             loadPreview()
             RearHostActivity.reload()
@@ -215,6 +225,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     override fun onResume() {
         super.onResume()
         preview.moving = !isHidden
+        displayCard.reload()
         // A chosen folder may have changed while we were away.
         showGallery()
         refresh()
@@ -252,6 +263,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         if (!previewLoading && previewUri != null && Gallery.shown(ctx) != previewUri) loadPreview()
         refreshSchedule(enabled)
         refreshSetup()
+        displayCard.refresh()
     }
 
     /** Everything again from the settings, for Refresh back screen. */
@@ -451,7 +463,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             WallpaperSettings.setShowClock(ctx, checked)
             clockChanged()
         }
-        addChips(clockStyles, ClockStyle.entries, WallpaperSettings.clockStyle(ctx), ClockStyle::label) { style ->
+        addChips(clockStyles, ClockStyle.entries, WallpaperSettings.clockStyle(ctx), { getString(it.label) }) { style ->
             WallpaperSettings.setClockStyle(ctx, style)
             clockChanged()
         }
@@ -557,12 +569,12 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     }
 
     /** Fills [group] with a choice chip per option, [current] checked; [onChosen] on a change. */
-    private fun <T> addChips(group: ChipGroup, options: List<T>, current: T, label: (T) -> Int, onChosen: (T) -> Unit) {
+    private fun <T> addChips(group: ChipGroup, options: List<T>, current: T, label: (T) -> String, onChosen: (T) -> Unit) {
         for (option in options) {
             val chip = layoutInflater.inflate(R.layout.chip_style, group, false) as Chip
             chip.id = View.generateViewId()
             chip.tag = option
-            chip.setText(label(option))
+            chip.text = label(option)
             chip.isChecked = option == current
             group.addView(chip)
         }
@@ -609,6 +621,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         preview.setBackgroundColor(Color.BLACK)
         preview.scaling = scaling
         preview.pan = WallpaperSettings.pan(ctx)
+        preview.minTravel = WallpaperSettings.panMinTravel(ctx)
         preview.setImageDrawable(drawable)
         // The clock's automatic colours follow the image.
         clock.backdropChanged()
@@ -628,19 +641,42 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             loadPreview()
             RearHostActivity.reload()
         }
-        addChips(panSpeeds, PanSpeed.entries, WallpaperSettings.panSpeed(ctx), PanSpeed::label) { speed ->
+        addChips(panSpeeds, PanSpeed.entries, WallpaperSettings.panSpeed(ctx), { getString(it.label) }) { speed ->
             WallpaperSettings.setPanSpeed(ctx, speed)
             // The preview and the back screen carry on from where they are, at the new speed.
             preview.pan = speed
             showPanning()
             RearHostActivity.settingsChanged()
         }
+        SwitchRow.bind(view.findViewById(R.id.skipShortRow), skipShortSwitch)
+        skipShortSwitch.isChecked = WallpaperSettings.skipShortPans(ctx)
+        skipShortSwitch.setOnCheckedChangeListener { _, checked ->
+            WallpaperSettings.setSkipShortPans(ctx, checked)
+            BackScreen.log(if (checked) "Skip short pans on" else "Skip short pans off")
+            minTravelChanged()
+        }
+        addChips(
+            panMinChips, WallpaperSettings.PAN_MIN_CHOICES, WallpaperSettings.panMinPercent(ctx),
+            { getString(R.string.percent, it) },
+        ) { percent ->
+            WallpaperSettings.setPanMinPercent(ctx, percent)
+            BackScreen.log("Skip pans shorter than $percent%")
+            minTravelChanged()
+        }
+    }
+
+    /** Skip short pans changed: the image showing is planned again, here and on the back screen, without reloading it. */
+    private fun minTravelChanged() {
+        preview.minTravel = WallpaperSettings.panMinTravel(ctx)
+        showPanning()
+        RearHostActivity.settingsChanged()
     }
 
     /** The panning options, the scaling it overrides, and what it does with the image showing. */
     private fun showPanning() {
         val pan = WallpaperSettings.pan(ctx)
         panOptions.visibility = if (pan != null) View.VISIBLE else View.GONE
+        skipShortOptions.visibility = if (WallpaperSettings.skipShortPans(ctx)) View.VISIBLE else View.GONE
         scalingPanNote.visibility = if (pan != null) View.VISIBLE else View.GONE
         for (i in 0 until scalingChips.childCount) scalingChips.getChildAt(i).isEnabled = pan == null
         val note = pan?.let(::describePan)
@@ -650,7 +686,8 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
     /**
      * Which way the image in the preview pans on the back screen, and how long each sweep takes,
-     * worked out just as the back screen does: the preview's image is decoded the same way.
+     * or that it stays still, worked out just as the back screen does: the preview's image is
+     * decoded the same way.
      */
     private fun describePan(speed: PanSpeed): String? {
         val image = preview.drawable ?: return null
@@ -660,13 +697,14 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         val plan = PanPlanner.plan(
             image.intrinsicWidth, image.intrinsicHeight,
             screen.width - inset.left - inset.right, screen.height - inset.top - inset.bottom,
-            screen.height, speed
+            screen.height, speed, WallpaperSettings.panMinTravel(ctx),
         )
         val sweep = formatDuration(plan.sweepMs)
-        return when (plan.axis) {
-            PanAxis.NONE -> getString(R.string.pan_fits)
-            PanAxis.HORIZONTAL -> getString(R.string.pan_horizontal, sweep)
-            PanAxis.VERTICAL -> getString(R.string.pan_vertical, sweep)
+        return when {
+            plan.skipped -> getString(R.string.pan_skipped, (plan.travel * 100).roundToInt())
+            plan.axis == PanAxis.NONE -> getString(R.string.pan_fits)
+            plan.axis == PanAxis.HORIZONTAL -> getString(R.string.pan_horizontal, sweep)
+            else -> getString(R.string.pan_vertical, sweep)
         }
     }
 

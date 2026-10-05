@@ -43,7 +43,7 @@ import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import rikka.shizuku.Shizuku
 
-/** The dialogs behind the top bar's menu: Diagnostics, Setup help and About. */
+/** The dialogs behind the top bar: each tab's help, and the menu's Diagnostics, Setup help and About. */
 object AppDialogs {
     private const val REFRESH_MS = 1000L
 
@@ -181,8 +181,12 @@ object AppDialogs {
         // The app's own notifications, for Bring back or Close camera, only while Quick Switch or
         // the camera's swipe is on.
         val mirror = MirrorSettings.isEnabled(activity) || CameraSettings.isEnabled(activity)
-        val posting = activity.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
-        val state = listOf(shizukuStatus(), alarms, battery, notifications, notificationAccess, mirror, posting)
+        val nm = activity.getSystemService(NotificationManager::class.java)
+        val posting = nm.areNotificationsEnabled()
+        // The keeper's own notification, once it has run and made its channel.
+        val keeperRan = nm.getNotificationChannel(KeeperService.KEEPER_CHANNEL_ID) != null
+        val keeperShown = KeeperService.isNotificationShown(activity)
+        val state = listOf(shizukuStatus(), alarms, battery, notifications, notificationAccess, mirror, posting, keeperRan, keeperShown)
         if (state == shown) return state
         list.removeAllViews()
         addStep(
@@ -221,24 +225,49 @@ object AppDialogs {
                 )
             }
         }
+        // Not needed either way, so it says which it is and offers the other.
+        if (keeperRan) {
+            addStep(
+                list, R.string.setup_keeper_title,
+                activity.getString(R.string.setup_keeper_text) + "\n" +
+                    activity.getString(if (keeperShown) R.string.setup_keeper_shown else R.string.setup_keeper_hidden),
+                done = null, if (keeperShown) R.string.hide else R.string.show,
+            ) { activity.startActivity(KeeperService.hideIntent(activity)) }
+        }
         return state
     }
 
+    /** A step: [done] says whether it's done, or null for a choice that isn't needed either way. */
     private fun addStep(
-        list: LinearLayout, title: Int, text: String, done: Boolean, action: Int?, onAction: () -> Unit,
+        list: LinearLayout, title: Int, text: String, done: Boolean?, action: Int?, onAction: () -> Unit,
     ) {
         val row = LayoutInflater.from(list.context).inflate(R.layout.item_setup_step, list, false)
         row.findViewById<ImageView>(R.id.stepIcon).apply {
-            setImageResource(if (done) R.drawable.ic_check_circle else R.drawable.ic_error)
-            imageTintList = ColorStateList.valueOf(
-                MaterialColors.getColor(this, if (done) MaterialR.attr.colorPrimary else MaterialR.attr.colorError)
+            setImageResource(
+                when (done) {
+                    true -> R.drawable.ic_check_circle
+                    false -> R.drawable.ic_error
+                    null -> R.drawable.ic_notifications
+                }
             )
-            contentDescription = list.context.getString(if (done) R.string.setup_done else R.string.setup_needed_short)
+            imageTintList = ColorStateList.valueOf(
+                MaterialColors.getColor(
+                    this,
+                    when (done) {
+                        true -> MaterialR.attr.colorPrimary
+                        false -> MaterialR.attr.colorError
+                        null -> MaterialR.attr.colorOnSurfaceVariant
+                    }
+                )
+            )
+            // The title says what it is when it isn't a step to do.
+            contentDescription = done?.let { list.context.getString(if (it) R.string.setup_done else R.string.setup_needed_short) }
+            if (done == null) importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         row.findViewById<TextView>(R.id.stepTitle).setText(title)
         row.findViewById<TextView>(R.id.stepText).text = text
         row.findViewById<Button>(R.id.stepButton).apply {
-            if (done || action == null) {
+            if (done == true || action == null) {
                 visibility = View.GONE
             } else {
                 setText(action)
@@ -246,6 +275,36 @@ object AppDialogs {
             }
         }
         list.addView(row)
+    }
+
+    /** [feature]'s help, behind the ? in the top bar: a heading and a few lines for each part. */
+    fun help(activity: AppCompatActivity, feature: Feature) {
+        val dp = activity.resources.displayMetrics.density
+        val list = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24 * dp).toInt(), (4 * dp).toInt(), (24 * dp).toInt(), 0)
+        }
+        for ((i, section) in feature.help.withIndex()) {
+            list.addView(TextView(activity).apply {
+                setTextAppearance(MaterialR.style.TextAppearance_Material3_TitleSmall)
+                setTextColor(MaterialColors.getColor(activity, MaterialR.attr.colorOnSurface, 0))
+                setText(section.title)
+                isAccessibilityHeading = true
+                if (i > 0) setPadding(0, (16 * dp).toInt(), 0, 0)
+            })
+            list.addView(TextView(activity).apply {
+                setTextAppearance(MaterialR.style.TextAppearance_Material3_BodyMedium)
+                setTextColor(MaterialColors.getColor(activity, MaterialR.attr.colorOnSurfaceVariant, 0))
+                setLineSpacing(4 * dp, 1f)
+                setText(section.text)
+                setPadding(0, (4 * dp).toInt(), 0, 0)
+            })
+        }
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(feature.label)
+            .setView(ScrollView(activity).apply { addView(list) })
+            .setPositiveButton(R.string.close, null)
+            .show()
     }
 
     fun about(activity: AppCompatActivity) {

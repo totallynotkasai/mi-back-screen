@@ -21,6 +21,8 @@ object WallpaperSettings : FeatureSettings("backscreen") {
     private const val KEY_CLOCK_BG_OPACITY = "clock_bg_opacity"
     private const val KEY_PAN = "pan"
     private const val KEY_PAN_SPEED = "pan_speed"
+    private const val KEY_PAN_SKIP_SHORT = "pan_skip_short"
+    private const val KEY_PAN_MIN_TRAVEL = "pan_min_travel"
 
     /** The tile and widget show this switch, so they follow it. */
     override fun setEnabled(context: Context, enabled: Boolean) {
@@ -52,6 +54,27 @@ object WallpaperSettings : FeatureSettings("backscreen") {
     fun setPanSpeed(context: Context, speed: PanSpeed) {
         prefs(context).edit().putString(KEY_PAN_SPEED, speed.name).apply()
     }
+
+    /** Skip short pans: images that would barely move stay still. Off by default, like every new option. */
+    fun skipShortPans(context: Context) = prefs(context).getBoolean(KEY_PAN_SKIP_SHORT, false)
+
+    fun setSkipShortPans(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAN_SKIP_SHORT, on).apply()
+    }
+
+    /** The shortest pan that still pans, as a percentage of the screen ([PAN_MIN_CHOICES]); kept while skipping is off. */
+    fun panMinPercent(context: Context) =
+        prefs(context).getInt(KEY_PAN_MIN_TRAVEL, PAN_MIN_CHOICES.first()).takeIf { it in PAN_MIN_CHOICES } ?: PAN_MIN_CHOICES.first()
+
+    fun setPanMinPercent(context: Context, percent: Int) {
+        prefs(context).edit().putInt(KEY_PAN_MIN_TRAVEL, percent).apply()
+    }
+
+    /** What [WallpaperView.minTravel] takes: the shortest pan as a share, or 0 while skipping is off. */
+    fun panMinTravel(context: Context): Double = if (skipShortPans(context)) panMinPercent(context) / 100.0 else 0.0
+
+    /** The choices for the shortest pan, as percentages of the screen. */
+    val PAN_MIN_CHOICES = listOf(15, 25, 40)
 
     /** How images are fitted: the gallery's scaling, except that panning always fills the screen. */
     fun scalingInUse(context: Context): Scaling = if (pan(context) != null) Scaling.FILL else Gallery.scaling(context)

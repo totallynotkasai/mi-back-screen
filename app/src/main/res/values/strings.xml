@@ -31,6 +31,27 @@
     <string name="copy">Copy</string>
     <string name="copied">Copied</string>
 
+    <!-- Each tab's help, behind the ? in the top bar. -->
+    <string name="help">Help</string>
+    <string name="help_with">Help with %1$s</string>
+    <string name="good_to_know">Good to know</string>
+    <string name="help_panning_title">Panning</string>
+    <string name="help_panning">Images that don\'t fit the back screen\'s shape glide slowly across it while it\'s lit, and hold still while it\'s dimmed. With Skip short pans, an image that would barely move stays still in the middle instead; the next one pans as usual.</string>
+    <string name="help_display_title">Back screen display</string>
+    <string name="help_display">• Stays lit for changes Xiaomi\'s own back screen setting, so it counts with the wallpaper off too. After that time the back screen fades for about 6 seconds, then dims. Before you uninstall Mi Back Screen, choose As set to put Xiaomi\'s own time back.\n• Stay fully lit while unlocked keeps the back screen bright while you use the phone, and lets it dim once you lock it. Panning and GIFs keep going all that time, so it uses more battery.\n• Light up when you pick it up: lying on its back, the back screen switches off, and normally comes back dimmed when you pick the phone up. Once it has been dim for 90 seconds, or 5 minutes in the dark, Xiaomi switches it off for good and it stays black. This lights it again as you pick the phone up, while it\'s unlocked.</string>
+    <string name="help_dimmed_title">A dimmed back screen</string>
+    <string name="help_dimmed">A single tap doesn\'t light a dimmed back screen; a double tap does.</string>
+    <string name="help_notifications_off_title">With the wallpaper off</string>
+    <string name="help_notifications_off">Xiaomi\'s own back screen shows notifications while the phone is locked.</string>
+    <string name="help_notifications_locked_title">While the phone is locked</string>
+    <string name="help_notifications_locked">The back screen follows your lock screen: if that hides sensitive content, only the app shows.</string>
+    <string name="help_battery_when_title">When it plays</string>
+    <string name="help_battery_when">When you plug in, wired or wireless, with Charging animation on. It doesn\'t play:\n• if the back screen is dark and Light up back screen when plugged in is off;\n• while the back is covered, such as lying face up on a table;\n• while the main screen is on and turned sideways;\n• within 10 seconds of the back screen last lighting up for something;\n• while another app or Xiaomi Camera is on the back screen.\nPlugging in again within 5 seconds doesn\'t play it again.</string>
+    <string name="help_battery_glow_title">Edge glow</string>
+    <string name="help_battery_glow">After it plays, a faint glow stays round the edge for as long as the phone charges, lit or dimmed, and goes when you unplug. It needs the wallpaper: over Xiaomi\'s back screen only the part as you plug in plays.</string>
+    <string name="help_battery_xiaomi_title">Over Xiaomi\'s back screen</string>
+    <string name="help_battery_xiaomi">With the wallpaper off and Also when the wallpaper is off on, it plays over Xiaomi\'s back screen for a few seconds, then hands it back.</string>
+
     <!-- Shizuku: the banner when it isn't ready, and its status elsewhere. -->
     <string name="shizuku_title">Shizuku</string>
     <string name="shizuku_ready">Connected</string>
@@ -52,6 +73,11 @@
     <string name="setup_notifications_text">Lets the back screen show new notifications. They\'re read on the phone only, and never stored or sent anywhere.</string>
     <string name="setup_done">Done</string>
     <string name="setup_needed_short">Needed</string>
+    <string name="setup_keeper_title">\"Mi Back Screen is on\" notification</string>
+    <string name="setup_keeper_text">Android shows it while the app works in the background. You can switch it off; the app carries on.</string>
+    <string name="setup_keeper_shown">Shown</string>
+    <string name="setup_keeper_hidden">Hidden</string>
+    <string name="show">Show</string>
 
     <!-- Diagnostics. -->
     <string name="diag_version">Mi Back Screen %1$s (%2$d)</string>
@@ -152,9 +178,28 @@
     <string name="pan_vertical">Pans up and down for this image: %1$s each way</string>
     <string name="pan_horizontal">Pans side to side for this image: %1$s each way</string>
     <string name="pan_fits">This image already fits the screen</string>
+    <string name="pan_skip_short">Skip short pans</string>
+    <string name="pan_skip_short_summary">Images that would barely move stay still instead</string>
+    <string name="pan_min_label">Shorter than this much of the screen</string>
+    <string name="pan_skipped">Stays still for this image: it would only move %1$d%%</string>
     <!-- Non-breaking spaces, so a number never wraps away from its unit. -->
     <string name="duration_seconds">%1$d s</string>
     <string name="duration_minutes">%1$d min %2$d s</string>
+    <string name="display_title">Back screen display</string>
+    <string name="lit_title">Stays lit for</string>
+    <string name="lit_summary">How long the back screen stays bright after a touch or a wake. It then fades for a few seconds and dims.</string>
+    <string name="lit_as_set">As set</string>
+    <string name="lit_as_set_value">As set (%1$s)</string>
+    <string name="lit_5s">5 s</string>
+    <string name="lit_1min">1 min</string>
+    <string name="lit_5min">5 min</string>
+    <string name="lit_needs_shizuku">Needs Shizuku, which isn\'t ready</string>
+    <string name="stay_lit_title">Stay fully lit while unlocked</string>
+    <string name="stay_lit_summary">The back screen doesn\'t dim while you\'re using the phone. Uses more battery.</string>
+    <string name="pick_up_title">Light up when you pick it up</string>
+    <string name="pick_up_summary">If it went dark lying on its back, it lights again when you pick the phone up while it\'s unlocked.</string>
+    <string name="display_needs_wallpaper">These two work while Show on back screen is on.</string>
+    <string name="duration_whole_minutes">%1$d min</string>
     <string name="avoid_camera_title">Keep clear of the camera</string>
     <string name="avoid_camera_summary">Fit the image beside the camera instead of partly behind it</string>
     <string name="schedule_title">Schedule</string>
@@ -198,6 +243,16 @@
     <string name="charging">Charging</string>
     <string name="charging_wireless">Wireless charging</string>
     <string name="charged">Fully charged</string>
+    <string name="style_ring">Ring</string>
+    <string name="style_ring_summary">The level fills a ring over the dimmed wallpaper, with the number in the middle</string>
+    <string name="style_glow">Edge glow</string>
+    <string name="style_glow_summary">A glow runs round the edge as far as the level, then stays faint while it charges</string>
+    <string name="style_minimal">Minimal</string>
+    <string name="style_minimal_summary">A small bolt and the level by the clock: below it, or beside it where there\'s no room</string>
+    <string name="charging_colour">Colour</string>
+    <string name="colour_auto_wallpaper">A colour from the image on the back screen</string>
+    <string name="charging_colour_auto">Colour, Auto</string>
+    <string name="charging_colour_custom">Colour, custom</string>
 
     <!-- Notifications tab, and notifications on the back screen. -->
     <string name="notifications_on_wallpaper">On · shows over the wallpaper</string>
@@ -229,7 +284,6 @@
     <string name="swipe_down_summary">Pull down from the top of the back screen while it\'s lit, for the ones you haven\'t cleared</string>
     <string name="notifications_light_up">Light up back screen for new notifications</string>
     <string name="notifications_light_up_summary">Each app at most once a minute. Not while you\'re using the phone or the back is covered</string>
-    <string name="notifications_notes">With the wallpaper off, Xiaomi\'s own back screen shows notifications while the phone is locked.\n\nWhile the phone is locked, the back screen follows your lock screen: if that hides sensitive content, only the app shows.</string>
     <string name="notification_header">%1$s · %2$s</string>
     <string name="ago_now">now</string>
     <string name="ago_minutes">%d min</string>
@@ -277,7 +331,6 @@
     <string name="orientation_landscape">Landscape</string>
     <string name="orientation_portrait">Portrait</string>
     <string name="mirror_options_note">These apply only while an app is on the back screen, and Xiaomi\'s settings are put back when it leaves.</string>
-    <string name="mirror_limits_title">Good to know</string>
     <string name="mirror_limits">• With the main screen on sideways, the back screen lights once you turn the phone over or press Power. Touching it before then brings up Xiaomi\'s \"Press the Power button\" message.\n• A video playing full screen may start again from the app\'s home page.\n• The keyboard may open on the main screen.\n• Some video apps show black on a second screen.\n• The main screen stays as it was, and turns off as usual.</string>
     <string name="mirror_notifications_denied">Without notifications, bring apps back with the tile or this tab</string>
     <string name="qs_tile_off">Off in Mi Back Screen</string>
@@ -315,7 +368,6 @@
     <string name="turn_on_wallpaper">Turn on wallpaper</string>
     <string name="camera_close_title">Closing it</string>
     <string name="camera_close">• Swipe in from the back screen\'s right edge, Xiaomi\'s back strip.\n• Cover the camera for a moment.\n• Close camera, here or in the notification.\n• It also closes when the back screen dims.</string>
-    <string name="camera_limits_title">Good to know</string>
     <string name="camera_limits">• Xiaomi Camera opens in its own back screen mode, on the main cameras. Photos and videos go to Gallery as usual.\n• While it\'s up, Xiaomi shows its own page on the main screen, and turns the main screen off after about 30 seconds.\n• Xiaomi Camera closes by itself when the back screen isn\'t touched for a while, even while recording. Tap it now and then during a long video.</string>
     <string name="camera_notifications_denied">Without notifications, close the camera here or with Xiaomi\'s back strip</string>
     <string name="camera_lent_title">Xiaomi Camera is on the back screen</string>
@@ -327,7 +379,9 @@
     <!-- Outside the app. -->
     <string name="tile_label">Back screen wallpaper</string>
     <string name="widget_description">Turn the Mi Back Screen wallpaper on or off</string>
-    <string name="keeper_channel">Mi Back Screen</string>
+    <string name="keeper_channel">Running in the background</string>
     <string name="keeper_title">Mi Back Screen is on</string>
+    <string name="keeper_text">Android shows this while the app looks after the back screen. Hide switches it off for good; the app carries on.</string>
     <string name="keeper_waiting">Waiting for Shizuku to start</string>
+    <string name="hide">Hide</string>
 </resources>

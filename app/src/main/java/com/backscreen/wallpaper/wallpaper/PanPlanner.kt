@@ -22,6 +22,8 @@ enum class PanAxis { NONE, HORIZONTAL, VERTICAL }
  * Where it is depends only on how long it has been panning, so after a pause it carries on from
  * exactly where it was. Positions are in screen pixels: 0 shows the top or left edge, [overflow]
  * the bottom or right.
+ *
+ * A [skipped] pan would move too little to be worth it: it holds still in the middle.
  */
 data class PanPlan(
     val axis: PanAxis,
@@ -34,13 +36,21 @@ data class PanPlan(
     private val rampMs: Long,
     /** Gliding speed between the ramps, in pixels per ms. */
     private val speed: Double,
+    /** How far it travels each way, as a share of the area along the pan: 0.09 is 9%. */
+    val travel: Double = 0.0,
+    /** Shorter than the minimum asked for, so it stays still, centred. */
+    val skipped: Boolean = false,
 ) {
     /** Hold, there, hold, back. */
     val cycleMs = 2 * (HOLD_MS + sweepMs)
 
+    /** Whether it moves at all. */
+    val moves get() = axis != PanAxis.NONE && !skipped
+
     /** How far along it is after panning for [elapsed] ms. */
     fun offsetAt(elapsed: Long): Float {
         if (axis == PanAxis.NONE) return 0f
+        if (skipped) return overflow / 2
         val t = elapsed.mod(cycleMs)
         return when {
             t < HOLD_MS -> 0f
@@ -55,7 +65,7 @@ data class PanPlan(
      * then. While it holds, that's the end of the hold.
      */
     fun nextMoveAt(elapsed: Long): Long {
-        if (axis == PanAxis.NONE) return Long.MAX_VALUE
+        if (!moves) return Long.MAX_VALUE
         val base = elapsed - elapsed.mod(cycleMs)
         val t = elapsed - base
         val end = when {
@@ -82,7 +92,7 @@ data class PanPlan(
      * or size carries on from where it was instead of starting again.
      */
     fun matching(other: PanPlan?, otherElapsed: Long): Long {
-        if (other == null || other.axis != axis || axis == PanAxis.NONE) return 0
+        if (other == null || other.axis != axis || !moves || !other.moves) return 0
         val t = otherElapsed.mod(other.cycleMs)
         return when {
             t < HOLD_MS -> t
@@ -144,9 +154,14 @@ object PanPlanner {
 
     /**
      * The pan for an image of [imageWidth] x [imageHeight] covering an area of [areaWidth] x
-     * [areaHeight] (inside any camera padding), on a screen [screenHeight] tall, at [speed].
+     * [areaHeight] (inside any camera padding), on a screen [screenHeight] tall, at [speed]. One
+     * that would travel less than [minTravel] of the area along the pan (0.15 is 15%) stays still
+     * in the middle instead; 0 pans every image that doesn't fit.
      */
-    fun plan(imageWidth: Int, imageHeight: Int, areaWidth: Int, areaHeight: Int, screenHeight: Int, speed: PanSpeed): PanPlan {
+    fun plan(
+        imageWidth: Int, imageHeight: Int, areaWidth: Int, areaHeight: Int, screenHeight: Int, speed: PanSpeed,
+        minTravel: Double = 0.0,
+    ): PanPlan {
         if (imageWidth <= 0 || imageHeight <= 0 || areaWidth <= 0 || areaHeight <= 0) return still(1f)
         val iw = imageWidth.toDouble()
         val ih = imageHeight.toDouble()
@@ -155,11 +170,13 @@ object PanPlanner {
         if (abs(shape - 1) <= FITS_WITHIN || abs(1 / shape - 1) <= FITS_WITHIN) return still(scale.toFloat())
         val axis = if (shape > 1) PanAxis.HORIZONTAL else PanAxis.VERTICAL
         val overflow = if (axis == PanAxis.HORIZONTAL) iw * scale - areaWidth else ih * scale - areaHeight
+        val travel = overflow / if (axis == PanAxis.HORIZONTAL) areaWidth else areaHeight
+        if (travel < minTravel) return PanPlan(axis, scale.toFloat(), overflow.toFloat(), 0, 1, 0.0, travel, skipped = true)
         val pxPerMs = speed.perSecond * max(1, screenHeight) / 1000
         val glideMs = overflow / pxPerMs
         // A short pan doesn't reach full speed: it eases up for half the way and down for the rest.
         val ramp = minOf(PanPlan.RAMP_MS.toDouble(), glideMs).roundToInt().toLong().coerceAtLeast(1)
-        return PanPlan(axis, scale.toFloat(), overflow.toFloat(), (glideMs + ramp).roundToInt().toLong(), ramp, pxPerMs)
+        return PanPlan(axis, scale.toFloat(), overflow.toFloat(), (glideMs + ramp).roundToInt().toLong(), ramp, pxPerMs, travel)
     }
 
     private fun still(scale: Float) = PanPlan(PanAxis.NONE, scale, 0f, 0, 1, 0.0)

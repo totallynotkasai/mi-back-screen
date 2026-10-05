@@ -11,8 +11,10 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import com.backscreen.wallpaper.battery.BatterySettings
 import com.backscreen.wallpaper.battery.ChargingLayer
 import com.backscreen.wallpaper.battery.ChargingStatus
+import com.backscreen.wallpaper.battery.ChargingStyle
 import com.backscreen.wallpaper.camera.CameraSettings
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.HostMode
@@ -141,6 +143,7 @@ class RearHostActivity : Activity() {
         }
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         setContentView(root)
+        if (!popover) applyKeepLit()
         if (!popover) addWallpaper(root, display)
         addCharging(root, display)
         if (!popover) addNotifications(root, display)
@@ -156,6 +159,8 @@ class RearHostActivity : Activity() {
         when {
             due != null -> playCharging(due)
             popover -> KeeperService.instance?.onPopoverFinished()
+            // Charging already: the faint Edge glow is simply there.
+            else -> refreshFaint()
         }
     }
 
@@ -182,17 +187,28 @@ class RearHostActivity : Activity() {
         applyClock()
     }
 
-    /** The charging animation, over everything, keeping clear of the camera like the clock. */
+    /**
+     * The charging animation, over everything, keeping clear of the camera like the clock; the
+     * Edge glow follows the screen's rounded edge. In the wallpaper the glow stays faint while
+     * charging, and Minimal goes below the clock; in a pop-over the glow fades and Minimal is
+     * centred.
+     */
     private fun addCharging(root: FrameLayout, display: Display) {
         val camera = BackScreen.cameraInsets(display)
         charging = ChargingLayer(this).apply {
             setPadding(camera.left, camera.top, camera.right, camera.bottom)
+            BackScreen.cornerShare(display)?.let { cornerShare = it }
+            stayFaint = !popover
+            centred = popover
+            clock = this@RearHostActivity.clock
+            setAutoAccent(wallpaper?.colour)
             onDone = ::onChargingDone
             onShown = { shown ->
                 chargingShown = shown
                 fadeClock()
             }
         }
+        wallpaper?.onColourChanged = { charging?.setAutoAccent(it) }
         root.addView(charging)
     }
 
@@ -234,6 +250,8 @@ class RearHostActivity : Activity() {
             updateGestures()
             updateMotion()
             playDueCharging()
+            // Plugged or unplugged while another app was in front.
+            refreshFaint()
             showDueNotification()
             pushWhenDrawn()
             if (RearState.owner(this) is RearOwner.Lent) KeeperService.instance?.onHostShownWhileLent()
@@ -470,6 +488,15 @@ class RearHostActivity : Activity() {
     private fun isLit() = display?.state == Display.STATE_ON
 
     /**
+     * Stay fully lit while unlocked: the window keeps the back screen on while it's in front
+     * (first check 3). Only the wallpaper's, never a pop-over's.
+     */
+    private fun applyKeepLit() {
+        if (keepLitWanted) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    /**
      * Plays the charging animation, once the back screen is lit. If it doesn't light up within
      * moments, it's dropped: a dimmed back screen shows none of it.
      */
@@ -489,11 +516,20 @@ class RearHostActivity : Activity() {
         if (!started || !isLit()) return
         chargingDue = null
         BackScreen.mainHandler.removeCallbacks(chargingGiveUp)
-        // The clock's colours, so it matches the wallpaper; light on a dark veil without one.
+        matchCharging(layer)
+        layer.play(status)
+        BackScreen.log("Charging animation on back screen (${BatterySettings.style(this).name.lowercase()}, ${status.level}%)")
+    }
+
+    /**
+     * The chosen style and colour, and the clock's colours for the text, so it matches the
+     * wallpaper; light on a dark veil without one.
+     */
+    private fun matchCharging(layer: ChargingLayer) {
+        layer.style = BatterySettings.style(this)
+        layer.accent = BatterySettings.color(this)
         val clock = clock?.takeIf { it.visibility == View.VISIBLE }
         if (clock != null) layer.setColors(clock.textColor, clock.autoBgColor) else layer.setColors(Color.WHITE, Color.BLACK)
-        layer.play(status)
-        BackScreen.log("Charging animation on back screen (${status.level}%)")
     }
 
     private fun giveUpCharging() {
@@ -501,18 +537,47 @@ class RearHostActivity : Activity() {
         chargingDue = null
         BackScreen.log("Back screen didn't light up; no charging animation")
         onChargingDone()
+        refreshFaint()
     }
 
-    /** You unplugged: one waiting is dropped, and one playing fades away. */
+    /** You unplugged: one waiting is dropped, and one playing, or the faint glow, fades away. */
     private fun stopCharging() {
         if (chargingDue != null) {
             BackScreen.mainHandler.removeCallbacks(chargingGiveUp)
             chargingDue = null
             onChargingDone()
         }
-        if (charging?.isPlaying != true) return
-        BackScreen.log("Unplugged; charging animation stopped")
-        charging?.stop()
+        val layer = charging ?: return
+        if (!layer.isPlaying && !layer.isFaint) return
+        if (layer.isPlaying) BackScreen.log("Unplugged; charging animation stopped") else BackScreen.log("Unplugged; edge glow off")
+        if (started && isLit()) {
+            layer.stop()
+        } else {
+            // Dimmed: no fade would reach the panel, so it goes at once, pushed there.
+            layer.clear()
+            onShownChanged()
+        }
+    }
+
+    /**
+     * The faint Edge glow, while charging with that style in the wallpaper: shown if it should be
+     * and isn't, gone if it shouldn't. A dimmed back screen gets the change like any other.
+     */
+    private fun refreshFaint() {
+        val layer = charging ?: return
+        if (popover || layer.isPlaying || chargingDue != null) return
+        val wanted = BatterySettings.isEnabled(this) && BatterySettings.style(this) == ChargingStyle.EDGE_GLOW &&
+            ChargingStatus.isPlugged(this)
+        if (wanted == layer.isFaint) return
+        if (wanted) {
+            matchCharging(layer)
+            layer.showFaint()
+            BackScreen.log("Charging; edge glow on")
+        } else {
+            layer.clear()
+            BackScreen.log("Edge glow off")
+        }
+        onShownChanged()
     }
 
     /** A pop-over has done what it was up for. */
@@ -592,6 +657,9 @@ class RearHostActivity : Activity() {
         var visibleOnRear = false
             private set
 
+        // Stay fully lit while unlocked, as DisplayKeeper last said, for this host and the next.
+        private var keepLitWanted = false
+
         private fun showing() = current?.get()?.takeIf { !it.isFinishing && it.onRear }
 
         /** The host showing the wallpaper, rather than a pop-over. */
@@ -607,6 +675,12 @@ class RearHostActivity : Activity() {
             val activity = showingWallpaper() ?: return
             activity.wallpaper?.showImage(advance = true)
             activity.clock?.updateTime()
+        }
+
+        /** Stay fully lit while unlocked started or ended ([com.backscreen.wallpaper.core.DisplayKeeper]). */
+        fun keepLit(on: Boolean) {
+            keepLitWanted = on
+            showingWallpaper()?.applyKeepLit()
         }
 
         /** The clock alarm: see [onMinute]. */
@@ -633,6 +707,16 @@ class RearHostActivity : Activity() {
         fun stopCharging() {
             pendingCharging = null
             showing()?.stopCharging()
+        }
+
+        /**
+         * Plugged in with nothing played (the back covered, say), or the Battery switch, style or
+         * colour changed: the faint Edge glow follows, and the next animation takes the change.
+         */
+        fun chargingChanged() {
+            val host = showingWallpaper() ?: return
+            host.charging?.takeIf { it.isFaint }?.let(host::matchCharging)
+            host.refreshFaint()
         }
 
         private fun takePendingCharging(): ChargingStatus? {

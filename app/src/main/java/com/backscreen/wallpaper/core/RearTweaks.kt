@@ -12,6 +12,18 @@ data class Tweak(val original: String?, val ours: String)
 /** What a setting holds now; [value] is null if it isn't set. [raw] is what the command printed. */
 data class Current(val value: String?, val raw: String)
 
+/** What a new base value for a setting (Stays lit for) means for it now. */
+sealed interface BaseChange {
+    /** Set it to [value] now (null unsets it). */
+    data class Write(val value: String?) : BaseChange
+
+    /** A lend has it changed: leave it, and the lend puts back [tweak]'s original instead. */
+    data class PutBackLater(val tweak: Tweak) : BaseChange
+
+    /** It holds that already, or will when the lend ends. */
+    data object None : BaseChange
+}
+
 /**
  * The rules for changing Xiaomi's settings while an app is lent the back screen, and putting
  * them back, and reading what the shell prints for them. Plain Kotlin, so it's unit tested.
@@ -35,6 +47,25 @@ object TweakRules {
 
     /** Whether to put [saved]'s original back: only if it still holds what this app set. */
     fun shouldPutBack(saved: Tweak, current: String?) = current == saved.ours
+
+    /**
+     * The value the setting rests at changed to [base] (Stays lit for, on the Wallpaper tab). While
+     * a lend has the setting changed ([saved], still holding its value), the lend keeps it, and
+     * puts back [base] when it ends instead of what it saved. Otherwise it's set now.
+     */
+    fun baseChanged(saved: Tweak?, current: String?, base: String?): BaseChange = when {
+        saved != null && current == saved.ours ->
+            if (saved.original == base) BaseChange.None else BaseChange.PutBackLater(saved.copy(original = base))
+        current == base -> BaseChange.None
+        else -> BaseChange.Write(base)
+    }
+
+    /**
+     * Xiaomi's own value, before this app changed it: the one saved when Stays lit for first
+     * changed it ([own]), or else what a lend would put back now, or else what it holds.
+     */
+    fun xiaomiOwn(own: Saved?, saved: Tweak?, current: String?): String? =
+        if (own != null) own.value else toPutBack(saved, current)
 
     /** `settings get` prints the value, or "null" when it isn't set. */
     fun timeout(output: String): String? = output.trim().takeIf { it.isNotEmpty() && it != "null" }
@@ -153,6 +184,12 @@ object RearTweaks {
 
     /** Whether anything is changed and waiting to be put back. Any thread. */
     fun pending(context: Context) = TweakKind.entries.any { load(context, it) != null }
+
+    /** What a lend changed [kind] from and to, if it's waiting to be put back. Any thread. */
+    fun saved(context: Context, kind: TweakKind): Tweak? = load(context, kind)
+
+    /** A lend's [kind] is to be put back to [tweak]'s original instead (see [TweakRules.baseChanged]). */
+    fun replace(context: Context, kind: TweakKind, tweak: Tweak) = save(context, kind, tweak)
 
     /** What's changed, for Diagnostics: "Xiaomi's back screen timeout 120000 (was 10000)". */
     fun summary(context: Context): String? = TweakKind.entries.mapNotNull { kind ->

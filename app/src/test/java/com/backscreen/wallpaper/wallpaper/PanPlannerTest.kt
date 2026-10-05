@@ -14,8 +14,8 @@ class PanPlannerTest {
     private val h = 596
     private val besideCamera = 976 - 296
 
-    private fun plan(iw: Int, ih: Int, speed: PanSpeed = PanSpeed.MEDIUM, aw: Int = w) =
-        PanPlanner.plan(iw, ih, aw, h, h, speed)
+    private fun plan(iw: Int, ih: Int, speed: PanSpeed = PanSpeed.MEDIUM, aw: Int = w, min: Double = 0.0) =
+        PanPlanner.plan(iw, ih, aw, h, h, speed, min)
 
     private fun assertNear(expected: Double, actual: Number, within: Double) =
         assertTrue("expected $expected ± $within, got $actual", abs(expected - actual.toDouble()) <= within)
@@ -168,6 +168,61 @@ class PanPlannerTest {
         val upAndDown = plan(4000, 3000)
         val sideToSide = plan(4000, 3000, aw = besideCamera)
         assertEquals(0L, sideToSide.matching(upAndDown, 9000))
+    }
+
+    @Test
+    fun shortPansStayStillAndCentredAt15Percent() {
+        // 16:9 moves 84 px of 976 (9%), and a 3:2 camera photo 55 px of 596 (9%).
+        for ((iw, ih) in listOf(1920 to 1080, 3000 to 2000)) {
+            val still = plan(iw, ih, min = 0.15)
+            assertTrue("$iw x $ih", still.skipped)
+            assertNear(0.09, still.travel, 0.01)
+            // It keeps its direction and distance, held at the middle, and never moves.
+            assertEquals(plan(iw, ih).axis, still.axis)
+            assertEquals(plan(iw, ih).overflow, still.overflow)
+            assertEquals(still.overflow / 2, still.offsetAt(0))
+            assertEquals(still.overflow / 2, still.offsetAt(23_456))
+            assertEquals(Long.MAX_VALUE, still.nextMoveAt(5_000))
+        }
+    }
+
+    @Test
+    fun aPhonePhotoPansAt15PercentButNotAt25() {
+        // 4:3 moves 136 px of 596: 23%.
+        val at15 = plan(4000, 3000, min = 0.15)
+        assertTrue(at15.moves)
+        assertNear(0.228, at15.travel, 0.005)
+        assertTrue(plan(4000, 3000, min = 0.25).skipped)
+    }
+
+    @Test
+    fun aSquareStillPansAt40Percent() {
+        // 380 px of 596: 64%.
+        val square = plan(1000, 1000, min = 0.40)
+        assertTrue(square.moves)
+        assertNear(0.638, square.travel, 0.005)
+    }
+
+    @Test
+    fun besideTheCameraTheShareIsOfTheAreaBesideIt() {
+        // 4:3 moves side to side, 115 px of 680 (17%); a square up and down, 84 px of 596 (14%).
+        val photo = plan(4000, 3000, aw = besideCamera, min = 0.15)
+        assertEquals(PanAxis.HORIZONTAL, photo.axis)
+        assertNear(0.169, photo.travel, 0.005)
+        assertTrue(photo.moves)
+        assertTrue(plan(4000, 3000, aw = besideCamera, min = 0.25).skipped)
+        assertTrue(plan(1000, 1000, aw = besideCamera, min = 0.15).skipped)
+    }
+
+    @Test
+    fun withSkippingOffEveryImageThatDoesntFitPans() {
+        for ((iw, ih) in listOf(1920 to 1080, 3000 to 2000, 4000 to 3000, 1700 to 1000)) {
+            val p = plan(iw, ih)
+            assertTrue("$iw x $ih", p.moves)
+            assertEquals(PanPlanner.plan(iw, ih, w, h, h, PanSpeed.MEDIUM), p)
+        }
+        // A skipped pan and a moving one don't line up: the moving one starts from the beginning.
+        assertEquals(0L, plan(4000, 3000).matching(plan(4000, 3000, min = 0.25), 9000))
     }
 
     @Test

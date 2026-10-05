@@ -76,7 +76,10 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
         lightUpRow = view.findViewById(R.id.lightUpRow)
         lightUpSwitch = view.findViewById(R.id.lightUpSwitch)
         // The banner takes the clock's colours, as on the back screen.
-        backdrop = PreviewBackdrop(view.findViewById(R.id.previewFrame), view.findViewById(R.id.preview), clock, ::matchClockColors)
+        backdrop = PreviewBackdrop(
+            view.findViewById(R.id.previewFrame), view.findViewById(R.id.preview), clock, ::matchClockColors,
+            view.findViewById(R.id.glow),
+        )
 
         mainSwitch.onCheckedChange = ::switched
         accessButton.setOnClickListener { onAccessButton() }

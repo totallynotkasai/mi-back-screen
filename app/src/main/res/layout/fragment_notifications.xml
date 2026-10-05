@@ -2,7 +2,7 @@
 <!--
     The Notifications tab: its main switch, pinned, then Notification access, a preview with a
     sample notification and Try on back screen, the style, and the options, which grey out while
-    it's off.
+    it's off. Its notes are in its help, behind the top bar's ?.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -113,6 +113,12 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:visibility="gone" />
+
+                    <!-- The Edge glow's faint glow while charging, as on the back screen. -->
+                    <com.backscreen.wallpaper.battery.ChargingLayer
+                        android:id="@+id/glow"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
 
                     <com.backscreen.wallpaper.notifications.NotificationLayer
                         android:id="@+id/notifications"
@@ -284,16 +290,6 @@
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
-
-            <!-- Where they show with the wallpaper off, and what's shown while locked. -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="4dp"
-                android:layout_marginTop="16dp"
-                android:text="@string/notifications_notes"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </LinearLayout>

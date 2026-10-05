@@ -14,13 +14,15 @@ import android.view.Display
 import android.view.View
 import android.widget.FrameLayout
 import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.battery.ChargingLayer
 import com.backscreen.wallpaper.core.BackScreen
+import com.google.android.material.card.MaterialCardView
 import kotlin.math.max
 
 /**
- * The preview's frame: the rear display's shape, with the part its camera covers drawn on
- * top, so the preview matches what you'll see. Until [setRearDisplay] is called it assumes
- * the 17 Pro Max's 976 x 596 with no camera.
+ * The preview's frame: the rear display's shape and rounded corners, with the part its camera
+ * covers drawn on top, so the preview matches what you'll see. Until [setRearDisplay] is called
+ * it assumes the 17 Pro Max's 976 x 596 with 101 px corners and no camera.
  */
 class RearPreviewLayout @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -31,6 +33,7 @@ class RearPreviewLayout @JvmOverloads constructor(
     private var cameraRects = emptyList<Rect>()
     private var cameraInsets = Insets.NONE
     private var avoidCamera = false
+    private var cornerShare = ChargingLayer.DEFAULT_CORNER_SHARE
 
     private val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -56,8 +59,19 @@ class RearPreviewLayout @JvmOverloads constructor(
         cameraRects = BackScreen.naturalCameraRects(display)
         cameraInsets = BackScreen.naturalCameraInsets(display)
         this.avoidCamera = avoidCamera
+        BackScreen.cornerShare(display)?.let { cornerShare = it }
+        for (id in intArrayOf(R.id.charging, R.id.glow)) findViewById<ChargingLayer>(id)?.cornerShare = cornerShare
         requestLayout()
         invalidate()
+    }
+
+    /**
+     * The card around the preview takes the back screen's own rounded corners, scaled, so the
+     * preview's shape, and the Edge glow along it, match the glass.
+     */
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        (parent as? MaterialCardView)?.radius = cornerShare * h
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
