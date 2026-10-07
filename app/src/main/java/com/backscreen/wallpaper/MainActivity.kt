@@ -28,14 +28,12 @@ import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.navigation.NavigationBarView
-import com.google.android.material.color.MaterialColors
 import com.google.android.material.snackbar.Snackbar
 import rikka.shizuku.Shizuku
 
 /**
  * The app: a top bar with the tab's help (?) and the menu, a banner while Shizuku isn't ready,
- * and a bottom bar with a tab per section (a rail down the side in landscape). A dot on a tab
- * means that section is on.
+ * and a bottom bar with a tab per section (a rail down the side in landscape).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -202,19 +200,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun refresh() {
         refreshBanner()
-        // A dot on each tab whose section is on.
-        val dot = MaterialColors.getColor(nav, com.google.android.material.R.attr.colorPrimary)
-        for (feature in Feature.entries) {
-            if (feature.settings.isEnabled(this)) {
-                nav.getOrCreateBadge(feature.navId).apply {
-                    isVisible = true
-                    backgroundColor = dot
-                    setContentDescriptionNumberless(getString(R.string.feature_on))
-                }
-            } else {
-                nav.getBadge(feature.navId)?.isVisible = false
-            }
-        }
         (supportFragmentManager.findFragmentByTag(current.name) as? Refreshable)?.refresh()
     }
 

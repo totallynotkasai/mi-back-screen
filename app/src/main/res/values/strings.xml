@@ -9,7 +9,6 @@
     <string name="tab_battery">Battery</string>
     <string name="tab_mirror">Mirror</string>
     <string name="tab_camera">Camera</string>
-    <string name="feature_on">On</string>
     <string name="show_on_back_screen">Show on back screen</string>
     <string name="notifications_switch">Show notifications on back screen</string>
     <string name="battery_switch">Charging animation</string>
