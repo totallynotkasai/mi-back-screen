@@ -116,7 +116,9 @@ object Gallery {
     fun setFolder(context: Context, folder: Uri) {
         // Keep access after the app restarts.
         context.contentResolver.takePersistableUriPermission(folder, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        releaseFolder(context)
+        // Let go of the old folder, unless it's this one again: that would undo the line above, and
+        // the picker's own access lasts only until the app closes.
+        if (folder(context) != folder) releaseFolder(context)
         imagesDir(context).deleteRecursively()
         prefs(context).edit().putString(KEY_FOLDER, folder.toString()).apply()
         restart(context)
