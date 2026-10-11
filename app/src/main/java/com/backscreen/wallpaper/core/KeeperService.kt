@@ -237,8 +237,8 @@ class KeeperService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Once in the foreground, a command needn't post it again (first check 1, Phase 9), so a
-        // notification you swiped away stays away.
+        // Once in the foreground, a command needn't post it again, so a notification you swiped
+        // away stays away.
         updateNotification()
         when (intent?.action) {
             ACTION_RESTORE -> restore()
@@ -868,8 +868,8 @@ class KeeperService : Service() {
     /**
      * Something covered the wallpaper. Xiaomi Camera can open there again by itself: its page on
      * the main screen opens it each time you come back to it, after the camera had closed when
-     * you left it (Phase 7). Covering a running camera with the wallpaper would hide it, so it
-     * becomes the camera's lend, as if opened here. Anything else is covered over.
+     * you left it. Covering a running camera with the wallpaper would hide it, so it becomes the
+     * camera's lend, as if opened here. Anything else is covered over.
      */
     private fun checkCover(rear: Int) {
         shell(onUnavailable = {}) {
@@ -946,7 +946,7 @@ class KeeperService : Service() {
         )
     }
 
-    /** What's on the back screen, with one action that ends it; tapping it does the same (Phase 6). */
+    /** What's on the back screen, with one action that ends it; tapping it does the same. */
     private fun buildLentNotification(
         icon: Int, title: String, text: String, actionLabel: String, action: String, request: Int,
     ): Notification {

@@ -89,10 +89,10 @@ class QuickSwitch(private val keeper: KeeperService) {
     }
 
     /**
-     * With the wallpaper off, Xiaomi's launcher is under the app, and once it exists Xiaomi
-     * removes whatever is on top each time the back screen dims (plan §12.2). Restarting Xiaomi's
-     * app once, with the app in front, brings it back without its launcher, as the wallpaper
-     * does. Not while the launcher is in front: Android would start it again at once. Shell thread.
+     * With the wallpaper off, Xiaomi's launcher is under the app, and once it exists Xiaomi removes
+     * whatever is on top each time the back screen dims. Restarting Xiaomi's app once, with the app
+     * in front, brings it back without its launcher, as the wallpaper does. Not while the launcher
+     * is in front: Android would start it again at once. Shell thread.
      */
     private fun restartXiaomiIfUnder(app: TaskList.Task, rear: Int): Boolean {
         val packages = RearCommands.taskList()?.let { TaskList.packagesOn(it, rear) } ?: return false

@@ -313,7 +313,7 @@ class RearHostActivity : Activity() {
 
     // Xiaomi's back gesture strip on the rear's right edge sends BACK: it closes the notification
     // list if that's down, and otherwise the host stays put. A swipe left that starts on the strip
-    // reaches us only as BACK, so that opens the camera, as a swipe left does (decided in Phase 7).
+    // reaches us only as BACK, so that opens the camera, as a swipe left does.
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
@@ -488,8 +488,8 @@ class RearHostActivity : Activity() {
     private fun isLit() = display?.state == Display.STATE_ON
 
     /**
-     * Stay fully lit while unlocked: the window keeps the back screen on while it's in front
-     * (first check 3). Only the wallpaper's, never a pop-over's.
+     * Stay fully lit while unlocked: the window keeps the back screen on while it's in front.
+     * Only the wallpaper's, never a pop-over's.
      */
     private fun applyKeepLit() {
         if (keepLitWanted) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -605,7 +605,7 @@ class RearHostActivity : Activity() {
     /**
      * Back in front on a dimmed back screen, after another app such as Xiaomi Camera closed: once
      * the wallpaper has drawn its first frame again, push it to the panel. Pushed straight away,
-     * the panel got the wallpaper as it was before the camera opened, minutes old (Phase 7).
+     * the panel got the wallpaper as it was before the camera opened, minutes old.
      */
     private fun pushWhenDrawn() {
         val state = display?.state

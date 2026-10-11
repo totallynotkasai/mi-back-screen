@@ -27,7 +27,7 @@ object StayLitRule {
 
     /**
      * Whether to light the back screen as the hold starts: keeping it lit doesn't light a dimmed
-     * one, and at unlock it's dimmed, since Xiaomi's doze started at the lock (first check 3).
+     * one, and at unlock it's dimmed, since Xiaomi's doze started at the lock.
      */
     fun lightsUp(held: Boolean, holds: Boolean, rearLit: Boolean) = holds && !held && !rearLit
 }
@@ -36,8 +36,8 @@ object StayLitRule {
  * Light up when you pick it up. Lying on its back, the back screen goes off, and when it's
  * uncovered Xiaomi returns it to dimmed by itself; but not once one of Xiaomi's own switch-offs
  * has fired (90 s after its doze started, or 5 minutes in the dark): then it stays black until a
- * double tap (first check 4). So while the back screen is off and you're using the phone, the
- * back going from covered to clear lights it. Plain Kotlin, so it's unit tested.
+ * double tap. So while the back screen is off and you're using the phone, the back going from
+ * covered to clear lights it. Plain Kotlin, so it's unit tested.
  */
 class PickUpRule {
     private var covered = false

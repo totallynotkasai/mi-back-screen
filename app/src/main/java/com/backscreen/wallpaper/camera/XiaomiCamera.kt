@@ -129,8 +129,8 @@ class XiaomiCamera(private val keeper: KeeperService) {
 
     /**
      * Closes it, letting it finish saving. [why] is for the log. On a lit back screen that's
-     * BACK, as Xiaomi's back strip sends; a dimmed one takes no keys (checked in Phase 7), so it's
-     * stopped after a moment for the last photo to save.
+     * BACK, as Xiaomi's back strip sends; a dimmed one takes no keys (checked on the phone), so
+     * it's stopped after a moment for the last photo to save.
      */
     fun close(why: String) {
         val lend = lend ?: return

@@ -26,7 +26,7 @@ class PanPlannerTest {
         assertEquals(PanAxis.VERTICAL, photo.axis)
         // Covering 976 wide makes it 1301 tall.
         assertNear(705.0, photo.overflow, 1.0)
-        // The plan's example: about 24 s at Medium, plus easing in and out.
+        // About 24 s at Medium, plus easing in and out.
         assertNear(24_000.0, photo.sweepMs, 1600.0)
 
         val tall = plan(1080, 1920)

@@ -117,7 +117,7 @@ data class RearSnapshot(
  *
  * A lend is saved with the phone's boot count and forgotten after a restart, since no app's
  * task survives one. Not on BOOT_COMPLETED: on Android 15 and later that also arrives when this
- * app comes back from a force stop, with the lent app still on the back screen (Phase 6).
+ * app comes back from a force stop, with the lent app still on the back screen.
  */
 @MainThread
 object RearState {

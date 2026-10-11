@@ -64,7 +64,7 @@ object DisplaySettings {
 
     /**
      * Light up when you pick it up. On by default, unlike other new options, since it puts right
-     * what Xiaomi gets wrong rather than adding something (decided before Phase 9).
+     * what Xiaomi gets wrong rather than adding something.
      */
     fun wakeOnPickUp(context: Context) = prefs(context).getBoolean(KEY_WAKE_ON_PICKUP, true)
 

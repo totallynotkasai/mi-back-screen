@@ -19,7 +19,7 @@ class CoverTimerTest {
 
     @Test
     fun aBriefCoverDoesNot() {
-        // Holding the phone to watch the back screen covered it for 1.1 and 1.25 s (Phase 6).
+        // Holding the phone to watch the back screen covered it for 1.1 and 1.25 s.
         val timer = CoverTimer()
         timer.reading(covered = false, now = 0)
         timer.reading(covered = true, now = 1000)

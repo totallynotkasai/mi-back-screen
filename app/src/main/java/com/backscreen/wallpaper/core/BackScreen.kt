@@ -81,7 +81,7 @@ object BackScreen {
 
     /**
      * How rounded [display]'s corners are, as a share of its natural height: 101 of 596 on the
-     * back screen, the same at every corner (first check 5, Phase 9). Null if it doesn't say.
+     * back screen, the same at every corner (measured on the phone). Null if it doesn't say.
      */
     fun cornerShare(display: Display): Float? {
         val radius = display.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)?.radius ?: return null

@@ -37,7 +37,7 @@ object MirrorSettings : FeatureSettings("mirror") {
     private const val KEY_TILE_ADDED = "tile_added"
     private const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
 
-    /** 2 minutes by default (decided before Phase 6). */
+    /** 2 minutes by default. */
     fun keepLit(context: Context) =
         KeepLit.entries.firstOrNull { it.name == prefs(context).getString(KEY_KEEP_LIT, null) } ?: KeepLit.MINUTES_2
 
@@ -47,7 +47,7 @@ object MirrorSettings : FeatureSettings("mirror") {
 
     /**
      * Covering the back for a moment brings the app back. Off by default: holding the phone to
-     * watch the back screen covered the sensor now and then (Phase 6).
+     * watch the back screen covered the sensor now and then.
      */
     fun coverReturn(context: Context) = prefs(context).getBoolean(KEY_COVER_RETURN, false)
 

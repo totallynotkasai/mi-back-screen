@@ -40,7 +40,7 @@ object BatterySettings : FeatureSettings("battery") {
         prefs(context).edit().putBoolean(KEY_OVER_XIAOMI, on).apply()
     }
 
-    /** Ring by default, as before Phase 9. */
+    /** Ring by default, as in earlier versions. */
     fun style(context: Context): ChargingStyle {
         val name = prefs(context).getString(KEY_STYLE, null)
         return ChargingStyle.entries.firstOrNull { it.name == name } ?: ChargingStyle.RING

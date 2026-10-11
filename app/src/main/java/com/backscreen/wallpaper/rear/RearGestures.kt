@@ -66,9 +66,9 @@ object Swipes {
 
 /**
  * A swipe left that starts on Xiaomi's back strip (from x 914) never reaches the host as a
- * swipe: Xiaomi's strip takes it and sends BACK. In Phase 7, half the natural swipes left that
- * opened the camera started there (5 of 10), so BACK on the wallpaper counts as a swipe left too
- * (decided then). Plain Kotlin, so it's unit tested.
+ * swipe: Xiaomi's strip takes it and sends BACK. In testing, half the natural swipes left that
+ * opened the camera started there (5 of 10), so BACK on the wallpaper counts as a swipe left too.
+ * Plain Kotlin, so it's unit tested.
  */
 object EdgeSwipe {
     /**

@@ -105,7 +105,7 @@ enum class TweakKind(val key: String, val label: String) {
 
     /**
      * Whether the back screen is turned. It turns only with both a locked rotation and the display
-     * fixed to it; HyperOS ignores the lock on its own (checked in Phase 6).
+     * fixed to it; HyperOS ignores the lock on its own (checked on the phone).
      */
     ROTATION("rotation", "Back screen rotation") {
         override fun read(rear: Int): Current? {

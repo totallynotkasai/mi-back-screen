@@ -590,7 +590,7 @@ class ChargingLayer @JvmOverloads constructor(
     private fun alpha255(opacity: Float) = (255 * opacity.coerceIn(0f, 1f)).roundToInt()
 
     companion object {
-        /** The 17 Pro Max's back screen: 101 px corners on a 596 px height (first check 5, Phase 9). */
+        /** The 17 Pro Max's back screen: 101 px corners on a 596 px height (measured on the phone). */
         const val DEFAULT_CORNER_SHARE = 101f / 596f
 
         private const val STILL_MS = 3000L

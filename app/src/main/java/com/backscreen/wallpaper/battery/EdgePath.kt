@@ -11,10 +11,10 @@ data class EdgePoint(val x: Float, val y: Float)
 
 /**
  * The back screen's outline: a rectangle [width] x [height] with every corner rounded to
- * [radius] (101 px on the 17 Pro Max's 976 x 596, from the display's own rounded corners; first
- * check 5, Phase 9). The picture shows round the camera lenses, so the outline runs round the
- * camera side too. The Edge glow follows it, clockwise from the top edge's left end, so a share
- * of the way round can stand for the battery's level. Plain Kotlin, so it's unit tested.
+ * [radius] (101 px on the 17 Pro Max's 976 x 596, from the display's own rounded corners). The
+ * picture shows round the camera lenses, so the outline runs round the camera side too. The
+ * Edge glow follows it, clockwise from the top edge's left end, so a share of the way round can
+ * stand for the battery's level. Plain Kotlin, so it's unit tested.
  */
 class EdgePath(val width: Float, val height: Float, radius: Float) {
     val radius = radius.coerceIn(0f, min(width, height) / 2)

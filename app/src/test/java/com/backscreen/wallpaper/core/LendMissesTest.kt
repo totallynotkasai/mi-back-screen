@@ -46,7 +46,7 @@ class LendMissesTest {
 
     @Test
     fun oneMissIsEnoughWhenTheWallpaperIsShowingAgain() {
-        // Xiaomi Camera closed from Xiaomi's back strip, and the wallpaper came back (Phase 7).
+        // Xiaomi Camera closed from Xiaomi's back strip, and the wallpaper came back.
         assertTrue(LendMisses().check(false, wallpaperShowing = true))
         // But the app still in front, or an unread list, doesn't end it.
         assertFalse(LendMisses().check(true, wallpaperShowing = true))
@@ -71,8 +71,8 @@ class LendMissesTest {
 
     @Test
     fun xiaomiCameraIsFoundByItsPackage() {
-        // Its task isn't known when it's opened. Taken on the phone with it up (Phase 7): its
-        // own page is in front on the main screen, and the camera on the back screen.
+        // Its task isn't known when it's opened. Taken on the phone with it up: its own page
+        // is in front on the main screen, and the camera on the back screen.
         val camera = Lend(LendReason.CAMERA, -1, "com.android.camera")
         val up = """
             RootTask id=3453 bounds=[0,0][1200,2608] displayId=0 userId=0

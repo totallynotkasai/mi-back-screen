@@ -8,8 +8,8 @@ import android.os.SystemClock
  * and an app's first screen goes behind on BACK rather than closing). Plain Kotlin, so it's unit
  * tested.
  *
- * One miss isn't enough: `am stack list` once left out the back screen's task altogether (plan
- * §12.6). Two in a row are.
+ * One miss isn't enough: `am stack list` once left out the back screen's task altogether. Two
+ * in a row are.
  */
 class LendMisses(private val limit: Int = MISSES_TO_END) {
     private var misses = 0

@@ -58,8 +58,8 @@ class TaskListTest {
         assertEquals(emptyList<String>(), TaskList.packagesOn(ten, 1))
     }
 
-    // Trimmed from `am stack list` on the phone during Phase 6: YouTube full screen and sideways,
-    // over the home screen and recents, with the wallpaper on the back screen.
+    // Trimmed from `am stack list` on the phone: YouTube full screen and sideways, over the home
+    // screen and recents, with the wallpaper on the back screen.
     private val youtubeInFront = """
         RootTask id=3377 bounds=[0,0][2608,1200] displayId=0 userId=0
          configuration={1.25 234mcc30mnc [en_US] ldltr sw400dp w869dp h400dp 480dpi nrml long hdr widecg land uimode=15 finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 2608, 1200) mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_270} display=0}

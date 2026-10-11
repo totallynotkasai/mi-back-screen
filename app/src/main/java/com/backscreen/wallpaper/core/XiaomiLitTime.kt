@@ -6,7 +6,7 @@ import kotlin.concurrent.thread
 /**
  * Stays lit for, on the Wallpaper tab: Xiaomi's own back screen timeout (`subscreen_display_time`),
  * set through Shizuku with the command Quick Switch already uses. After it, Xiaomi lowers the
- * brightness for 6 s more, then dims (first check 2, Phase 9).
+ * brightness for 6 s more, then dims (measured on the phone).
  *
  * Xiaomi's own value is saved the first time it's changed, and As set puts it back. While a lend
  * has the timeout raised (Quick Switch's Back screen stays lit), a change here leaves it raised and

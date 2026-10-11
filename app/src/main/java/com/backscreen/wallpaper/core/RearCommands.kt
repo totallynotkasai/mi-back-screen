@@ -16,7 +16,7 @@ object RearCommands {
     const val CAMERA_PACKAGE = "com.android.camera"
     private const val REAR_TIMEOUT = "subscreen_display_time"
 
-    // How Xiaomi's own back screen opens its camera there (seen in Phase 0): NEW_TASK,
+    // How Xiaomi's own back screen opens its camera there (seen on the phone): NEW_TASK,
     // SINGLE_TOP, EXCLUDE_FROM_RECENTS, RESET_TASK_IF_NEEDED and CLEAR_TASK, with no extras.
     private const val CAMERA_FLAGS = "0x30a08000"
     private val FIXED_ROTATION_MODES = setOf("default", "enabled", "disabled", "enabled_if_no_auto_rotation")
