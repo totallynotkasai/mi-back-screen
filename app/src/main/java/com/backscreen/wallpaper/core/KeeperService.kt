@@ -21,6 +21,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.Display
 import android.view.Surface
+import com.backscreen.wallpaper.MainActivity
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.battery.BatterySettings
 import com.backscreen.wallpaper.battery.ChargingMonitor
@@ -40,6 +41,8 @@ import com.backscreen.wallpaper.rear.BackCover
 import com.backscreen.wallpaper.rear.BackSensor
 import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.wallpaper.ClockAlarm
+import com.backscreen.wallpaper.wallpaper.FolderAccess
+import com.backscreen.wallpaper.wallpaper.Gallery
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import rikka.shizuku.Shizuku
 import java.util.concurrent.Executors
@@ -337,6 +340,8 @@ class KeeperService : Service() {
         WallpaperSettings.setEnabled(this, true)
         RearState.wallpaperChanged(this, true)
         displayOptions.update()
+        // Says so if its folder can't be opened.
+        updateNotification()
         BackScreen.mainHandler.removeCallbacks(popoverDone)
         // You just asked for it, so light the back screen up to show it (a schedule doesn't).
         wakeWhenShown = byYou
@@ -464,6 +469,8 @@ class KeeperService : Service() {
         RearState.wallpaperChanged(this, false)
         displayOptions.update()
         stopWaiting()
+        // A folder it couldn't open no longer matters.
+        updateNotification()
         awaitingDirectLaunch = false
         wakeWhenShown = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
@@ -494,6 +501,7 @@ class KeeperService : Service() {
         RearState.wallpaperChanged(this, false)
         displayOptions.update()
         stopWaiting()
+        updateNotification()
         RearHostActivity.finishCurrent()
         ClockAlarm.update(this)
         stopIfIdle()
@@ -634,6 +642,14 @@ class KeeperService : Service() {
     /** Xiaomi's settings are still changed, nothing is lent, and putting them back hasn't worked yet. */
     private fun puttingBack(lend: Lend?) =
         putBackStalled && lend == null && (RearTweaks.pending(this) || XiaomiLitTime.owed(this))
+
+    /** The wallpaper is on, and its folder couldn't be opened when last listed. */
+    private fun folderLost() = WallpaperSettings.isEnabled(this) && Gallery.access(this) != FolderAccess.OK
+
+    /** The gallery found its folder can or can't be opened now, or one was chosen. */
+    fun folderAccessChanged() {
+        updateNotification()
+    }
 
     /**
      * Mirror was switched on or off, or one of its options changed. Switching it off brings back
@@ -1046,10 +1062,12 @@ class KeeperService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(KEEPER_CHANNEL_ID, getString(R.string.keeper_channel), NotificationManager.IMPORTANCE_MIN)
         )
+        val folderLost = folderLost()
         val text = getString(
             when {
                 isWaitingForShizuku -> R.string.keeper_waiting
                 puttingBack(lend = null) -> R.string.keeper_putting_back
+                folderLost -> R.string.keeper_folder_lost
                 else -> R.string.keeper_text
             }
         )
@@ -1062,9 +1080,19 @@ class KeeperService : Service() {
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_image), getString(R.string.hide), hide).build())
+            .apply { if (folderLost) setContentIntent(showWallpaperIntent()) }
             .setOngoing(true)
             .build()
     }
+
+    /** Opens the app at the Wallpaper tab, where the folder can be chosen again. */
+    private fun showWallpaperIntent(): PendingIntent = PendingIntent.getActivity(
+        this, REQUEST_SHOW_WALLPAPER,
+        Intent(this, MainActivity::class.java)
+            .setAction(ACTION_SHOW_WALLPAPER)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
 
     /**
      * Shows whether it's waiting for Shizuku or to put Xiaomi's settings back, or which app is on
@@ -1075,7 +1103,7 @@ class KeeperService : Service() {
     private fun updateNotification(): Boolean {
         if (destroyed) return false
         val lend = (RearState.owner(this) as? RearOwner.Lent)?.lend
-        val says = NotificationSays(lend, isWaitingForShizuku && lend == null, puttingBack(lend))
+        val says = NotificationSays(lend, isWaitingForShizuku && lend == null, puttingBack(lend), lend == null && folderLost())
         if (says == posted) return true
         try {
             startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
@@ -1087,8 +1115,11 @@ class KeeperService : Service() {
         return true
     }
 
-    /** What the notification says: which app is on the back screen, or whether it's waiting for Shizuku or a put-back. */
-    private data class NotificationSays(val lend: Lend?, val waiting: Boolean, val puttingBack: Boolean)
+    /**
+     * What the notification says: which app is on the back screen, or whether it's waiting for
+     * Shizuku or a put-back, or can't open the wallpaper's folder.
+     */
+    private data class NotificationSays(val lend: Lend?, val waiting: Boolean, val puttingBack: Boolean, val folderLost: Boolean)
 
     companion object {
         const val ACTION_APPLY = "com.backscreen.wallpaper.APPLY"
@@ -1124,6 +1155,9 @@ class KeeperService : Service() {
         /** With the camera's actions: where it was asked from, for the log. */
         const val EXTRA_WHY = "why"
 
+        /** Opens the app at the Wallpaper tab: the notification, when the folder needs choosing again. */
+        const val ACTION_SHOW_WALLPAPER = "com.backscreen.wallpaper.SHOW_WALLPAPER"
+
         private const val ACTION_SUB_SCREEN_ON = "miui.intent.action.SUB_SCREEN_ON"
 
         /** The "Mi Back Screen is on" notification's channel, which Hide opens. */
@@ -1136,6 +1170,7 @@ class KeeperService : Service() {
         private const val REQUEST_BRING_BACK = 1
         private const val REQUEST_CLOSE_CAMERA = 2
         private const val REQUEST_HIDE = 3
+        private const val REQUEST_SHOW_WALLPAPER = 4
 
         // How long a sent app's light waits for the main screen to turn upright or off.
         private const val LEND_LIGHT_WINDOW_MS = 30_000L

@@ -87,8 +87,9 @@ class PreviewBackdrop(
             val scaling = WallpaperSettings.scalingInUse(app)
             val drawable = try {
                 uri?.let { BackScreen.loadImage(app, it, display, scaling) }
-            } catch (e: Exception) {
-                BackScreen.log("Preview failed: ${e.message}")
+            } catch (e: Throwable) {
+                // Out of memory too: uncaught on this thread, it would take the app down.
+                BackScreen.log("Preview failed: $e")
                 null
             }
             val colour = drawable?.let(WallpaperColour::of)

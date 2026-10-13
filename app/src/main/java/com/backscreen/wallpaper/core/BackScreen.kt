@@ -16,13 +16,11 @@ import android.util.Size
 import android.view.Display
 import android.view.RoundedCorner
 import android.view.Surface
+import com.backscreen.wallpaper.wallpaper.DecodeSize
 import com.backscreen.wallpaper.wallpaper.Scaling
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * Shared helpers: finding the rear display, loading images and a small log. Each section keeps
@@ -98,8 +96,9 @@ object BackScreen {
     }
 
     /**
-     * Decodes [uri] sized for [display] in its natural orientation and [scaling]. Works off the
-     * main thread; [start] it once shown.
+     * Decodes [uri] sized for [display] in its natural orientation and [scaling], never bigger
+     * than [DecodeSize] allows. Works off the main thread; [start] it once shown. Callers catch
+     * [Throwable]: an image can still be too big for the memory left.
      */
     fun loadImage(context: Context, uri: Uri, display: Display, scaling: Scaling): Drawable {
         val screen = naturalSize(display)
@@ -109,22 +108,10 @@ object BackScreen {
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             val w = info.size.width
             val h = info.size.height
-            if (scaling == Scaling.NONE) {
-                // Shown at its own size, centred: keep just the middle that fits on the screen.
-                val left = max(0, (w - screen.width) / 2)
-                val top = max(0, (h - screen.height) / 2)
-                decoder.crop = Rect(left, top, left + min(w, screen.width), top + min(h, screen.height))
-                return@decodeDrawable
-            }
-            // Downscale large images to just what's shown; saves memory and battery.
-            val sx = screen.width.toFloat() / w
-            val sy = screen.height.toFloat() / h
-            val scale = if (scaling == Scaling.FIT) min(sx, sy) else max(sx, sy)
-            if (scale < 1f) {
-                decoder.setTargetSize(
-                    max(1, (info.size.width * scale).roundToInt()),
-                    max(1, (info.size.height * scale).roundToInt())
-                )
+            val size = DecodeSize.of(w, h, screen.width, screen.height, scaling)
+            when {
+                size.crop -> decoder.crop = Rect(size.left, size.top, size.left + size.width, size.top + size.height)
+                size.width != w || size.height != h -> decoder.setTargetSize(size.width, size.height)
             }
         }
     }

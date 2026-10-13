@@ -170,6 +170,8 @@ class MirrorFragment : Fragment(R.layout.fragment_mirror), Refreshable {
 
     /** Android's own one-tap prompt to add the tile. */
     private fun addTile() {
+        // The answer can come after the phone was turned and this tab made again, so it saves through the app.
+        val app = ctx.applicationContext
         val statusBar = ctx.getSystemService(StatusBarManager::class.java)
         statusBar.requestAddTileService(
             QuickSwitchTile.component(ctx),
@@ -181,7 +183,7 @@ class MirrorFragment : Fragment(R.layout.fragment_mirror), Refreshable {
             when (result) {
                 StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED,
                 StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> {
-                    MirrorSettings.setTileAdded(ctx, true)
+                    MirrorSettings.setTileAdded(app, true)
                     if (view != null) snackbar(R.string.tile_added_now)
                 }
                 StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> {}

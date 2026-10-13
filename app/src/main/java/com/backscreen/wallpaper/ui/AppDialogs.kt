@@ -1,6 +1,8 @@
 package com.backscreen.wallpaper.ui
 
+import android.app.Activity
 import android.app.AlarmManager
+import android.app.Dialog
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -11,6 +13,7 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.LayoutInflater
@@ -21,7 +24,13 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.VisibleForTesting
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDialogFragment
+import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.FragmentManager
+import com.backscreen.wallpaper.MainActivity
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.camera.CameraSettings
 import com.backscreen.wallpaper.core.BackScreen
@@ -43,43 +52,135 @@ import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import rikka.shizuku.Shizuku
 
-/** The dialogs behind the top bar: each tab's help, and the menu's Diagnostics, Setup help and About. */
-object AppDialogs {
-    private const val REFRESH_MS = 1000L
+/**
+ * A dialog from the menu that keeps itself up to date while it's on screen: once a second,
+ * between [onStart] and [onStop]. As a fragment it survives turning the phone, and the old
+ * screen's refresh stops with it.
+ */
+abstract class RefreshingDialog : AppCompatDialogFragment() {
 
-    /** What's happening on the back screen, and the app's recent log, kept up to date while open. */
-    fun diagnostics(activity: AppCompatActivity) {
-        val dp = activity.resources.displayMetrics.density
-        val text = TextView(activity).apply {
+    @VisibleForTesting
+    val refresher = object : Runnable {
+        override fun run() {
+            update()
+            BackScreen.mainHandler.postDelayed(this, REFRESH_MS)
+        }
+    }
+
+    /** Brings what it shows up to date. */
+    protected abstract fun update()
+
+    override fun onStart() {
+        super.onStart()
+        refresher.run()
+    }
+
+    override fun onStop() {
+        BackScreen.mainHandler.removeCallbacks(refresher)
+        super.onStop()
+    }
+
+    companion object {
+        private const val REFRESH_MS = 1000L
+
+        /** Shows [make]'s dialog under [tag], unless it's showing already (two quick taps open one). */
+        fun show(fm: FragmentManager, tag: String, make: () -> DialogFragment) {
+            if (fm.findFragmentByTag(tag) != null || fm.isStateSaved) return
+            make().showNow(fm, tag)
+        }
+    }
+}
+
+/** What's happening on the back screen, and the app's recent log. */
+class DiagnosticsDialog : RefreshingDialog() {
+    private var text: TextView? = null
+
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val context = requireContext()
+        val dp = context.resources.displayMetrics.density
+        val text = TextView(context).apply {
             setTextAppearance(MaterialR.style.TextAppearance_Material3_BodySmall)
             typeface = Typeface.MONOSPACE
-            setTextColor(MaterialColors.getColor(activity, MaterialR.attr.colorOnSurfaceVariant, 0))
+            setTextColor(MaterialColors.getColor(context, MaterialR.attr.colorOnSurfaceVariant, 0))
             setTextIsSelectable(true)
             setPadding((24 * dp).toInt(), (8 * dp).toInt(), (24 * dp).toInt(), 0)
         }
-        val update = object : Runnable {
-            override fun run() {
-                text.text = diagnosticsText(activity)
-                BackScreen.mainHandler.postDelayed(this, REFRESH_MS)
-            }
-        }
-        val dialog = MaterialAlertDialogBuilder(activity)
+        this.text = text
+        return MaterialAlertDialogBuilder(context)
             .setTitle(R.string.diagnostics)
-            .setView(ScrollView(activity).apply { addView(text) })
+            .setView(ScrollView(context).apply { addView(text) })
             .setNeutralButton(R.string.copy, null)
             .setPositiveButton(R.string.close, null)
-            .setOnDismissListener { BackScreen.mainHandler.removeCallbacks(update) }
-            .show()
-        // Copying leaves it open.
-        dialog.getButton(DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
-            activity.getSystemService(ClipboardManager::class.java)
-                .setPrimaryClip(ClipData.newPlainText(activity.getString(R.string.diagnostics), text.text))
-            Toast.makeText(activity, R.string.copied, Toast.LENGTH_SHORT).show()
-        }
-        update.run()
+            .create()
     }
 
-    private fun diagnosticsText(context: Context): String {
+    override fun onStart() {
+        super.onStart()
+        // Copying leaves it open.
+        (dialog as AlertDialog).getButton(DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
+            val context = requireContext()
+            context.getSystemService(ClipboardManager::class.java)
+                .setPrimaryClip(ClipData.newPlainText(context.getString(R.string.diagnostics), text?.text))
+            Toast.makeText(context, R.string.copied, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun update() {
+        text?.text = AppDialogs.diagnosticsText(requireContext())
+    }
+
+    override fun onDestroyView() {
+        text = null
+        super.onDestroyView()
+    }
+
+    companion object {
+        const val TAG = "diagnostics"
+
+        fun show(fm: FragmentManager) = show(fm, TAG, ::DiagnosticsDialog)
+    }
+}
+
+/** What the app needs allowed, each with whether it is and how to allow it. */
+class SetupHelpDialog : RefreshingDialog() {
+    private var list: LinearLayout? = null
+
+    // What the steps show, so they're rebuilt only when something changes and a tap on a button is never lost.
+    private var shown: List<Any>? = null
+
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val context = requireContext()
+        val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        this.list = list
+        shown = null
+        return MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.setup_help)
+            .setView(ScrollView(context).apply { addView(list) })
+            .setPositiveButton(R.string.close, null)
+            .create()
+    }
+
+    override fun update() {
+        val list = list ?: return
+        shown = AppDialogs.fillSetupSteps(requireActivity(), list, shown)
+    }
+
+    override fun onDestroyView() {
+        list = null
+        super.onDestroyView()
+    }
+
+    companion object {
+        const val TAG = "setup_help"
+
+        fun show(fm: FragmentManager) = show(fm, TAG, ::SetupHelpDialog)
+    }
+}
+
+/** The dialogs behind the top bar: each tab's help, About, and what Diagnostics and Setup help show. */
+object AppDialogs {
+
+    fun diagnosticsText(context: Context): String {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
         val rear = BackScreen.findRearDisplay(context)
         return listOfNotNull(
@@ -141,31 +242,8 @@ object AppDialogs {
         else -> R.string.shizuku_not_running
     }
 
-    /** What the app needs allowed, each with whether it is and how to allow it. */
-    fun setupHelp(activity: AppCompatActivity, requestShizuku: () -> Unit) {
-        val list = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-        val dialog = MaterialAlertDialogBuilder(activity)
-            .setTitle(R.string.setup_help)
-            .setView(ScrollView(activity).apply { addView(list) })
-            .setPositiveButton(R.string.close, null)
-            .create()
-        // Rebuilt only when something changes, so a tap on a button is never lost.
-        var shown: List<Any>? = null
-        val update = object : Runnable {
-            override fun run() {
-                shown = fillSetupSteps(activity, list, requestShizuku, shown)
-                BackScreen.mainHandler.postDelayed(this, REFRESH_MS)
-            }
-        }
-        dialog.setOnDismissListener { BackScreen.mainHandler.removeCallbacks(update) }
-        dialog.show()
-        update.run()
-    }
-
-    /** Fills [list] with the steps, unless they're as [shown]; returns what it shows. */
-    private fun fillSetupSteps(
-        activity: AppCompatActivity, list: LinearLayout, requestShizuku: () -> Unit, shown: List<Any>?,
-    ): List<Any> {
+    /** Fills [list] with Setup help's steps, unless they're as [shown]; returns what it shows. */
+    fun fillSetupSteps(activity: Activity, list: LinearLayout, shown: List<Any>?): List<Any> {
         val shizukuReady = RearCommands.isReady()
         val alarms = activity.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
         val battery = activity.getSystemService(PowerManager::class.java)
@@ -193,8 +271,8 @@ object AppDialogs {
             list, R.string.shizuku_title,
             activity.getString(R.string.setup_shizuku_text) + "\n" + activity.getString(shizukuStatus()),
             shizukuReady,
-            if (!shizukuReady && Shizuku.pingBinder()) R.string.allow_access else null, requestShizuku,
-        )
+            if (!shizukuReady && Shizuku.pingBinder()) R.string.allow_access else null,
+        ) { (activity as? MainActivity)?.requestShizuku() }
         addStep(
             list, R.string.setup_alarms_title, activity.getString(R.string.setup_alarms_text), alarms,
             R.string.allow_alarms,

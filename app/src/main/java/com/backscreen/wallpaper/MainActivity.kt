@@ -21,8 +21,10 @@ import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.mirror.MirrorFragment
 import com.backscreen.wallpaper.notifications.NotificationsFragment
 import com.backscreen.wallpaper.ui.AppDialogs
+import com.backscreen.wallpaper.ui.DiagnosticsDialog
 import com.backscreen.wallpaper.ui.Feature
 import com.backscreen.wallpaper.ui.Refreshable
+import com.backscreen.wallpaper.ui.SetupHelpDialog
 import com.backscreen.wallpaper.wallpaper.WallpaperFragment
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import com.google.android.material.appbar.MaterialToolbar
@@ -91,7 +93,7 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.menu_help -> AppDialogs.help(this, current)
                 R.id.menu_refresh -> refreshBackScreen()
-                R.id.menu_diagnostics -> AppDialogs.diagnostics(this)
+                R.id.menu_diagnostics -> DiagnosticsDialog.show(supportFragmentManager)
                 R.id.menu_setup_help -> showSetupHelp()
                 R.id.menu_about -> AppDialogs.about(this)
                 else -> return@setOnMenuItemClickListener false
@@ -124,23 +126,29 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleIntent(intent)
     }
 
     /**
-     * The wallpaper's tile opens us to toggle when it isn't allowed to itself, and the Quick
-     * Switch tile when the service wasn't running.
+     * The wallpaper's tile opens us to toggle when it isn't allowed to itself, the Quick Switch
+     * tile when the service wasn't running, and the keeper's notification when the wallpaper's
+     * folder needs choosing again. Each is done once: afterwards the intent is a plain one.
      */
     private fun handleIntent(intent: Intent?) {
-        when (intent?.action) {
-            KeeperService.ACTION_TOGGLE -> toggleWallpaper()
-            KeeperService.ACTION_QUICK_SWITCH -> {
+        intent ?: return
+        when (LaunchCommand.of(intent.action, intent.flags)) {
+            LaunchCommand.TOGGLE -> toggleWallpaper()
+            LaunchCommand.QUICK_SWITCH -> {
                 // We're in front now, so there's nothing to send; start the service for the next tap.
                 selectTab(Feature.MIRROR)
                 KeeperService.start(this, KeeperService.ACTION_UPDATE)
                 snackbar(R.string.qs_was_asleep, Snackbar.LENGTH_LONG)
             }
+            LaunchCommand.SHOW_WALLPAPER -> selectTab(Feature.WALLPAPER)
+            null -> return
         }
+        setIntent(Intent(intent).setAction(Intent.ACTION_MAIN))
     }
 
     private fun selectTab(feature: Feature) {
@@ -226,11 +234,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestShizuku() {
+    /** Shizuku's own prompt to allow access: the banner's Allow access, and Setup help's. */
+    fun requestShizuku() {
         if (Shizuku.pingBinder()) Shizuku.requestPermission(REQUEST_SHIZUKU)
     }
 
-    private fun showSetupHelp() = AppDialogs.setupHelp(this, ::requestShizuku)
+    private fun showSetupHelp() = SetupHelpDialog.show(supportFragmentManager)
 
     /** Reloads everything and puts the wallpaper up afresh, for when something didn't update. */
     private fun refreshBackScreen() {

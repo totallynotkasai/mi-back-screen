@@ -47,7 +47,7 @@ class RearNotificationListener : NotificationListenerService() {
         } ?: return
         val ranking = currentRanking
         reader.execute {
-            val read = shade.map { read(it, ranking) }
+            val read = shade.mapNotNull { readSafely(it, ranking) }
             BackScreen.mainHandler.post { loaded(read) }
         }
     }
@@ -68,7 +68,7 @@ class RearNotificationListener : NotificationListenerService() {
         if (!NotificationSettings.isEnabled(this)) return
         val late = System.currentTimeMillis() - sbn.postTime
         reader.execute {
-            val n = read(sbn, rankingMap)
+            val n = readSafely(sbn, rankingMap) ?: return@execute
             BackScreen.mainHandler.post { posted(n, late) }
         }
     }
@@ -104,6 +104,18 @@ class RearNotificationListener : NotificationListenerService() {
 
     private fun removed(key: String) {
         if (active.remove(key) != null) RearHostActivity.notificationRemoved(key)
+    }
+
+    /**
+     * [read], or null if [sbn] can't be read. Any app can post a malformed notification (a bad
+     * parcel in its extras, say); it's skipped rather than crashing the app and the wallpaper,
+     * or stopping the rest being read.
+     */
+    private fun readSafely(sbn: StatusBarNotification, rankingMap: RankingMap): RearNotification? = try {
+        read(sbn, rankingMap)
+    } catch (e: RuntimeException) {
+        BackScreen.trace("Couldn't read a notification from ${sbn.packageName}: $e")
+        null
     }
 
     /** [sbn] as plain text, with its app's name, and its app's icon ready ([AppIcons]). Reader thread. */

@@ -68,8 +68,9 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
                 setImage(uri, drawable, WallpaperColour.of(drawable), fade = false)
                 BackScreen.log("Wallpaper showing on back screen")
             }
-        } catch (e: Exception) {
-            BackScreen.log("Couldn't load image: ${e.message}")
+        } catch (e: Throwable) {
+            // Out of memory too: a thrown Error here would take the app down.
+            BackScreen.log("Couldn't load image: $e")
         }
         scheduleNextImage()
     }
@@ -98,8 +99,9 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
                     if (uri == null) clearImage()
                     setNextImage(next)
                 }
-            } catch (e: Exception) {
-                BackScreen.log("Couldn't load image: ${e.message}")
+            } catch (e: Throwable) {
+                // Out of memory too: uncaught on this thread, it would take the app down.
+                BackScreen.log("Couldn't load image: $e")
                 BackScreen.mainHandler.post { if (!released) scheduleNextImage() }
             }
         }

@@ -104,20 +104,25 @@
     <string name="no_wallpaper_caption">No wallpaper. The back screen shows black.</string>
     <string name="choose_images">Choose images</string>
     <string name="choose_folder">Folder</string>
+    <string name="choose_folder_again">Choose folder again</string>
     <string name="state_on">On</string>
     <string name="state_on_black">On · black, no images</string>
     <string name="state_off">Off</string>
     <string name="state_off_xiaomi">Off · Xiaomi back screen</string>
     <string name="state_waiting_shizuku">On · waiting for Shizuku</string>
+    <string name="state_on_folder_lost">On · can\'t open your folder</string>
     <string name="copying_images">Adding images…</string>
     <string name="copy_failed">Couldn\'t add those images</string>
     <string name="folder_empty">No images in that folder</string>
+    <string name="folder_failed">Couldn\'t use that folder. Try choosing it again.</string>
     <string name="gallery_title">Gallery</string>
     <plurals name="gallery_count">
         <item quantity="one">%d image</item>
         <item quantity="other">%d images</item>
     </plurals>
     <string name="gallery_from_folder">%1$s from %2$s</string>
+    <string name="folder_lost">Can\'t open %1$s any more. Choose it again.</string>
+    <string name="folder_lost_unnamed">Can\'t open your folder any more. Choose it again.</string>
     <string name="change_every">Change every</string>
     <plurals name="every_minutes">
         <item quantity="one">%d minute</item>
@@ -385,5 +390,6 @@
     <string name="keeper_text">Android shows this while the app looks after the back screen. Hide switches it off for good; the app carries on.</string>
     <string name="keeper_waiting">Waiting for Shizuku to start</string>
     <string name="keeper_putting_back">Putting Xiaomi\'s back screen settings back once Shizuku is running</string>
+    <string name="keeper_folder_lost">Can\'t open your wallpaper folder. Tap to choose it again.</string>
     <string name="hide">Hide</string>
 </resources>

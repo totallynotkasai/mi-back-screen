@@ -61,6 +61,7 @@ No internet permission, no storage permission.
 - **Apps on the back screen:** a full-screen video may restart from the app's home page, the keyboard may open on the main screen, and some video apps show black on a second screen.
 - **Xiaomi Camera** closes itself when the back screen isn't touched for a while, even while recording, so tap it now and then during a long video.
 - **After a restart** Shizuku has to be started again (unless the phone is rooted). Mi Back Screen waits for it, then carries on.
+- **Folder images stopped showing?** Choose the folder again (Wallpaper → Folder). Android can take back access to a folder, for example after it's moved or renamed.
 
 ## How it works
 

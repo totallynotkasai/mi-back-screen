@@ -24,8 +24,8 @@ android {
         applicationId = "com.backscreen.wallpaper"
         minSdk = 33 // needed for the system photo picker (no storage permission)
         targetSdk = 35
-        versionCode = 8
-        versionName = "2.0.1"
+        versionCode = 9
+        versionName = "2.0.2"
     }
 
     signingConfigs {

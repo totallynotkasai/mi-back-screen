@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
+import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.PickVisualMediaRequest
@@ -69,6 +70,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private lateinit var clock: ClockLayer
     private lateinit var galleryCard: View
     private lateinit var gallerySummary: TextView
+    private lateinit var folderButton: Button
     private lateinit var galleryRotation: View
     private lateinit var intervalValue: TextView
     private lateinit var shuffleSwitch: MaterialSwitch
@@ -134,6 +136,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         clock = view.findViewById(R.id.clock)
         galleryCard = view.findViewById(R.id.galleryCard)
         gallerySummary = view.findViewById(R.id.gallerySummary)
+        folderButton = view.findViewById(R.id.folderButton)
         galleryRotation = view.findViewById(R.id.galleryRotation)
         intervalValue = view.findViewById(R.id.intervalValue)
         shuffleSwitch = view.findViewById(R.id.shuffleSwitch)
@@ -173,7 +176,8 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         view.findViewById<View>(R.id.emptyChooseButton).setOnClickListener(choose)
         view.findViewById<View>(R.id.previewCard).setOnClickListener(choose)
         view.findViewById<View>(R.id.removeButton).setOnClickListener { confirmRemoveImages() }
-        view.findViewById<View>(R.id.folderButton).setOnClickListener { pickFolder.launch(Gallery.folder(ctx)) }
+        // Opens where the chosen folder is, so it's quick to choose again.
+        folderButton.setOnClickListener { pickFolder.launch(Gallery.folder(ctx)) }
 
         view.findViewById<View>(R.id.intervalRow).setOnClickListener { chooseInterval() }
         SwitchRow.bind(view.findViewById(R.id.shuffleRow), shuffleSwitch)
@@ -185,7 +189,8 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
                 Gallery.skip(app)
                 BackScreen.mainHandler.post {
                     RearHostActivity.reload()
-                    if (view != null) loadPreview()
+                    // The tab's view, not this listener's: the tab may have gone since (turned, say).
+                    if (this@WallpaperFragment.view != null) loadPreview()
                 }
             }
         }
@@ -255,6 +260,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             when {
                 !enabled -> R.string.state_off_xiaomi
                 KeeperService.instance?.isWaitingForShizuku == true -> R.string.state_waiting_shizuku
+                Gallery.access(ctx) != FolderAccess.OK -> R.string.state_on_folder_lost
                 previewUri == null -> R.string.state_on_black
                 else -> R.string.state_on
             }
@@ -367,9 +373,13 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             }
             BackScreen.mainHandler.post {
                 copying.dismiss()
+                // The back screen whether or not this tab is still there: it may have been turned
+                // or left while copying, and the image on the back screen has been deleted.
+                if (error == null) showOnBackScreen(app)
                 if (view == null) return@post
                 if (error != null) snackbar(R.string.copy_failed)
-                onImagesChanged()
+                loadPreview()
+                showGallery()
             }
         }
     }
@@ -379,22 +389,17 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             Gallery.setFolder(ctx, folder)
         } catch (e: Exception) {
             BackScreen.log("Couldn't use folder: ${e.message}")
+            snackbar(R.string.folder_failed, Snackbar.LENGTH_LONG)
+            return
         }
-        val app = ctx.applicationContext
-        loader.execute {
-            BackScreen.log("Chose folder ${Gallery.folderName(app)}")
-            val empty = !Gallery.hasImages(app)
-            BackScreen.mainHandler.post { if (view != null && empty) snackbar(R.string.folder_empty, Snackbar.LENGTH_LONG) }
-        }
-        onImagesChanged()
+        onImagesChanged(folderChosen = true)
     }
 
-    private fun onImagesChanged() {
+    /** The images changed: here and on the back screen. [folderChosen]: say if it has none. */
+    private fun onImagesChanged(folderChosen: Boolean = false) {
         loadPreview()
-        showGallery()
-        if (WallpaperSettings.isEnabled(ctx) && !RearHostActivity.reload()) {
-            KeeperService.start(ctx, KeeperService.ACTION_APPLY)
-        }
+        showGallery(folderChosen)
+        showOnBackScreen(ctx.applicationContext)
     }
 
     private fun confirmRemoveImages() {
@@ -414,25 +419,40 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
     /**
      * The gallery card: there once there are images; its timing only with more than one to go
-     * through, or a folder.
+     * through, or a folder. It says if the folder can't be opened any more. With [folderChosen],
+     * logs the new folder and says if it has no images.
      */
-    private fun showGallery() {
+    private fun showGallery(folderChosen: Boolean = false) {
         val app = ctx.applicationContext
         loader.execute {
             val count = Gallery.images(app).size
             val folder = Gallery.folderName(app)
-            BackScreen.mainHandler.post { if (view != null) showGallery(count, folder) }
+            val access = Gallery.access(app)
+            if (folderChosen) BackScreen.log("Chose folder $folder: $count image(s)")
+            BackScreen.mainHandler.post {
+                if (view == null) return@post
+                showGallery(count, folder, access)
+                if (folderChosen && count == 0 && access == FolderAccess.OK) snackbar(R.string.folder_empty, Snackbar.LENGTH_LONG)
+            }
         }
     }
 
-    private fun showGallery(count: Int, folder: String?) {
+    private fun showGallery(count: Int, folder: String?, access: FolderAccess) {
         val hasFolder = Gallery.folder(ctx) != null
         galleryCard.visibility = if (count > 0 || hasFolder) View.VISIBLE else View.GONE
         fitCard.visibility = if (count > 0) View.VISIBLE else View.GONE
         galleryRotation.visibility = if (count > 1 || hasFolder) View.VISIBLE else View.GONE
         val images = resources.getQuantityString(R.plurals.gallery_count, count, count)
-        gallerySummary.text = if (folder == null) images else getString(R.string.gallery_from_folder, images, folder)
+        gallerySummary.text = when {
+            access != FolderAccess.OK ->
+                folder?.let { getString(R.string.folder_lost, it) } ?: getString(R.string.folder_lost_unnamed)
+            folder == null -> images
+            else -> getString(R.string.gallery_from_folder, images, folder)
+        }
+        folderButton.setText(if (access == FolderAccess.OK) R.string.choose_folder else R.string.choose_folder_again)
         intervalValue.text = formatInterval(Gallery.interval(ctx))
+        // The switch's summary says so too.
+        refresh()
     }
 
     private fun chooseInterval() {
@@ -603,8 +623,9 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             val scaling = WallpaperSettings.scalingInUse(app)
             val drawable = try {
                 uri?.let { BackScreen.loadImage(app, it, display, scaling) }
-            } catch (e: Exception) {
-                BackScreen.log("Preview failed: ${e.message}")
+            } catch (e: Throwable) {
+                // Out of memory too: uncaught on this thread, it would take the app down.
+                BackScreen.log("Preview failed: $e")
                 null
             }
             BackScreen.mainHandler.post {
@@ -730,5 +751,12 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
     private companion object {
         const val DEFAULT_BG_OPACITY = 50
+
+        /** The images changed: the back screen shows the gallery's first image, or black. Needs no tab. */
+        fun showOnBackScreen(app: Context) {
+            if (WallpaperSettings.isEnabled(app) && !RearHostActivity.reload()) {
+                KeeperService.start(app, KeeperService.ACTION_APPLY)
+            }
+        }
     }
 }

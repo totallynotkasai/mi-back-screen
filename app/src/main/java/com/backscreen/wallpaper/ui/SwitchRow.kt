@@ -18,6 +18,8 @@ object SwitchRow {
         switch.isClickable = false
         switch.isFocusable = false
         switch.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        // The settings say whether it's on. Restored after a rotation it could flip, and save, a stale value.
+        switch.isSaveEnabled = false
         row.accessibilityDelegate = object : View.AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
                 super.onInitializeAccessibilityNodeInfo(host, info)

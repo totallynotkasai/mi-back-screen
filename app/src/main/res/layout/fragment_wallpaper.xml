@@ -619,6 +619,7 @@
 
                             <Button
                                 android:id="@+id/alignLeft"
+                                android:saveEnabled="false"
                                 style="?attr/materialButtonOutlinedStyle"
                                 android:paddingHorizontal="4dp"
                                 android:layout_width="0dp"
@@ -628,6 +629,7 @@
 
                             <Button
                                 android:id="@+id/alignCentre"
+                                android:saveEnabled="false"
                                 style="?attr/materialButtonOutlinedStyle"
                                 android:paddingHorizontal="4dp"
                                 android:layout_width="0dp"
@@ -637,6 +639,7 @@
 
                             <Button
                                 android:id="@+id/alignRight"
+                                android:saveEnabled="false"
                                 style="?attr/materialButtonOutlinedStyle"
                                 android:paddingHorizontal="4dp"
                                 android:layout_width="0dp"
@@ -654,6 +657,7 @@
 
                             <Button
                                 android:id="@+id/alignTop"
+                                android:saveEnabled="false"
                                 style="?attr/materialButtonOutlinedStyle"
                                 android:paddingHorizontal="4dp"
                                 android:layout_width="0dp"
@@ -663,6 +667,7 @@
 
                             <Button
                                 android:id="@+id/alignMiddle"
+                                android:saveEnabled="false"
                                 style="?attr/materialButtonOutlinedStyle"
                                 android:paddingHorizontal="4dp"
                                 android:layout_width="0dp"
@@ -672,6 +677,7 @@
 
                             <Button
                                 android:id="@+id/alignBottom"
+                                android:saveEnabled="false"
                                 style="?attr/materialButtonOutlinedStyle"
                                 android:paddingHorizontal="4dp"
                                 android:layout_width="0dp"

@@ -32,8 +32,11 @@
             android:textColor="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 
+    <!-- Every row's switch has the same id, so it doesn't restore its own state after a
+         rotation: Android would give every row the last one's. The schedules set it. -->
     <com.google.android.material.materialswitch.MaterialSwitch
         android:id="@+id/scheduleSwitch"
+        android:saveEnabled="false"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content" />
 </LinearLayout>
