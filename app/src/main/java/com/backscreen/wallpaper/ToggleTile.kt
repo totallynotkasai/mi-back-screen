@@ -44,8 +44,7 @@ class ToggleTile : TileService() {
 
     @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openAppToToggle() {
-        val intent = Intent(this, MainActivity::class.java)
-            .setAction(KeeperService.ACTION_TOGGLE)
+        val intent = LaunchCommand.intent(this, KeeperService.ACTION_TOGGLE)
             // Reach an already open app through onNewIntent rather than just bringing it forward.
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

@@ -392,20 +392,42 @@ class ClockLayer @JvmOverloads constructor(
         sampleBackdrop(moving = true)
     }
 
-    /** Works out the automatic colours from the average colour under the clock. */
-    private fun sampleBackdrop(moving: Boolean = false) {
-        val src = backdrop ?: return
-        if (box.width == 0 || src.width == 0) return
-        sampled.set(box.left, box.top, box.right, box.bottom)
+    /**
+     * The background colour Auto gives for the image under the clock as it is now. While the
+     * image pans, the clock's own colours change only when its text should flip between light and
+     * dark (and not at all with both colours chosen), so they can be behind; what's drawn over the
+     * wallpaper (the banner, the list, the charging animation) takes this as it shows. One small
+     * sample of the image.
+     */
+    fun freshBgColor(): Int {
+        val src = backdrop?.takeIf { box.width > 0 && it.width > 0 } ?: return autoBgColor
+        val shades = shades(src) ?: return autoBgColor
+        return if (isLight(textColor)) shades.dark else shades.light
+    }
+
+    /** A light and a dark shade of the image under the clock, and whether light text stands out more on it. */
+    private data class Shades(val light: Int, val dark: Int, val lightText: Boolean)
+
+    /** [Shades] from the average colour under the clock in [src], or null if it can't be read. */
+    private fun shades(src: View): Shades? {
         // Where the clock is, in the image's own coordinates (they're side by side in one frame).
-        val region = Rect(sampled).apply { offset(this@ClockLayer.left - src.left, this@ClockLayer.top - src.top) }
-        val average = averageColor(src, region) ?: return
+        val region = Rect(box.left, box.top, box.right, box.bottom)
+            .apply { offset(this@ClockLayer.left - src.left, this@ClockLayer.top - src.top) }
+        val average = averageColor(src, region) ?: return null
         val hsl = FloatArray(3).also { ColorUtils.colorToHSL(average, it) }
         // A tint of the image's colour, not so strong that it's hard to read.
         val saturation = min(hsl[1], 0.45f)
         val light = ColorUtils.HSLToColor(floatArrayOf(hsl[0], saturation, 0.95f))
         val dark = ColorUtils.HSLToColor(floatArrayOf(hsl[0], saturation, 0.12f))
-        val useLight = ColorUtils.calculateContrast(light, average) >= ColorUtils.calculateContrast(dark, average)
+        return Shades(light, dark, ColorUtils.calculateContrast(light, average) >= ColorUtils.calculateContrast(dark, average))
+    }
+
+    /** Works out the automatic colours from the average colour under the clock. */
+    private fun sampleBackdrop(moving: Boolean = false) {
+        val src = backdrop ?: return
+        if (box.width == 0 || src.width == 0) return
+        sampled.set(box.left, box.top, box.right, box.bottom)
+        val (light, dark, useLight) = shades(src) ?: return
         if (moving && useLight == lightText) return
         if (light == shadeLight && dark == shadeDark && useLight == lightText) return
         val shown = shownLook()

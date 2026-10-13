@@ -39,7 +39,8 @@ class LifecycleTest {
 
     @Before
     fun addBackScreen() {
-        ShadowDisplayManager.addDisplay("w601dp-h367dp-land")
+        // Its size in pixels, as the app finds it by (976 x 596).
+        ShadowDisplayManager.addDisplay("w976dp-h596dp-land-mdpi")
     }
 
     @Test
@@ -70,7 +71,7 @@ class LifecycleTest {
     @Test
     fun aTileOpeningTheAppTogglesOnce() {
         WallpaperSettings.setEnabled(context, true)
-        val intent = Intent(context, MainActivity::class.java).setAction(KeeperService.ACTION_TOGGLE)
+        val intent = LaunchCommand.intent(context, KeeperService.ACTION_TOGGLE)
 
         val controller = Robolectric.buildActivity(MainActivity::class.java, intent).setup()
         assertFalse(WallpaperSettings.isEnabled(context))
@@ -82,8 +83,19 @@ class LifecycleTest {
     fun recentsReopeningItDoesNotToggleAgain() {
         WallpaperSettings.setEnabled(context, true)
         // What Recents sends when the task's first intent was the tile's.
-        val intent = Intent(context, MainActivity::class.java).setAction(KeeperService.ACTION_TOGGLE)
+        val intent = LaunchCommand.intent(context, KeeperService.ACTION_TOGGLE)
             .addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+
+        val controller = Robolectric.buildActivity(MainActivity::class.java, intent).setup()
+        assertTrue(WallpaperSettings.isEnabled(context))
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun anotherAppAskingMainActivityToToggleIsIgnored() {
+        WallpaperSettings.setEnabled(context, true)
+        // MainActivity is exported, so any app can send it this; only the private alias counts.
+        val intent = Intent(context, MainActivity::class.java).setAction(KeeperService.ACTION_TOGGLE)
 
         val controller = Robolectric.buildActivity(MainActivity::class.java, intent).setup()
         assertTrue(WallpaperSettings.isEnabled(context))

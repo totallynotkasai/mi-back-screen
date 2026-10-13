@@ -62,8 +62,20 @@
         </activity>
 
         <!--
-            Exported only so the Shizuku shell process can launch it. It shows nothing on the
-            main screen and closes itself unless this app's service asked for it.
+            The app's tiles and its notification open it through this private name, which no
+            other app can use; MainActivity acts on what they ask only when it comes this way
+            (see LaunchCommand).
+        -->
+        <activity-alias
+            android:name=".CommandLaunch"
+            android:exported="false"
+            android:targetActivity=".MainActivity" />
+
+        <!--
+            Exported only so the Shizuku shell process can launch it: the shell can't start an
+            activity that isn't. On either screen it closes itself at once unless it carries the
+            token this app's service gave that launch, and the main screen only ever sees it
+            on its way to the back screen.
         -->
         <activity
             android:name=".rear.RearHostActivity"

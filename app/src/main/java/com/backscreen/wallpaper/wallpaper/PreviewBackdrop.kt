@@ -32,9 +32,11 @@ class PreviewBackdrop(
     private var loads = 0
     private var released = false
 
-    // What it was loaded for: whether the wallpaper was on, and its image.
+    // What it was loaded for: whether the wallpaper was on, and the image the gallery said was
+    // showing then. Not the image it got, which is none while the folder can't be read: that
+    // would differ every time, and load again every second.
     private var loadedFor: Boolean? = null
-    private var uri: Uri? = null
+    private var asked: Uri? = null
 
     /** The image's colour for the charging animation's Auto ([WallpaperColour]), or null for none. */
     var colour: Int? = null
@@ -61,7 +63,7 @@ class PreviewBackdrop(
     /** Catches up with the wallpaper's switch, image and clock, and charging. The tab calls this every second. */
     fun refresh() {
         val wallpaperOn = WallpaperSettings.isEnabled(context)
-        if (wallpaperOn != loadedFor || (wallpaperOn && Gallery.shown(context) != uri)) load(wallpaperOn)
+        if (wallpaperOn != loadedFor || (wallpaperOn && Gallery.shown(context) != asked)) load(wallpaperOn)
         showClock(wallpaperOn)
         showGlow(wallpaperOn)
     }
@@ -75,18 +77,17 @@ class PreviewBackdrop(
         loadedFor = wallpaperOn
         val load = ++loads
         if (!wallpaperOn) {
-            uri = null
+            asked = null
             show(null, null, Scaling.FILL)
             return
         }
         val display = BackScreen.findRearDisplay(context) ?: frame.display ?: return
         val app = context.applicationContext
-        uri = Gallery.shown(context)
+        asked = Gallery.shown(context)
         loader.execute {
-            val uri = Gallery.current(app)
             val scaling = WallpaperSettings.scalingInUse(app)
             val drawable = try {
-                uri?.let { BackScreen.loadImage(app, it, display, scaling) }
+                Gallery.decodeCurrent(app, advance = false) { BackScreen.loadImage(app, it, display, scaling) }.result
             } catch (e: Throwable) {
                 // Out of memory too: uncaught on this thread, it would take the app down.
                 BackScreen.log("Preview failed: $e")
@@ -95,7 +96,6 @@ class PreviewBackdrop(
             val colour = drawable?.let(WallpaperColour::of)
             BackScreen.mainHandler.post {
                 if (released || load != loads) return@post
-                this.uri = uri
                 show(drawable, colour, scaling)
             }
         }

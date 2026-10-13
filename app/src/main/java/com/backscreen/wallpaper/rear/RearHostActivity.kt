@@ -19,6 +19,7 @@ import com.backscreen.wallpaper.camera.CameraSettings
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.HostMode
 import com.backscreen.wallpaper.core.KeeperService
+import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.notifications.NotificationAccess
@@ -49,7 +50,9 @@ import java.lang.ref.WeakReference
  *
  * KeeperService launches it straight onto the rear; if HyperOS won't allow that, it's launched
  * on the main display (transparent, so it doesn't flash) and its task moved to the rear, where
- * it's recreated. It shows what [RearState] says: the wallpaper, or, with the wallpaper off, a
+ * it's recreated. Each launch carries a token from the keeper, and without the latest one it
+ * closes at once: it's exported so the shell can launch it, which lets any app try. It shows
+ * what [RearState] says: the wallpaper, or, with the wallpaper off, a
  * pop-over over Xiaomi's screen, which is black with just the charging animation, and closes
  * when that's done.
  *
@@ -84,11 +87,19 @@ class RearHostActivity : Activity() {
     private var chargingShown = 0f
     private var shadeShown = 0f
 
+    // The charging animation playing, to carry over if the window is rebuilt.
+    private var chargingPlaying: ChargingStatus? = null
+
     private val redraw = Runnable {
         if (!isDestroyed) window.decorView.invalidate()
     }
     private val chargingGiveUp = Runnable { giveUpCharging() }
     private val notificationGiveUp = Runnable { showDueNotificationStill() }
+    private val strandedOnMain = Runnable {
+        if (isFinishing || isDestroyed) return@Runnable
+        intent.getStringExtra(RearCommands.EXTRA_TOKEN)?.let { KeeperService.instance?.abandonHost("it was still on the main screen", it) }
+        finishQuietly()
+    }
 
     private val swipes = object : RearGestures.Listener {
         override fun onSwipe(swipe: Swipe) {
@@ -123,17 +134,34 @@ class RearHostActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Exported, since the shell launches it; so on either screen it closes unless the keeper
+        // asked for this launch, and Xiaomi's screen isn't the one that should be there.
+        val keeper = KeeperService.instance
+        val token = intent.getStringExtra(RearCommands.EXTRA_TOKEN)
+        if (keeper == null || token == null || token != keeper.hostToken || RearState.owner(this) == RearOwner.Xiaomi) {
+            BackScreen.log("Back screen window opened without being asked for; closing it")
+            finishQuietly()
+            // A launch of ours overtaken by a newer one, which this window may have taken as it went.
+            keeper?.onHostRefused()
+            return
+        }
         current = WeakReference(this)
         setShowWhenLocked(true)
 
         val display = display ?: return
         if (display.displayId == Display.DEFAULT_DISPLAY) {
-            val keeper = KeeperService.instance
-            if (keeper == null) finishQuietly() else keeper.onHostCreatedOnMain(taskId)
+            // Only on its way to the back screen. Meanwhile touches go through it to the main
+            // screen, and if it's still here in a moment, it closes rather than sit over it.
+            window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+            BackScreen.mainHandler.postDelayed(strandedOnMain, STRANDED_MS)
+            keeper.onHostCreatedOnMain(taskId, token)
             return
         }
         onRear = true
         popover = RearState.owner(this) == RearOwner.Popover
+        // Rebuilt for a change of dark mode, font size or density: what was due or showing carries on.
+        val carried = lastNonConfigurationInstance as? Carried
+        if (carried != null) BackScreen.log("Back screen window rebuilt")
 
         // Opaque on the rear, so the system doesn't need to draw Xiaomi's launcher behind us.
         setTranslucent(false)
@@ -151,17 +179,35 @@ class RearHostActivity : Activity() {
 
         getSystemService(DisplayManager::class.java).registerDisplayListener(displayListener, BackScreen.mainHandler)
         onRearStateChanged()
-        wallpaper?.showFirst()
+        // The first image is decoded off the main thread, from onStart; until then it's black.
         ClockAlarm.update(this)
-        KeeperService.instance?.onHostShownOnRear(display.displayId)
+        keeper.onHostShownOnRear(display.displayId)
         // What it was put up for, or a plug-in while the wallpaper was being put back.
-        val due = takePendingCharging()
+        val due = takePendingCharging() ?: carried?.charging
         when {
             due != null -> playCharging(due)
-            popover -> KeeperService.instance?.onPopoverFinished()
+            // Rebuilt just as it went up: the keeper's timer ends it, in case something is on its way.
+            popover && carried != null -> {}
+            popover -> keeper.onPopoverFinished()
             // Charging already: the faint Edge glow is simply there.
             else -> refreshFaint()
         }
+        // Not started yet: it shows once it is, as one the back screen was woken for does.
+        carried?.notification?.let {
+            notificationDue = it
+            BackScreen.mainHandler.postDelayed(notificationGiveUp, LIGHT_UP_WAIT_MS)
+        }
+    }
+
+    /**
+     * What a window rebuilt on the back screen hands to the next one: a charging animation that
+     * was due or playing, and a banner that was due or showing. Each starts again from the top.
+     */
+    private class Carried(val charging: ChargingStatus?, val notification: ShownNotification?)
+
+    override fun onRetainNonConfigurationInstance(): Any? {
+        if (!onRear) return null
+        return Carried(chargingDue ?: chargingPlaying, notificationDue ?: notifications?.bannerShowing)
     }
 
     /** The images, and the clock over them. */
@@ -243,7 +289,8 @@ class RearHostActivity : Activity() {
         startedAt = SystemClock.uptimeMillis()
         if (onRear) {
             if (isCurrent()) visibleOnRear = true
-            wallpaper?.showImage(advance = true)
+            // Catches up with the gallery, which doesn't change while it can't be seen.
+            wallpaper?.resume()
             clock?.updateTime()
             // In case the display listener missed the rear waking.
             onRearStateChanged()
@@ -273,6 +320,8 @@ class RearHostActivity : Activity() {
         // A host being replaced stops after its replacement has started; leave that one be.
         if (isCurrent()) visibleOnRear = false
         if (onRear) {
+            // Under the camera or an app, or the back screen is off: no new images until it's back.
+            wallpaper?.pause()
             updateGestures()
             updateMotion()
             // Covered, or the back screen went off: the list doesn't stay down behind it.
@@ -290,6 +339,7 @@ class RearHostActivity : Activity() {
         BackScreen.mainHandler.removeCallbacks(redraw)
         BackScreen.mainHandler.removeCallbacks(chargingGiveUp)
         BackScreen.mainHandler.removeCallbacks(notificationGiveUp)
+        BackScreen.mainHandler.removeCallbacks(strandedOnMain)
         if (onRear) {
             getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
             wallpaper?.release()
@@ -323,6 +373,8 @@ class RearHostActivity : Activity() {
             }
             notifications?.isShadeOpen == true -> notifications?.closeShade(animate = true)
             !started || !isLit() -> {}
+            // Not a swipe for the camera unless that's on.
+            popover || !CameraSettings.isEnabled(this) -> {}
             EdgeSwipe.opensCamera(SystemClock.uptimeMillis() - startedAt) -> {
                 BackScreen.log("Swiped left from Xiaomi's back strip")
                 openCamera("swipe left from the back strip")
@@ -433,10 +485,13 @@ class RearHostActivity : Activity() {
         if (started && display?.state != Display.STATE_OFF) showBanner(n) else BackScreen.log("Back screen didn't light up; no banner")
     }
 
-    /** The clock's colours, so it matches the wallpaper; light on dark without one. */
+    /**
+     * The clock's colours, so it matches the wallpaper, with a background taken from the image
+     * under the clock as it is now, however far it has panned; light on dark without a clock.
+     */
     private fun matchNotificationColors() {
         val clock = clock?.takeIf { it.visibility == View.VISIBLE }
-        if (clock != null) notifications?.setColors(clock.textColor, clock.autoBgColor) else notifications?.setColors(Color.WHITE, Color.BLACK)
+        if (clock != null) notifications?.setColors(clock.textColor, clock.freshBgColor()) else notifications?.setColors(Color.WHITE, Color.BLACK)
     }
 
     /** The back screen lit up, dimmed or went off. */
@@ -460,8 +515,9 @@ class RearHostActivity : Activity() {
             playDueCharging()
             showDueNotification()
         } else {
-            if (charging?.isPlaying == true) {
-                // A dimmed back screen would keep a half-faded frame of it; show the wallpaper.
+            if (charging?.isPlaying == true || charging?.isLeaving == true) {
+                // A dimmed back screen would keep a half-faded frame of it; show the wallpaper
+                // (with the faint glow, if it was playing and the phone is still charging).
                 charging?.cancel()
                 onShownChanged()
             }
@@ -518,18 +574,27 @@ class RearHostActivity : Activity() {
         BackScreen.mainHandler.removeCallbacks(chargingGiveUp)
         matchCharging(layer)
         layer.play(status)
+        chargingPlaying = status
         BackScreen.log("Charging animation on back screen (${BatterySettings.style(this).name.lowercase()}, ${status.level}%)")
     }
 
     /**
      * The chosen style and colour, and the clock's colours for the text, so it matches the
-     * wallpaper; light on a dark veil without one.
+     * wallpaper (the veil from the image under the clock as it is now); light on a dark veil
+     * without one.
      */
     private fun matchCharging(layer: ChargingLayer) {
         layer.style = BatterySettings.style(this)
         layer.accent = BatterySettings.color(this)
         val clock = clock?.takeIf { it.visibility == View.VISIBLE }
-        if (clock != null) layer.setColors(clock.textColor, clock.autoBgColor) else layer.setColors(Color.WHITE, Color.BLACK)
+        if (clock != null) layer.setColors(clock.textColor, clock.freshBgColor()) else layer.setColors(Color.WHITE, Color.BLACK)
+    }
+
+    /** Android said how it's charging only after the plug-in: the label follows, if it's showing or due. */
+    private fun chargingSourceChanged(status: ChargingStatus) {
+        chargingDue?.let { chargingDue = it.copy(source = status.source) }
+        chargingPlaying?.let { chargingPlaying = it.copy(source = status.source) }
+        if (chargingPlaying != null) charging?.relabel(status)
     }
 
     private fun giveUpCharging() {
@@ -542,6 +607,8 @@ class RearHostActivity : Activity() {
 
     /** You unplugged: one waiting is dropped, and one playing, or the faint glow, fades away. */
     private fun stopCharging() {
+        // Not to be carried into a rebuilt window, however it ends.
+        chargingPlaying = null
         if (chargingDue != null) {
             BackScreen.mainHandler.removeCallbacks(chargingGiveUp)
             chargingDue = null
@@ -580,8 +647,9 @@ class RearHostActivity : Activity() {
         onShownChanged()
     }
 
-    /** A pop-over has done what it was up for. */
+    /** The charging animation ended, or one due was dropped: a pop-over has done what it was up for. */
     private fun onChargingDone() {
+        chargingPlaying = null
         if (popover) KeeperService.instance?.onPopoverFinished()
     }
 
@@ -647,6 +715,10 @@ class RearHostActivity : Activity() {
         private const val LIGHT_UP_WAIT_MS = 3000L
         private const val PENDING_MS = 5000L
 
+        // Opened on the main screen, it's moved to the back screen within a second; but the move
+        // can wait behind a command that runs out its 5 s.
+        private const val STRANDED_MS = 10_000L
+
         private var current: WeakReference<RearHostActivity>? = null
 
         // A charging animation for a host that isn't up yet: a pop-over going up for it, or
@@ -707,6 +779,12 @@ class RearHostActivity : Activity() {
         fun stopCharging() {
             pendingCharging = null
             showing()?.stopCharging()
+        }
+
+        /** Wired or wireless became known only after the plug-in ([com.backscreen.wallpaper.battery.ChargingMonitor]). */
+        fun chargingSourceChanged(status: ChargingStatus) {
+            pendingCharging = pendingCharging?.copy(source = status.source)
+            showing()?.chargingSourceChanged(status)
         }
 
         /**

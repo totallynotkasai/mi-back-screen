@@ -26,7 +26,8 @@ class MainActivityTest {
 
     @Before
     fun addBackScreen() {
-        ShadowDisplayManager.addDisplay("w601dp-h367dp-land")
+        // Its size in pixels, as the app finds it by (976 x 596).
+        ShadowDisplayManager.addDisplay("w976dp-h596dp-land-mdpi")
     }
 
     @Test

@@ -9,6 +9,7 @@ import android.graphics.BitmapShader
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
@@ -71,6 +72,16 @@ class ChargingLayer @JvmOverloads constructor(
     /** Whether the faint Edge glow is showing on its own, as it does while charging. */
     var isFaint = false
         private set
+
+    /**
+     * Whether it's fading away after you unplugged ([stop]). It's neither playing nor faint
+     * meanwhile, so a dim or a plug-in in that moment sees it as on its way out.
+     */
+    var isLeaving = false
+        private set
+
+    // What's fading away was an animation, whose onDone is still to come.
+    private var leavingPlay = false
 
     /** The style the next [play] or [showStill] uses. */
     var style = ChargingStyle.RING
@@ -165,6 +176,10 @@ class ChargingLayer @JvmOverloads constructor(
         strokeJoin = Paint.Join.ROUND
     }
     private val headPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var headShader: RadialGradient? = null
+    private var headColor = 0
+    private var headRadius = 0f
+    private val headMatrix = Matrix()
     private val box = Rect()
 
     /** The text and veil colours: the clock's, so it matches the wallpaper. */
@@ -229,13 +244,17 @@ class ChargingLayer @JvmOverloads constructor(
      * "Charging".
      */
     fun stop() {
-        if ((!isPlaying && !isFaint) || exitAnimator != null) return
+        if ((!isPlaying && !isFaint) || isLeaving) return
         removeCallbacks(stillDone)
         // Held where it is while it fades.
         animator?.let {
             animator = null
             it.cancel()
         }
+        leavingPlay = isPlaying
+        isPlaying = false
+        isFaint = false
+        isLeaving = true
         exitAnimator = ValueAnimator.ofFloat(exit, 0f).apply {
             duration = STOP_FADE_MS
             addUpdateListener {
@@ -244,7 +263,7 @@ class ChargingLayer @JvmOverloads constructor(
             }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
-                    if (exitAnimator === animation) end(faint = false)
+                    if (exitAnimator === animation) endLeaving()
                 }
             })
             start()
@@ -253,10 +272,20 @@ class ChargingLayer @JvmOverloads constructor(
 
     /**
      * Ends a running animation at once: the back screen dimmed, and would keep a half-faded frame
-     * of it. An Edge glow that stays goes straight to the faint glow.
+     * of it. An Edge glow that stays goes straight to the faint glow; one fading away after you
+     * unplugged is simply gone.
      */
     fun cancel() {
-        if (isPlaying) finish()
+        when {
+            isLeaving -> endLeaving()
+            isPlaying -> finish()
+        }
+    }
+
+    /** Says "Charging" or "Wireless charging" as [status] does, carrying on as it is: Android can tell which only after the plug-in. */
+    fun relabel(status: ChargingStatus) {
+        label = context.getString(status.label)
+        invalidate()
     }
 
     /** The faint Edge glow on its own, as it shows while charging. */
@@ -291,6 +320,8 @@ class ChargingLayer @JvmOverloads constructor(
         stopAnimators()
         isPlaying = false
         isFaint = false
+        isLeaving = false
+        leavingPlay = false
         frame = null
         exit = 1f
         changed()
@@ -316,6 +347,13 @@ class ChargingLayer @JvmOverloads constructor(
     private fun end(faint: Boolean) {
         val played = isPlaying
         if (faint) showFaint() else clear()
+        if (played) onDone?.invoke()
+    }
+
+    /** The fade after you unplugged is over, or cut short: nothing shows. */
+    private fun endLeaving() {
+        val played = leavingPlay
+        clear()
         if (played) onDone?.invoke()
     }
 
@@ -460,7 +498,18 @@ class ChargingLayer @JvmOverloads constructor(
             val p = edge.pointAt(f.filled.coerceAtMost(0.9999f))
             val r = HEAD_RADIUS * height
             val core = ColorUtils.blendARGB(color, Color.WHITE, HEAD_WHITENESS)
-            headPaint.shader = RadialGradient(p.x, p.y, r, withAlpha(core, f.head * exit), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            // One gradient, made again only when its colour or size changes, moved to the head
+            // each frame; the paint's alpha fades it.
+            val shader = headShader?.takeIf { headColor == core && headRadius == r }
+                ?: RadialGradient(0f, 0f, r, core, Color.TRANSPARENT, Shader.TileMode.CLAMP).also {
+                    headShader = it
+                    headColor = core
+                    headRadius = r
+                    headPaint.shader = it
+                }
+            headMatrix.setTranslate(p.x, p.y)
+            shader.setLocalMatrix(headMatrix)
+            headPaint.alpha = alpha255(f.head * exit)
             canvas.drawCircle(p.x, p.y, r, headPaint)
         }
     }

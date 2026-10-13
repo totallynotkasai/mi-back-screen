@@ -161,9 +161,9 @@ class QuickSwitch(private val keeper: KeeperService) {
     fun bringBack(why: String) {
         val lend = lend ?: return
         if (bringingBack) return BackScreen.log("Quick Switch: still bringing ${lend.packageName} back")
+        // As last found, if it can't be found just now; it was found to send the app there.
+        val rear = BackScreen.rearIdOrLastKnown(keeper) ?: return BackScreen.log("Quick Switch: no back screen to bring ${lend.packageName} back from")
         bringingBack = true
-        // The back screen is display 1 on the 17 Pro Max, if it can't be found just now.
-        val rear = keeper.rearDisplayId() ?: 1
         BackScreen.log("Quick Switch: bringing ${lend.packageName} back ($why)")
         keeper.shell(onUnavailable = {
             bringingBack = false

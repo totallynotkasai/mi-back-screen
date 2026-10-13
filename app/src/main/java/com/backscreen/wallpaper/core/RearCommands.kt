@@ -2,16 +2,36 @@ package com.backscreen.wallpaper.core
 
 import android.content.pm.PackageManager
 import rikka.shizuku.Shizuku
+import java.io.ByteArrayOutputStream
+import java.io.Closeable
+import java.io.IOException
+import java.io.InputStream
+import kotlin.concurrent.thread
+
+/** How a command ended: its exit code, or null if it ran out of time, and what it printed. */
+data class ExecResult(val code: Int?, val out: String, val err: String)
 
 /**
  * The only privileged commands this app runs. Shizuku executes them with shell (ADB-level)
  * access. Arguments go straight to the process (no shell), so nothing can be injected.
+ *
+ * Each has a time limit ([exec]): the keeper runs them one at a time, so one that hung would
+ * hold up every command after it.
  */
 object RearCommands {
     private const val AM = "/system/bin/am"
     private const val INPUT = "/system/bin/input"
     private const val CMD = "/system/bin/cmd"
-    private const val PACKAGE = "com.backscreen.wallpaper"
+
+    /** A launch token's extra on the host's intent (see KeeperService.hostToken). */
+    const val EXTRA_TOKEN = "token"
+
+    // Far longer than any of them takes (most are under 100 ms, a locked `am start` under a second).
+    private const val TIMEOUT_MS = 5000L
+    private const val TASK_LIST_TIMEOUT_MS = 3000L
+
+    // After a command ends, how long its output may take to arrive.
+    private const val STREAM_WAIT_MS = 500L
     const val XIAOMI_REAR_PACKAGE = "com.xiaomi.subscreencenter"
     const val CAMERA_PACKAGE = "com.android.camera"
     private const val REAR_TIMEOUT = "subscreen_display_time"
@@ -32,9 +52,14 @@ object RearCommands {
     fun isReady() =
         Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
 
-    /** Our one window on the back screen (RearHostActivity), on [displayId]. */
-    fun launchHost(displayId: Int) =
-        run(AM, "start", "--display", displayId.toString(), "-n", "$PACKAGE/.rear.RearHostActivity")
+    /**
+     * Our one window on the back screen (RearHostActivity), from [packageName], on [displayId].
+     * It stays only if it carries [token], the one the keeper gave this launch.
+     */
+    fun launchHost(packageName: String, displayId: Int, token: String) = run(
+        AM, "start", "--display", displayId.toString(), "-n", "$packageName/.rear.RearHostActivity",
+        "--es", EXTRA_TOKEN, token,
+    )
 
     fun moveTaskToDisplay(taskId: Int, displayId: Int) =
         run(AM, "display", "move-stack", taskId.toString(), displayId.toString())
@@ -55,7 +80,7 @@ object RearCommands {
         run(CMD, "notification", "disallow_listener", component)
 
     /** What `am stack list` prints (read it with [TaskList]), or null if it couldn't run. */
-    fun taskList(): String? = read(AM, "stack", "list")
+    fun taskList(): String? = read(AM, "stack", "list", timeoutMs = TASK_LIST_TIMEOUT_MS)
 
     /** Closes the notification shade, once the Quick Switch tile has been tapped. */
     fun collapseShade() = run(CMD, "statusbar", "collapse")
@@ -113,14 +138,13 @@ object RearCommands {
         return run(CMD, "window", "fixed-to-user-rotation", "-d", displayId.toString(), mode)
     }
 
-    /** What [command] prints, or null if it couldn't run. */
-    private fun read(vararg command: String): String? {
+    /** What [command] prints, or null if it couldn't run, failed or ran out of time. */
+    private fun read(vararg command: String, timeoutMs: Long = TIMEOUT_MS): String? {
         if (!isReady()) return null
         return try {
-            val process = newProcess(arrayOf(*command))
-            val output = process.inputStream.bufferedReader().readText()
-            process.errorStream.bufferedReader().readText()
-            if (process.waitFor() == 0) output else null
+            val result = exec(timeoutMs) { newProcess(arrayOf(*command)) }
+            if (result.code == null) BackScreen.log("${command.drop(1).take(2).joinToString(" ")} timed out")
+            if (result.code == 0) result.out else null
         } catch (e: Exception) {
             null
         }
@@ -139,22 +163,87 @@ object RearCommands {
         return result
     }
 
+    /** Runs [command]: "ok", or what went wrong ([summary]). */
     private fun run(vararg command: String): String {
         if (!isReady()) return "Shizuku not ready"
         return try {
-            val process = newProcess(arrayOf(*command))
-            val output = process.inputStream.bufferedReader().readText().trim() + "\n" +
-                process.errorStream.bufferedReader().readText().trim()
-            val code = process.waitFor()
-            // `am start` can exit 0 but print "Error: ..." when it didn't start anything.
-            val error = output.lines().firstOrNull { it.startsWith("Error") }
-            when {
-                code != 0 -> "failed ($code): ${output.trim().lines().lastOrNull().orEmpty()}"
-                error != null -> "failed: $error"
-                else -> "ok"
-            }
+            summary(exec(TIMEOUT_MS) { newProcess(arrayOf(*command)) })
         } catch (e: Exception) {
             "error: ${e.cause?.message ?: e.message}"
+        }
+    }
+
+    /** "ok", or what went wrong: "timed out", "failed (code): last line", or "failed: Error ...". */
+    fun summary(result: ExecResult): String {
+        val code = result.code ?: return "timed out"
+        val output = result.out.trim() + "\n" + result.err.trim()
+        // `am start` can exit 0 but print "Error: ..." when it didn't start anything.
+        val error = output.lines().firstOrNull { it.startsWith("Error") }
+        return when {
+            code != 0 -> "failed ($code): ${output.trim().lines().lastOrNull().orEmpty()}"
+            error != null -> "failed: $error"
+            else -> "ok"
+        }
+    }
+
+    /**
+     * Runs the process [start] makes, giving it up to [timeoutMs]. Both of its outputs are read on
+     * threads of their own, so one filling up can't stall the other (or the process). If it runs
+     * out of time it's stopped and its outputs closed, and the result has no exit code. The waits
+     * are on threads of our own too: Shizuku's process doesn't support Java's waitFor with a time
+     * limit. Throws if [start] does, or if the process can't be waited for (Shizuku stopped, say).
+     */
+    fun exec(timeoutMs: Long, start: () -> Process): ExecResult {
+        val process = start()
+        val out = Drain(process.inputStream)
+        val err = Drain(process.errorStream)
+        var code = 0
+        var failure: Exception? = null
+        val waiter = thread(isDaemon = true, name = "BackScreen-wait") {
+            try {
+                code = process.waitFor()
+            } catch (e: Exception) {
+                failure = e
+            }
+        }
+        waiter.join(timeoutMs)
+        if (waiter.isAlive || failure != null) {
+            try {
+                process.destroy()
+            } catch (e: Exception) {
+                // Gone already.
+            }
+            out.close()
+            err.close()
+            failure?.let { throw it }
+            return ExecResult(null, out.text(), err.text())
+        }
+        return ExecResult(code, out.text(), err.text())
+    }
+
+    /** Reads [stream] to its end on a thread of its own. */
+    private class Drain(private val stream: InputStream) : Closeable {
+        private val bytes = ByteArrayOutputStream()
+        private val reader = thread(isDaemon = true, name = "BackScreen-read") {
+            try {
+                stream.copyTo(bytes)
+            } catch (e: IOException) {
+                // Closed after a timeout.
+            }
+        }
+
+        /** What it has read: all of it, once the process has ended and its output arrived. */
+        fun text(): String {
+            reader.join(STREAM_WAIT_MS)
+            return bytes.toString(Charsets.UTF_8.name())
+        }
+
+        override fun close() {
+            try {
+                stream.close()
+            } catch (e: IOException) {
+                // Closed already.
+            }
         }
     }
 

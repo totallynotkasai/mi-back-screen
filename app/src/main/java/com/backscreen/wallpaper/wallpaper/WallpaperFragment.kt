@@ -43,7 +43,6 @@ import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
 import java.util.concurrent.Executors
-import kotlin.concurrent.thread
 import kotlin.math.roundToInt
 
 /**
@@ -98,6 +97,9 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
     private var schedules = emptyList<Schedule>()
     private var previewUri: Uri? = null
+
+    // Whether the folder could be opened when the preview was last loaded.
+    private var previewAccess = FolderAccess.OK
 
     // Reading a big folder and decoding an image can take a second or more. They're done here
     // rather than on the main thread, which the back screen shares: a stall there froze the
@@ -185,7 +187,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         shuffleSwitch.setOnCheckedChangeListener { _, checked -> Gallery.setShuffle(ctx, checked) }
         view.findViewById<View>(R.id.nextButton).setOnClickListener {
             val app = ctx.applicationContext
-            loader.execute {
+            Gallery.io.execute {
                 Gallery.skip(app)
                 BackScreen.mainHandler.post {
                     RearHostActivity.reload()
@@ -265,8 +267,13 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
                 else -> R.string.state_on
             }
         )
-        // Keep up with the gallery moving on while the app is open.
-        if (!previewLoading && previewUri != null && Gallery.shown(ctx) != previewUri) loadPreview()
+        // Keep up with the gallery moving on while the app is open, and with the folder becoming
+        // one it can't open (black, as on the back screen) or can again.
+        if (!previewLoading && (previewUri != null || previewAccess != FolderAccess.OK) &&
+            (Gallery.shown(ctx) != previewUri || Gallery.access(ctx) != previewAccess)
+        ) {
+            loadPreview()
+        }
         refreshSchedule(enabled)
         refreshSetup()
         displayCard.refresh()
@@ -359,10 +366,13 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         KeeperService.setWallpaper(ctx, false)
     }
 
+    // Changes to the images go through Gallery.io, so one asked for just before the tab is turned
+    // or closed still happens. The back screen hears of it either way; the tab, if it's still here.
+
     private fun onImagesPicked(uris: List<Uri>) {
         val app = ctx.applicationContext
         val copying = snackbar(R.string.copying_images, Snackbar.LENGTH_INDEFINITE)
-        thread {
+        Gallery.io.execute {
             val error = try {
                 Gallery.setImages(app, uris)
                 BackScreen.log("Chose ${uris.size} image(s)")
@@ -385,21 +395,26 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     }
 
     private fun onFolderPicked(folder: Uri) {
-        try {
-            Gallery.setFolder(ctx, folder)
-        } catch (e: Exception) {
-            BackScreen.log("Couldn't use folder: ${e.message}")
-            snackbar(R.string.folder_failed, Snackbar.LENGTH_LONG)
-            return
+        val app = ctx.applicationContext
+        Gallery.io.execute {
+            val used = try {
+                Gallery.setFolder(app, folder)
+                true
+            } catch (e: Exception) {
+                BackScreen.log("Couldn't use folder: ${e.message}")
+                false
+            }
+            BackScreen.mainHandler.post {
+                if (used) showOnBackScreen(app)
+                if (view == null) return@post
+                if (!used) {
+                    snackbar(R.string.folder_failed, Snackbar.LENGTH_LONG)
+                    return@post
+                }
+                loadPreview()
+                showGallery(folderChosen = true)
+            }
         }
-        onImagesChanged(folderChosen = true)
-    }
-
-    /** The images changed: here and on the back screen. [folderChosen]: say if it has none. */
-    private fun onImagesChanged(folderChosen: Boolean = false) {
-        loadPreview()
-        showGallery(folderChosen)
-        showOnBackScreen(ctx.applicationContext)
     }
 
     private fun confirmRemoveImages() {
@@ -408,11 +423,19 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             .setMessage(R.string.remove_images_message)
             .setNegativeButton(R.string.cancel, null)
             .setPositiveButton(R.string.remove_images) { _, _ ->
-                Gallery.clear(ctx)
-                BackScreen.log("Removed images")
-                snackbar(R.string.images_removed)
-                // The back screen fades to black.
-                onImagesChanged()
+                val app = ctx.applicationContext
+                Gallery.io.execute {
+                    Gallery.clear(app)
+                    BackScreen.log("Removed images")
+                    BackScreen.mainHandler.post {
+                        // The back screen fades to black.
+                        showOnBackScreen(app)
+                        if (view == null) return@post
+                        snackbar(R.string.images_removed)
+                        loadPreview()
+                        showGallery()
+                    }
+                }
             }
             .show()
     }
@@ -425,7 +448,8 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private fun showGallery(folderChosen: Boolean = false) {
         val app = ctx.applicationContext
         loader.execute {
-            val count = Gallery.images(app).size
+            // Read afresh: the folder may have changed while the app was away.
+            val count = Gallery.images(app, fresh = true).size
             val folder = Gallery.folderName(app)
             val access = Gallery.access(app)
             if (folderChosen) BackScreen.log("Chose folder $folder: $count image(s)")
@@ -619,18 +643,22 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         val load = ++previewLoads
         previewLoading = true
         loader.execute {
-            val uri = Gallery.current(app)
             val scaling = WallpaperSettings.scalingInUse(app)
-            val drawable = try {
-                uri?.let { BackScreen.loadImage(app, it, display, scaling) }
+            val decoded = try {
+                Gallery.decodeCurrent(app, advance = false) { BackScreen.loadImage(app, it, display, scaling) }
             } catch (e: Throwable) {
                 // Out of memory too: uncaught on this thread, it would take the app down.
                 BackScreen.log("Preview failed: $e")
                 null
             }
+            val uri = if (decoded != null) decoded.shown.image else Gallery.shown(app)
+            val drawable = decoded?.result
+            // As the listing just found it.
+            val access = Gallery.access(app)
             BackScreen.mainHandler.post {
                 if (view == null || load != previewLoads) return@post
                 previewLoading = false
+                previewAccess = access
                 showPreview(uri, drawable, scaling)
             }
         }

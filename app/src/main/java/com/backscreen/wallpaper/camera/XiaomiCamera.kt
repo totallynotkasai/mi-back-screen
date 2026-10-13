@@ -54,7 +54,7 @@ class CameraDim(private val lightWithinMs: Long = LIGHT_WITHIN_MS) {
  *
  * Closing: BACK, so Xiaomi Camera closes itself and finishes saving the last photo or video;
  * if it's still there after 3 s, it's stopped. A dimmed back screen takes no keys, so there it's
- * stopped after a second for the last photo to save. It's never moved to the main screen, where it
+ * stopped after 3 s for the last photo or video to save. It's never moved to the main screen, where it
  * would pop up. It closes whenever the back screen dims or goes off ([CameraDim]), when the back
  * is covered (the keeper's BackCover), from Close camera, and from Xiaomi's back strip, which
  * BACK reaches without us. If it closes by itself (Xiaomi Camera does after a while unused),
@@ -129,24 +129,32 @@ class XiaomiCamera(private val keeper: KeeperService) {
 
     /**
      * Closes it, letting it finish saving. [why] is for the log. On a lit back screen that's
-     * BACK, as Xiaomi's back strip sends; a dimmed one takes no keys (checked on the phone), so
-     * it's stopped after a moment for the last photo to save.
+     * BACK, as Xiaomi's back strip sends, but only while the camera is in front: BACK on the
+     * wallpaper would open it again. A dimmed one takes no keys (checked on the phone), so it's
+     * stopped once it has had time to save. If it has gone already, the lend just ends.
      */
     fun close(why: String) {
         val lend = lend ?: return
         if (closing) return
+        // As last found, if it can't be found just now; it was found to open the camera there.
+        val rear = BackScreen.rearIdOrLastKnown(keeper) ?: return BackScreen.log("Camera: no back screen to close it on")
         closing = true
         BackScreen.mainHandler.removeCallbacks(checkLit)
-        // The back screen is display 1 on the 17 Pro Max, if it can't be found just now.
-        val rear = keeper.rearDisplayId() ?: 1
         val lit = keeper.isRearLit()
         BackScreen.log("Closing Xiaomi Camera ($why)")
         keeper.shell(onUnavailable = { closing = false }) {
-            val gone = if (lit) {
-                BackScreen.log("Camera: BACK on the back screen: ${RearCommands.pressBack(rear)}")
-                waitUntil(rear, lend, inFront = false, CLOSE_WAIT_MS)
-            } else {
-                waitUntil(rear, lend, inFront = false, SAVE_WAIT_MS)
+            val inFront = LendMisses.inFront(RearCommands.taskList(), rear, lend)
+            val gone = when {
+                inFront == false -> {
+                    BackScreen.log("Xiaomi Camera had gone from the back screen already")
+                    true
+                }
+                // In front, so BACK reaches it. (If the list couldn't be read, it's not sent.)
+                lit && inFront == true -> {
+                    BackScreen.log("Camera: BACK on the back screen: ${RearCommands.pressBack(rear)}")
+                    waitUntil(rear, lend, inFront = false, CLOSE_WAIT_MS)
+                }
+                else -> waitUntil(rear, lend, inFront = false, SAVE_WAIT_MS)
             }
             if (!gone) {
                 BackScreen.log("Xiaomi Camera is still there; stopping it: ${RearCommands.stopXiaomiCamera()}")
@@ -195,8 +203,10 @@ class XiaomiCamera(private val keeper: KeeperService) {
         const val OPEN_WAIT_MS = 1500L
         const val CLOSE_WAIT_MS = 3000L
 
-        // A photo taken just before the back screen dimmed is saved within about a second.
-        const val SAVE_WAIT_MS = 1000L
+        // A photo taken just before the back screen dimmed is saved within about a second, and a
+        // 65 s video at 1080p (the most the back screen's camera offers) 0.65 s after stopping
+        // (measured). It keeps the back screen lit while it records.
+        const val SAVE_WAIT_MS = 3000L
         const val POLL_MS = 150L
     }
 }

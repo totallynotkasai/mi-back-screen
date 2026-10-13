@@ -46,19 +46,22 @@ object ClockAlarm {
         // Not while another app has the back screen: the clock is underneath it.
         val wanted = RearState.snapshot(context).guardsWallpaper && WallpaperSettings.showClock(context) &&
             RearHostActivity.isClockVisible()
-        if (!wanted) {
-            if (due != 0L) alarms.cancel(intent(context))
-            due = 0L
-            return
-        }
         val next = ClockTicker.nextMinute(System.currentTimeMillis())
-        if (next == due) return
-        due = next
-        if (alarms.canScheduleExactAlarms()) {
-            alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, intent(context))
-        } else {
-            // Without exact alarm access it may come a few minutes late; the app warns about it.
-            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, intent(context))
+        when (ClockAlarmPlan.decide(wanted, due, next)) {
+            ClockAlarmStep.CANCEL -> {
+                alarms.cancel(intent(context))
+                due = 0L
+            }
+            ClockAlarmStep.KEEP -> {}
+            ClockAlarmStep.SET -> {
+                due = next
+                if (alarms.canScheduleExactAlarms()) {
+                    alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, intent(context))
+                } else {
+                    // Without exact alarm access it may come a few minutes late; the app warns about it.
+                    alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, intent(context))
+                }
+            }
         }
     }
 
@@ -82,6 +85,25 @@ object ClockAlarm {
     fun summary(): String? =
         if (fired == 0) null
         else "Clock updates: $fired, $late late (worst ${"%.1f".format(worstMs / 1000f)} s)"
+}
+
+/** What [ClockAlarm.update] does with the alarm. */
+enum class ClockAlarmStep { CANCEL, KEEP, SET }
+
+/**
+ * Whether to set the clock's alarm, keep it or cancel it. Plain Kotlin, so it's unit tested.
+ */
+object ClockAlarmPlan {
+    /**
+     * [wanted]: the clock is on the back screen. [due]: the minute this process last set it for,
+     * or 0. [next]: the next minute. Cancelled whenever it isn't wanted, even with nothing set
+     * here: one set by a process that has since died is still there, and would fire once more.
+     */
+    fun decide(wanted: Boolean, due: Long, next: Long): ClockAlarmStep = when {
+        !wanted -> ClockAlarmStep.CANCEL
+        next == due -> ClockAlarmStep.KEEP
+        else -> ClockAlarmStep.SET
+    }
 }
 
 class ClockAlarmReceiver : BroadcastReceiver() {

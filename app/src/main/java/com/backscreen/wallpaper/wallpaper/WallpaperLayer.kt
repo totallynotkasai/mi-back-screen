@@ -13,7 +13,8 @@ import kotlin.math.max
 /**
  * The back screen's bottom layer: the gallery's images, each fading in over the last, or black
  * with none. Decoding happens on its own thread, so a big image or a slow folder doesn't hold
- * up the screen.
+ * up the screen; the first image too, so the window opens black for a moment. The gallery moves
+ * on only while the window can be seen ([pause], [resume]).
  */
 @SuppressLint("ViewConstructor")
 class WallpaperLayer(context: Context, private val display: Display) : FrameLayout(context) {
@@ -48,61 +49,63 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         }
 
     @Volatile private var shown: Uri? = null
-    private var loads = 0
-
-    // A reload overtaken by a later request (the rear waking, say) must still happen.
-    private var reloadPending = false
+    private val reload = ReloadRule()
     private var released = false
+
+    // While the window can't be seen (under the camera or an app, or the back screen is off), the
+    // gallery doesn't move on; it catches up when it's back ([resume]).
+    private var paused = false
 
     private val loader = Executors.newSingleThreadExecutor()
     private val nextImage = Runnable { showImage(advance = true) }
 
-    /** The first image straight away, so there's no blank moment. Main thread. */
-    fun showFirst() {
-        try {
-            val uri = Gallery.current(context, advance = true)
-            if (uri == null) {
-                BackScreen.log("No images; the back screen shows black")
-            } else {
-                val drawable = BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context))
-                setImage(uri, drawable, WallpaperColour.of(drawable), fade = false)
-                BackScreen.log("Wallpaper showing on back screen")
-            }
-        } catch (e: Throwable) {
-            // Out of memory too: a thrown Error here would take the app down.
-            BackScreen.log("Couldn't load image: $e")
-        }
-        scheduleNextImage()
+    /** The window can't be seen: no decoding, colours or new frames until it can. */
+    fun pause() {
+        paused = true
+        BackScreen.mainHandler.removeCallbacks(nextImage)
+    }
+
+    /**
+     * The window can be seen: shows the gallery's image, moving on if it's time. Also how the
+     * first image goes up, off the main thread, so the screen is black for a moment first.
+     */
+    fun resume() {
+        paused = false
+        showImage(advance = true)
     }
 
     /**
      * Shows the gallery's current image, moving on to the next first if [advance] and it's time.
      * With [force], reloads it even if it's the one already showing. With no images, fades to
-     * black.
+     * black. An image that can't be decoded is passed over ([Gallery.decodeCurrent]).
      */
     fun showImage(advance: Boolean, force: Boolean = false) {
         if (released) return
-        val load = ++loads
-        val reload = force || reloadPending
-        reloadPending = reload
+        if (paused) {
+            // Done on resume.
+            if (force) reload.ask()
+            return
+        }
+        val load = reload.start(force)
         loader.execute {
-            try {
-                val uri = Gallery.current(context, advance)
-                val drawable = if (uri == null || (uri == shown && !reload)) null
-                else BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context))
-                val colour = drawable?.let(WallpaperColour::of)
-                val next = Gallery.nextChangeAt(context)
-                BackScreen.mainHandler.post {
-                    if (released || load != loads) return@post
-                    reloadPending = false
-                    if (uri != null && drawable != null) setImage(uri, drawable, colour, fade = true)
-                    if (uri == null) clearImage()
-                    setNextImage(next)
+            val decoded = try {
+                Gallery.decodeCurrent(context, advance, alreadyShown = { it == shown && !load.reload }) { uri ->
+                    val drawable = BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context))
+                    drawable to WallpaperColour.of(drawable)
                 }
             } catch (e: Throwable) {
                 // Out of memory too: uncaught on this thread, it would take the app down.
                 BackScreen.log("Couldn't load image: $e")
-                BackScreen.mainHandler.post { if (!released) scheduleNextImage() }
+                null
+            }
+            BackScreen.mainHandler.post {
+                if (released || !reload.ended(load)) return@post
+                if (decoded == null) return@post scheduleNextImage()
+                val uri = decoded.shown.image
+                val result = decoded.result
+                if (uri != null && result != null) setImage(uri, result.first, result.second, fade = true)
+                if (uri == null) clearImage()
+                setNextImage(decoded.shown.nextChangeAt)
             }
         }
     }
@@ -113,7 +116,7 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
      * thread: on the main thread it held up the pan and the clock.
      */
     fun scheduleNextImage() {
-        if (released) return
+        if (released || paused) return
         loader.execute {
             val next = Gallery.nextChangeAt(context)
             BackScreen.mainHandler.post { setNextImage(next) }
@@ -122,7 +125,7 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
 
     private fun setNextImage(at: Long?) {
         BackScreen.mainHandler.removeCallbacks(nextImage)
-        if (released || at == null) return
+        if (released || paused || at == null) return
         // While the phone sleeps this runs late; the host catches up when the rear wakes.
         BackScreen.mainHandler.postDelayed(nextImage, max(MIN_DELAY_MS, at - System.currentTimeMillis()))
     }

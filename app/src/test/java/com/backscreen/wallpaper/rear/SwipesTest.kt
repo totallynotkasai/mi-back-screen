@@ -89,6 +89,22 @@ class SwipesTest {
     }
 
     @Test
+    fun aPullThatTurnsLeftIsASwipeLeft() {
+        // Starting slightly down made it a pull; overall it's 43% of the width to the left.
+        assertTrue(Swipes.startsPull(800f, 200f, 801f, 215f, slop = 12f, height = h))
+        assertEquals(PullRelease.SWIPE_LEFT, Swipes.release(800f, 200f, 380f, 260f, 200, w, h))
+        // Too short to the left: it just goes back up.
+        assertEquals(PullRelease.BACK, Swipes.release(800f, 200f, 650f, 240f, 200, w, h))
+    }
+
+    @Test
+    fun aPullFarEnoughDownStillOpens() {
+        assertEquals(PullRelease.OPEN, Swipes.release(500f, 40f, 510f, 300f, 400, w, h))
+        // Far enough, but mostly sideways: neither.
+        assertEquals(PullRelease.BACK, Swipes.release(500f, 40f, 300f, 200f, 400, w, h))
+    }
+
+    @Test
     fun nothingOnAnUnmeasuredScreen() {
         assertNull(Swipes.classify(700f, 300f, 300f, 300f, 150, 0, 0))
     }

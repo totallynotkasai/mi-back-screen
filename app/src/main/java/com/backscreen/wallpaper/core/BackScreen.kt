@@ -29,6 +29,8 @@ import java.util.Locale
 object BackScreen {
     private const val TAG = "BackScreen"
     private const val MAX_LOG_LINES = 40
+    private const val REAR_PREFS = "back_screen"
+    private const val KEY_REAR_ID = "rear_display_id"
 
     private val log = ArrayDeque<String>()
     private val time = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -89,11 +91,36 @@ object BackScreen {
     private fun isTurned(display: Display) =
         display.rotation == Surface.ROTATION_90 || display.rotation == Surface.ROTATION_270
 
+    /** The back screen, as [RearDisplayPick] chooses it, or null if there's none. Remembered for next time. */
+    @Suppress("DEPRECATION")
     fun findRearDisplay(context: Context): Display? {
-        val dm = context.getSystemService(DisplayManager::class.java)
-        return dm.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION).firstOrNull()
-            ?: dm.displays.firstOrNull { it.displayId != Display.DEFAULT_DISPLAY }
+        val displays = context.getSystemService(DisplayManager::class.java).displays
+        val candidates = displays.map { d ->
+            val m = DisplayMetrics().also { d.getRealMetrics(it) }
+            DisplayCandidate(d.displayId, m.widthPixels, m.heightPixels, d.flags and Display.FLAG_PRIVATE != 0)
+        }
+        val remembered = rememberedRearId(context)
+        val id = RearDisplayPick.choose(candidates, remembered) ?: return null
+        if (id != remembered) rearPrefs(context).edit().putInt(KEY_REAR_ID, id).apply()
+        return displays.firstOrNull { it.displayId == id }
     }
+
+    /**
+     * The back screen's id: as found now, or else as last found. For putting things back on it
+     * when it can't be found just now. Null if it has never been found.
+     */
+    fun rearIdOrLastKnown(context: Context): Int? = findRearDisplay(context)?.displayId ?: rememberedRearId(context)
+
+    /** Says which display is the back screen, once each time the keeper starts. */
+    fun logRearDisplay(context: Context) {
+        val rear = findRearDisplay(context) ?: return log("No back screen found")
+        val size = naturalSize(rear)
+        log("The back screen is display ${rear.displayId} (${size.width} x ${size.height})")
+    }
+
+    private fun rememberedRearId(context: Context) = rearPrefs(context).getInt(KEY_REAR_ID, -1).takeIf { it >= 0 }
+
+    private fun rearPrefs(context: Context) = context.getSharedPreferences(REAR_PREFS, Context.MODE_PRIVATE)
 
     /**
      * Decodes [uri] sized for [display] in its natural orientation and [scaling], never bigger

@@ -133,11 +133,12 @@ class MainActivity : AppCompatActivity() {
     /**
      * The wallpaper's tile opens us to toggle when it isn't allowed to itself, the Quick Switch
      * tile when the service wasn't running, and the keeper's notification when the wallpaper's
-     * folder needs choosing again. Each is done once: afterwards the intent is a plain one.
+     * folder needs choosing again; only through our private alias ([LaunchCommand.ALIAS]). Each is
+     * done once: afterwards the intent is a plain one.
      */
     private fun handleIntent(intent: Intent?) {
         intent ?: return
-        when (LaunchCommand.of(intent.action, intent.flags)) {
+        when (LaunchCommand.of(intent.action, intent.flags, intent.component?.className)) {
             LaunchCommand.TOGGLE -> toggleWallpaper()
             LaunchCommand.QUICK_SWITCH -> {
                 // We're in front now, so there's nothing to send; start the service for the next tap.

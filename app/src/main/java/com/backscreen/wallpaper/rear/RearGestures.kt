@@ -62,6 +62,30 @@ object Swipes {
 
     /** Whether a push up that moved ([dx], [dy]) closes what was pulled down: 15% of the height, mostly upward. */
     fun pushCloses(dx: Float, dy: Float, height: Int) = height > 0 && -dy >= height * UP_TRAVEL && -dy >= 2 * abs(dx)
+
+    /**
+     * What letting go of a pull down does, from ([x0], [y0]) to ([x1], [y1]) in [durationMs]. A
+     * pull starts as soon as a touch moves a little downward, so a swipe left that begins slightly
+     * down becomes one; if it doesn't open what it pulls but is a swipe left overall, it counts as
+     * that.
+     */
+    fun release(x0: Float, y0: Float, x1: Float, y1: Float, durationMs: Long, width: Int, height: Int): PullRelease = when {
+        pullOpens(x1 - x0, y1 - y0, height) -> PullRelease.OPEN
+        classify(x0, y0, x1, y1, durationMs, width, height) == Swipe.LEFT -> PullRelease.SWIPE_LEFT
+        else -> PullRelease.BACK
+    }
+}
+
+/** What letting go of a pull down does ([Swipes.release]). */
+enum class PullRelease {
+    /** It comes the rest of the way down. */
+    OPEN,
+
+    /** It goes back up. */
+    BACK,
+
+    /** It goes back up, and the touch was a swipe left. */
+    SWIPE_LEFT,
 }
 
 /**
@@ -160,12 +184,14 @@ class RearGestures(context: Context, private val listener: Listener) : SensorEve
             MotionEvent.ACTION_UP -> {
                 if (!tracking || covered) return stopTracking()
                 tracking = false
+                val ms = event.eventTime - startTime
                 if (pulling) {
                     pulling = false
-                    listener.onPullEnd(Swipes.pullOpens(event.x - startX, event.y - startY, height))
+                    val release = Swipes.release(startX, startY, event.x, event.y, ms, width, height)
+                    listener.onPullEnd(release == PullRelease.OPEN)
+                    if (release == PullRelease.SWIPE_LEFT) listener.onSwipe(Swipe.LEFT)
                     return
                 }
-                val ms = event.eventTime - startTime
                 val swipe = Swipes.classify(startX, startY, event.x, event.y, ms, width, height)
                 // For tuning: where each touch that moved went, and whether it counted.
                 if (abs(event.x - startX) > slop || abs(event.y - startY) > slop) {

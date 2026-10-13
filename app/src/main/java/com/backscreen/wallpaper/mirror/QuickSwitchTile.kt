@@ -8,7 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import com.backscreen.wallpaper.MainActivity
+import com.backscreen.wallpaper.LaunchCommand
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
@@ -91,8 +91,7 @@ class QuickSwitchTile : TileService() {
 
     @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openApp() {
-        val intent = Intent(this, MainActivity::class.java)
-            .setAction(KeeperService.ACTION_QUICK_SWITCH)
+        val intent = LaunchCommand.intent(this, KeeperService.ACTION_QUICK_SWITCH)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))

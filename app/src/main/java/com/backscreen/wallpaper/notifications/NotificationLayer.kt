@@ -107,8 +107,8 @@ class NotificationLayer @JvmOverloads constructor(
     /** Whether the list is down, or on its way. */
     val isShadeOpen get() = list.visibility == VISIBLE
 
-    /** The notification the banner shows, if it's up. */
-    val bannerKey: String? get() = bannerShown?.key
+    /** The notification the banner shows, if it's up and not on its way out. */
+    val bannerShowing: ShownNotification? get() = bannerShown?.takeIf { !bannerLeaving }
 
     /** The text and card colours: the clock's, so it matches the wallpaper. */
     fun setColors(text: Int, card: Int) {

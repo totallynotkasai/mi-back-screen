@@ -34,14 +34,22 @@ class ChargingGate(private val minGapMs: Long = MIN_GAP_MS) {
  * registered by a running app gets these. A plug-in is passed on with the battery's level and
  * where the power comes from, unless [ChargingGate] holds it back; then [onHeldBack] hears of it,
  * since it's charging all the same (the Edge glow's faint glow).
+ *
+ * A wireless charger may be reported as one only a moment after the plug-in, so where the power
+ * comes from is read again shortly after, and [onSourceChanged] hears if it has changed.
  */
 class ChargingMonitor(
     private val context: Context,
     private val onPlugged: (ChargingStatus) -> Unit,
     private val onUnplugged: () -> Unit,
     private val onHeldBack: () -> Unit,
+    private val onSourceChanged: (ChargingStatus) -> Unit,
 ) {
     private val gate = ChargingGate()
+
+    // What the last plug-in said, until it's been read again.
+    private var plugged: ChargingStatus? = null
+    private val readAgain = Runnable { checkSource() }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -53,11 +61,30 @@ class ChargingMonitor(
                         onHeldBack()
                         return
                     }
-                    onPlugged(ChargingStatus.read(context) ?: return)
+                    val status = ChargingStatus.read(context) ?: return
+                    plugged = status
+                    BackScreen.mainHandler.removeCallbacks(readAgain)
+                    BackScreen.mainHandler.postDelayed(readAgain, READ_AGAIN_MS)
+                    onPlugged(status)
                 }
-                Intent.ACTION_POWER_DISCONNECTED -> onUnplugged()
+                Intent.ACTION_POWER_DISCONNECTED -> {
+                    plugged = null
+                    BackScreen.mainHandler.removeCallbacks(readAgain)
+                    onUnplugged()
+                }
             }
         }
+    }
+
+    /** Where the power comes from, read again a moment after the plug-in. */
+    private fun checkSource() {
+        val first = plugged ?: return
+        plugged = null
+        if (!ChargingStatus.isPlugged(context)) return
+        val now = ChargingStatus.read(context) ?: return
+        if (now.source == first.source) return
+        BackScreen.log("Charging: ${now.source.name.lowercase()}, known only after plugging in")
+        onSourceChanged(now)
     }
 
     fun start() {
@@ -70,6 +97,11 @@ class ChargingMonitor(
     }
 
     fun stop() {
+        BackScreen.mainHandler.removeCallbacks(readAgain)
         context.unregisterReceiver(receiver)
+    }
+
+    private companion object {
+        const val READ_AGAIN_MS = 700L
     }
 }

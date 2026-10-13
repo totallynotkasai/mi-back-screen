@@ -21,7 +21,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.Display
 import android.view.Surface
-import com.backscreen.wallpaper.MainActivity
+import com.backscreen.wallpaper.LaunchCommand
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.battery.BatterySettings
 import com.backscreen.wallpaper.battery.ChargingMonitor
@@ -45,8 +45,7 @@ import com.backscreen.wallpaper.wallpaper.FolderAccess
 import com.backscreen.wallpaper.wallpaper.Gallery
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import rikka.shizuku.Shizuku
-import java.util.concurrent.Executors
-import java.util.concurrent.RejectedExecutionException
+import java.util.UUID
 import kotlin.math.max
 
 /**
@@ -103,14 +102,13 @@ import kotlin.math.max
  */
 class KeeperService : Service() {
 
-    private val executor = Executors.newSingleThreadExecutor()
+    // Stopped first thing in onDestroy: shell work posted or queued after that is dropped.
+    private val shellRunner = ShellRunner()
+    private val destroyed get() = shellRunner.stopped
     private var lastApply = 0L
 
     // What the notification said when it was last posted; null until the service is in the foreground.
     private var posted: NotificationSays? = null
-
-    // Set first thing in onDestroy: shell work posted or queued after that is dropped.
-    private var destroyed = false
 
     // The latest start. Stopping with it can't race a start that's still on its way, which
     // would then find no service to call startForeground.
@@ -120,19 +118,35 @@ class KeeperService : Service() {
     // why this is still running (see puttingBack).
     private var putBackStalled = false
 
-    // Set if a direct launch fails while unlocked; from then on use the main display route.
-    private var directLaunchBlocked = false
+    // Set when a direct launch fails while unlocked: until then (elapsedRealtime), use the main
+    // display route. Not for good: one slow launch shouldn't slow every later one.
+    private var directLaunchBlockedUntil = 0L
     private var awaitingDirectLaunch = false
-    private var wakeWhenShown = false
 
-    // Work waiting for Shizuku's connection, which arrives shortly after our process starts.
-    private val waitingForShizuku = mutableListOf<() -> Unit>()
+    // The host about to go up is lit up when it shows, if it does so before then (elapsedRealtime):
+    // only for a launch that shows it now, never one much later.
+    private var wakeWhenShownUntil = 0L
+
+    // When Xiaomi's "back screen turned on" last came (elapsedRealtime), to take a burst as one.
+    private var lastSubScreenOn = 0L
+
+    /**
+     * The token the host window last launched carries; it closes itself unless it matches (see
+     * RearHostActivity). New for each launch, and cleared when nothing of ours should be up, so
+     * no other app can put it up, and neither can a launch overtaken by switching the wallpaper off.
+     */
+    var hostToken: String? = null
+        private set
 
     /** The wallpaper is on but couldn't go up, because Shizuku isn't ready (see [waitForShizuku]). */
     var isWaitingForShizuku = false
         private set
 
-    private val charging = ChargingMonitor(this, ::onPluggedIn, ::onUnplugged) { RearHostActivity.chargingChanged() }
+    private val charging = ChargingMonitor(
+        this, ::onPluggedIn, ::onUnplugged,
+        onHeldBack = { RearHostActivity.chargingChanged() },
+        onSourceChanged = RearHostActivity::chargingSourceChanged,
+    )
     private val wakes = WakeThrottle()
     private val appWakes = AppWakeLimit()
 
@@ -158,7 +172,7 @@ class KeeperService : Service() {
     private val lightForLendAgain = Runnable { tryLightForLend() }
 
     private val binderReceived = Shizuku.OnBinderReceivedListener {
-        runWaiting()
+        shellRunner.runWaiting()
         BackScreen.mainHandler.post {
             applyIfWaiting()
             putBackTweaksIfIdle()
@@ -172,7 +186,6 @@ class KeeperService : Service() {
             checkLitTime()
         }
     }
-    private val shizukuTimeout = Runnable { runWaiting() }
     private val directLaunchTimeout = Runnable { onDirectLaunchFailed() }
     private val checkRear = Runnable { checkRearDisplay() }
     private val checkRearLate = Runnable { checkRearDisplay() }
@@ -211,10 +224,14 @@ class KeeperService : Service() {
     }
 
     // HyperOS's own "back screen turned on" broadcast. Can arrive when the display listener
-    // doesn't fire (the doze layer reports the display as off); anyone can send it, but all
-    // it does is trigger a check.
+    // doesn't fire (the doze layer reports the display as off). It's a protected broadcast, so
+    // only the system and its own apps can send it (HyperOS 3.0.319); which one does isn't known,
+    // so the receiver stays exported. All it does is trigger a check, at most once a second.
     private val subScreenOn = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastSubScreenOn < SUB_SCREEN_ON_GAP_MS) return
+            lastSubScreenOn = now
             RearHostActivity.refreshImage()
             scheduleRearCheck()
         }
@@ -238,6 +255,7 @@ class KeeperService : Service() {
         // Only the system sends it, and it reaches receivers that aren't exported.
         registerReceiver(userPresent, IntentFilter(Intent.ACTION_USER_PRESENT), RECEIVER_NOT_EXPORTED)
         getSystemService(NotificationManager::class.java).deleteNotificationChannel(OLD_CHANNEL_ID)
+        BackScreen.logRearDisplay(this)
         charging.start()
         val lend = (RearState.owner(this) as? RearOwner.Lent)?.lend
         if (lend != null) {
@@ -298,14 +316,13 @@ class KeeperService : Service() {
     }
 
     override fun onDestroy() {
-        destroyed = true
-        waitingForShizuku.clear()
+        shellRunner.stop()
         instance = null
+        hostToken = null
         BackScreen.mainHandler.removeCallbacks(checkRear)
         BackScreen.mainHandler.removeCallbacks(checkRearLate)
         BackScreen.mainHandler.removeCallbacks(putBack)
         BackScreen.mainHandler.removeCallbacks(wakeForChanges)
-        BackScreen.mainHandler.removeCallbacks(shizukuTimeout)
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.mainHandler.removeCallbacks(popoverDone)
         BackScreen.mainHandler.removeCallbacks(lightForLendAgain)
@@ -319,7 +336,6 @@ class KeeperService : Service() {
         unregisterReceiver(subScreenOn)
         unregisterReceiver(userPresent)
         charging.stop()
-        executor.shutdown()
         super.onDestroy()
     }
 
@@ -343,13 +359,15 @@ class KeeperService : Service() {
         // Says so if its folder can't be opened.
         updateNotification()
         BackScreen.mainHandler.removeCallbacks(popoverDone)
-        // You just asked for it, so light the back screen up to show it (a schedule doesn't).
-        wakeWhenShown = byYou
         val owner = RearState.owner(this)
         if (owner is RearOwner.Lent) {
+            // Not lit up for later, when the app leaves: that may be hours from now.
+            wakeWhenShownUntil = 0L
             BackScreen.log("Wallpaper on; it shows when ${owner.lend.packageName} leaves the back screen")
             return
         }
+        // You just asked for it, so light the back screen up to show it (a schedule doesn't).
+        wakeWhenShownUntil = if (byYou) SystemClock.elapsedRealtime() + WAKE_WHEN_SHOWN_MS else 0L
         apply(orWait = !byYou || isWaitingForShizuku || wasOn)
     }
 
@@ -389,27 +407,33 @@ class KeeperService : Service() {
         updateNotification()
     }
 
-    /** Launches the host, replacing it if it's up. It shows whatever [RearState] says. */
+    /**
+     * Launches the host, replacing it if it's up. It shows whatever [RearState] says. Each launch
+     * has a new [hostToken], so one overtaken by a newer launch, or by switching off, closes itself.
+     */
     private fun launchHost(what: String, onUnavailable: () -> Unit = ::fail) {
         if (destroyed) return
         RearHostActivity.finishCurrent()
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.log(what)
+        val token = UUID.randomUUID().toString()
+        hostToken = token
         val rear = BackScreen.findRearDisplay(this)?.displayId
         // HyperOS only honours our rear display opt-in while the phone is unlocked.
         val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
         val popover = RearState.owner(this) == RearOwner.Popover
         val unavailable: () -> Unit = if (popover) ({ endPopover("Shizuku isn't ready") }) else onUnavailable
-        if (rear == null || locked || directLaunchBlocked) {
+        if (rear == null || locked || SystemClock.elapsedRealtime() < directLaunchBlockedUntil) {
             awaitingDirectLaunch = false
             shell(unavailable) {
-                BackScreen.log("Open on main screen, to move: ${RearCommands.launchHost(Display.DEFAULT_DISPLAY)}")
+                val result = RearCommands.launchHost(packageName, Display.DEFAULT_DISPLAY, token)
+                BackScreen.log("Open on main screen, to move: $result")
             }
             return
         }
         awaitingDirectLaunch = true
         shell(unavailable) {
-            val result = RearCommands.launchHost(rear)
+            val result = RearCommands.launchHost(packageName, rear, token)
             BackScreen.log("Open on back screen: $result")
             // Give it a moment to appear; if it doesn't, use the main display route.
             BackScreen.mainHandler.postDelayed(
@@ -421,26 +445,54 @@ class KeeperService : Service() {
     private fun onDirectLaunchFailed() {
         if (!awaitingDirectLaunch) return
         awaitingDirectLaunch = false
-        directLaunchBlocked = true
-        BackScreen.log("Back screen refused a direct launch; going via the main screen")
+        directLaunchBlockedUntil = SystemClock.elapsedRealtime() + DIRECT_LAUNCH_BLOCKED_MS
+        BackScreen.log("Back screen refused a direct launch; going via the main screen for a while")
         launchHost("Opening via the main screen...")
     }
 
-    /** Called by RearHostActivity when it has been created on the main display. */
-    fun onHostCreatedOnMain(taskId: Int) {
+    /** Called by RearHostActivity when it has been created on the main display, by the launch with [token]. */
+    fun onHostCreatedOnMain(taskId: Int, token: String) {
         // HyperOS may put a direct launch on the main display instead; moving it fixes that.
         awaitingDirectLaunch = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
-        val rear = BackScreen.findRearDisplay(this)?.displayId
-            ?: return BackScreen.log("Back screen not found")
-        shell { BackScreen.log("Move to back screen: ${RearCommands.moveTaskToDisplay(taskId, rear)}") }
+        val rear = BackScreen.findRearDisplay(this)?.displayId ?: return abandonHost("the back screen wasn't found", token)
+        shell(onUnavailable = { abandonHost("Shizuku isn't ready", token) }) {
+            val result = RearCommands.moveTaskToDisplay(taskId, rear)
+            BackScreen.log("Move to back screen: $result")
+            if (result != "ok") BackScreen.mainHandler.post { abandonHost("it couldn't be moved", token) }
+        }
+    }
+
+    /**
+     * The host the launch with [token] opened on the main screen, to be moved to the back screen,
+     * can't be moved: close it, rather than leave a see-through window over the main screen. A
+     * pop-over ends; the wallpaper is left to the usual checks, which put it back when they can.
+     * Nothing if a newer launch has taken over, or the window reached the back screen after all
+     * (a move that ran out of time may still have happened).
+     */
+    fun abandonHost(why: String, token: String) {
+        if (token != hostToken || RearHostActivity.isOnRear()) return
+        BackScreen.log("Back screen window not moved there ($why); closing it")
+        hostToken = null
+        wakeWhenShownUntil = 0L
+        RearHostActivity.finishCurrent()
+        endPopover(why)
+    }
+
+    /**
+     * A host window closed itself on opening, its launch overtaken by a newer one (see
+     * [hostToken]). The newer launch can be taken by that window as it went, so if nothing of
+     * ours is up in a moment, it's put back.
+     */
+    fun onHostRefused() {
+        if (hostToken != null) scheduleRearCheck()
     }
 
     /** Called by RearHostActivity when it is showing on the rear display. */
     fun onHostShownOnRear(displayId: Int) {
-        val wake = wakeWhenShown && !hyperOsWouldCover()
+        val wake = SystemClock.elapsedRealtime() < wakeWhenShownUntil && !hyperOsWouldCover()
         awaitingDirectLaunch = false
-        wakeWhenShown = false
+        wakeWhenShownUntil = 0L
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         // Only for the wallpaper, which stays: a pop-over is gone in seconds.
         val guard = RearState.snapshot(this).guardsWallpaper
@@ -472,7 +524,9 @@ class KeeperService : Service() {
         // A folder it couldn't open no longer matters.
         updateNotification()
         awaitingDirectLaunch = false
-        wakeWhenShown = false
+        wakeWhenShownUntil = 0L
+        // A launch still on its way closes itself when it arrives.
+        hostToken = null
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.mainHandler.removeCallbacks(putBack)
         RearHostActivity.finishCurrent()
@@ -487,7 +541,7 @@ class KeeperService : Service() {
 
     /** Brings Xiaomi's launcher to the front of the back screen. */
     private fun restoreXiaomi() {
-        val rear = BackScreen.findRearDisplay(this)?.displayId ?: 1
+        val rear = BackScreen.rearIdOrLastKnown(this) ?: return stopIfIdle()
         shell(onUnavailable = { stopIfIdle() }) {
             // Usually already underneath; this makes sure it's there.
             BackScreen.log("Restore Xiaomi back screen: ${RearCommands.restoreXiaomiRearLauncher(rear)}")
@@ -502,6 +556,8 @@ class KeeperService : Service() {
         displayOptions.update()
         stopWaiting()
         updateNotification()
+        wakeWhenShownUntil = 0L
+        hostToken = null
         RearHostActivity.finishCurrent()
         ClockAlarm.update(this)
         stopIfIdle()
@@ -515,7 +571,7 @@ class KeeperService : Service() {
      */
     fun showPopover(durationMs: Long, wake: Boolean): Boolean {
         if (!RearState.startPopover(this)) return false
-        wakeWhenShown = wake
+        wakeWhenShownUntil = if (wake) SystemClock.elapsedRealtime() + WAKE_WHEN_SHOWN_MS else 0L
         BackScreen.mainHandler.removeCallbacks(popoverDone)
         BackScreen.mainHandler.postDelayed(popoverDone, durationMs)
         launchHost("Pop-over on back screen...")
@@ -531,7 +587,8 @@ class KeeperService : Service() {
         if (RearState.owner(this) != RearOwner.Popover) return
         RearState.endPopover(this)
         awaitingDirectLaunch = false
-        wakeWhenShown = false
+        wakeWhenShownUntil = 0L
+        hostToken = null
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         RearHostActivity.finishCurrent()
         BackScreen.log("Pop-over ended: $why")
@@ -973,48 +1030,11 @@ class KeeperService : Service() {
     }
 
     /**
-     * Runs [block] with Shizuku on the shell thread, waiting briefly for its connection if needed.
-     * If Shizuku isn't ready, [onUnavailable] runs instead, on the main thread; by default that
-     * switches the wallpaper off. Once the service has stopped, neither runs.
+     * Runs [block] with Shizuku on the shell thread ([ShellRunner]). If Shizuku isn't ready,
+     * [onUnavailable] runs instead, on the main thread; by default that switches the wallpaper
+     * off. Once the service has stopped, neither runs.
      */
-    fun shell(onUnavailable: () -> Unit = ::fail, block: () -> Unit) {
-        if (destroyed) return BackScreen.trace("The keeper has stopped; shell work dropped")
-        val task = {
-            when {
-                destroyed -> BackScreen.trace("The keeper has stopped; shell work dropped")
-                RearCommands.isReady() -> execute(block)
-                else -> {
-                    BackScreen.log("Shizuku isn't running or this app isn't allowed")
-                    onUnavailable()
-                }
-            }
-        }
-        if (Shizuku.pingBinder()) {
-            task()
-        } else {
-            waitingForShizuku += task
-            BackScreen.mainHandler.removeCallbacks(shizukuTimeout)
-            BackScreen.mainHandler.postDelayed(shizukuTimeout, SHIZUKU_WAIT_MS)
-        }
-    }
-
-    /** On the shell thread, unless the service stopped in the meantime and shut it. */
-    private fun execute(block: () -> Unit) {
-        try {
-            executor.execute(block)
-        } catch (e: RejectedExecutionException) {
-            BackScreen.trace("The keeper has stopped; shell work dropped")
-        }
-    }
-
-    private fun runWaiting() {
-        BackScreen.mainHandler.post {
-            BackScreen.mainHandler.removeCallbacks(shizukuTimeout)
-            val tasks = waitingForShizuku.toList()
-            waitingForShizuku.clear()
-            tasks.forEach { it() }
-        }
-    }
+    fun shell(onUnavailable: () -> Unit = ::fail, block: () -> Unit) = shellRunner.run(onUnavailable, block)
 
     /**
      * The service's one notification. Android requires it, and shows it silently rather than
@@ -1088,8 +1108,7 @@ class KeeperService : Service() {
     /** Opens the app at the Wallpaper tab, where the folder can be chosen again. */
     private fun showWallpaperIntent(): PendingIntent = PendingIntent.getActivity(
         this, REQUEST_SHOW_WALLPAPER,
-        Intent(this, MainActivity::class.java)
-            .setAction(ACTION_SHOW_WALLPAPER)
+        LaunchCommand.intent(this, ACTION_SHOW_WALLPAPER)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
@@ -1180,8 +1199,10 @@ class KeeperService : Service() {
         private const val HIDDEN_CHECK_DELAY_MS = 300L
         private const val PUT_BACK_DELAY_MS = 700L
         private const val REAPPLY_MIN_INTERVAL_MS = 5000L
-        private const val SHIZUKU_WAIT_MS = 4000L
         private const val DIRECT_LAUNCH_TIMEOUT_MS = 1500L
+        private const val DIRECT_LAUNCH_BLOCKED_MS = 30 * 60_000L
+        private const val WAKE_WHEN_SHOWN_MS = 10_000L
+        private const val SUB_SCREEN_ON_GAP_MS = 1000L
         private const val SHOW_CHANGES_DELAY_MS = 400L
         private const val SENSOR_AWAKE_MS = 2000L
 
