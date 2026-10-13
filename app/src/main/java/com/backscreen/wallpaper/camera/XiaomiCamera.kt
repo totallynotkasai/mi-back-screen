@@ -78,13 +78,13 @@ class XiaomiCamera(private val keeper: KeeperService) {
     fun open(why: String) {
         if (lend != null) return BackScreen.log("Xiaomi Camera is on the back screen already")
         val rear = keeper.rearDisplayId() ?: return BackScreen.log("Camera: no back screen")
-        val lend = Lend(LendReason.CAMERA, UNKNOWN_TASK, RearCommands.CAMERA_PACKAGE)
+        val lend = Lend(LendReason.CAMERA, UNKNOWN_TASK, RearCommands.CAMERA_PACKAGE, Lend.newId())
         if (!keeper.onLent(lend)) return BackScreen.log("Camera: another app has the back screen")
         BackScreen.log("Opening Xiaomi Camera on the back screen ($why)")
         closing = false
         watchLight()
         val started = SystemClock.elapsedRealtime()
-        keeper.shell(onUnavailable = { keeper.onLendEnded() }) {
+        keeper.shell(onUnavailable = { keeper.onLendEnded(lend) }) {
             val route = when {
                 opened(1, RearCommands.openXiaomiCamera(rear), rear, lend) -> 1
                 opened(2, RearCommands.openCameraByIntent(rear), rear, lend) -> 2
@@ -94,7 +94,7 @@ class XiaomiCamera(private val keeper: KeeperService) {
             BackScreen.mainHandler.post {
                 if (route == null) {
                     BackScreen.log("Xiaomi Camera didn't open on the back screen")
-                    if (this.lend == lend) keeper.onLendEnded()
+                    keeper.onLendEnded(lend)
                     return@post
                 }
                 this.route = route
@@ -115,7 +115,7 @@ class XiaomiCamera(private val keeper: KeeperService) {
      */
     fun adopt() {
         if (lend != null) return
-        if (!keeper.onLent(Lend(LendReason.CAMERA, UNKNOWN_TASK, RearCommands.CAMERA_PACKAGE))) return
+        if (!keeper.onLent(Lend(LendReason.CAMERA, UNKNOWN_TASK, RearCommands.CAMERA_PACKAGE, Lend.newId()))) return
         BackScreen.log("Xiaomi Camera opened on the back screen by itself; it has the back screen")
         closing = false
         watchLight()
@@ -153,7 +153,7 @@ class XiaomiCamera(private val keeper: KeeperService) {
             }
             BackScreen.mainHandler.post {
                 closing = false
-                if (this.lend == lend) keeper.onLendEnded()
+                keeper.onLendEnded(lend)
             }
         }
     }

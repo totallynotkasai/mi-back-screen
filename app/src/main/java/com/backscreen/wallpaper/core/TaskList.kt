@@ -21,6 +21,13 @@ object TaskList {
     fun tasksOn(output: String, displayId: Int): List<Task> =
         list(output).filter { it.display == displayId }.map { it.task }
 
+    /**
+     * Every task [packageName] has on [displayId], the one in front first: Bring back moves them
+     * all, since the app may have opened another task there since it was sent.
+     */
+    fun tasksOf(output: String, displayId: Int, packageName: String): List<Task> =
+        tasksOn(output, displayId).filter { it.packageName == packageName }
+
     /** The packages with a task on [displayId], the one in front first. */
     fun packagesOn(output: String, displayId: Int): List<String> =
         tasksOn(output, displayId).map { it.packageName }.distinct()

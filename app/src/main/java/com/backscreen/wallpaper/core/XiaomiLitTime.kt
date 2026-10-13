@@ -8,7 +8,8 @@ import kotlin.concurrent.thread
  * set through Shizuku with the command Quick Switch already uses. After it, Xiaomi lowers the
  * brightness for 6 s more, then dims (measured on the phone).
  *
- * Xiaomi's own value is saved the first time it's changed, and As set puts it back. While a lend
+ * Xiaomi's own value is saved the first time it's changed, and As set puts it back (kept, and the
+ * keeper kept running, until that write works). While a lend
  * has the timeout raised (Quick Switch's Back screen stays lit), a change here leaves it raised and
  * becomes what the lend puts back; so Quick Switch's As set means what this says. Uninstalling the
  * app leaves Xiaomi's setting as it is, which the Wallpaper help mentions.
@@ -34,16 +35,26 @@ object XiaomiLitTime {
         // Saved before Xiaomi's value is first changed, and forgotten once it's back.
         if (chosen != null && own == null) DisplaySettings.saveXiaomiLitTime(context, Saved(xiaomi))
         val base = chosen?.toString() ?: xiaomi
-        when (val change = TweakRules.baseChanged(saved, current.value, base)) {
-            is BaseChange.Write -> BackScreen.log("Stays lit for: ${base ?: "unset"} (was ${current.value ?: "unset"}): ${kind.write(rear, base)}")
+        val done = when (val change = TweakRules.baseChanged(saved, current.value, base)) {
+            is BaseChange.Write -> {
+                val result = kind.write(rear, base)
+                BackScreen.log("Stays lit for: ${base ?: "unset"} (was ${current.value ?: "unset"}): $result")
+                result == "ok"
+            }
             is BaseChange.PutBackLater -> {
                 RearTweaks.replace(context, kind, change.tweak)
                 BackScreen.log("Stays lit for: ${base ?: "unset"} once the app on the back screen leaves")
+                true
             }
-            BaseChange.None -> {}
+            BaseChange.None -> true
         }
-        if (chosen == null) DisplaySettings.saveXiaomiLitTime(context, null)
+        // Xiaomi's own value is forgotten only once it's back (or a lend will put it back), so a
+        // failed write is tried again: the keeper runs until it's done (see owed).
+        if (chosen == null && done) DisplaySettings.saveXiaomiLitTime(context, null)
     }
+
+    /** As set is chosen but Xiaomi's own value isn't back yet. Any thread. */
+    fun owed(context: Context) = DisplaySettings.litTime(context).ms == null && DisplaySettings.xiaomiLitTime(context) != null
 
     /** Xiaomi's own timeout in ms, for As set's chip; null if it can't be read. Shell thread. */
     fun xiaomiMs(context: Context): Int? {
@@ -52,10 +63,22 @@ object XiaomiLitTime {
         return TweakRules.xiaomiOwn(null, RearTweaks.saved(context, TweakKind.TIMEOUT), current.value)?.toIntOrNull()
     }
 
-    /** Stays lit for changed: apply it on the keeper's shell thread if it's running, so it's in turn with a lend. */
+    /**
+     * Stays lit for changed: apply it on the keeper's shell thread if it's running, so it's in
+     * turn with a lend. Otherwise here; and if Xiaomi's own value couldn't be put back, the keeper
+     * starts to try again.
+     */
     fun changed(context: Context) {
         val app = context.applicationContext
-        val keeper = KeeperService.instance
-        if (keeper != null) keeper.shell(onUnavailable = {}) { apply(app) } else thread { apply(app) }
+        KeeperService.instance?.let { return it.checkLitTime() }
+        thread {
+            apply(app)
+            if (!owed(app)) return@thread
+            try {
+                KeeperService.start(app, KeeperService.ACTION_UPDATE)
+            } catch (e: IllegalStateException) {
+                BackScreen.log("Stays lit for: couldn't start the keeper to try again: ${e.message}")
+            }
+        }
     }
 }

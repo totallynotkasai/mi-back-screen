@@ -49,6 +49,22 @@ object TweakRules {
     fun shouldPutBack(saved: Tweak, current: String?) = current == saved.ours
 
     /**
+     * A write to the setting failed (Shizuku dropped partway, say), and [reread] is what it holds
+     * now, or null if that couldn't be read. What to keep for the put-back: nothing if it holds
+     * [tweak]'s original after all; otherwise what it holds now counts as this app's, so a
+     * half-done change (a rotation locked but not fixed) is still put back. If it can't be told,
+     * the write most likely didn't happen: [earlier], the tweak saved before it (a second change
+     * in one lend), or else [tweak], which puts back the right original either way.
+     */
+    fun afterFailedWrite(tweak: Tweak, reread: Current?, earlier: Tweak? = null): Tweak? = when {
+        reread == null -> earlier ?: tweak
+        reread.value == tweak.original -> null
+        // Unset now, though the write never unsets: nothing to go on.
+        reread.value == null -> earlier ?: tweak
+        else -> tweak.copy(ours = reread.value)
+    }
+
+    /**
      * The value the setting rests at changed to [base] (Stays lit for, on the Wallpaper tab). While
      * a lend has the setting changed ([saved], still holding its value), the lend keeps it, and
      * puts back [base] when it ends instead of what it saved. Otherwise it's set now.
@@ -139,9 +155,10 @@ enum class TweakKind(val key: String, val label: String) {
 /**
  * Everything a lend changes in Xiaomi's settings: how long the back screen stays lit, and the
  * back screen's density and rotation if those are chosen. Each is saved to disk with its original
- * before it's changed, and put back when the lend ends; also when the keeper starts with no app
- * lent, so a crash or a restart can't leave them changed for good. A value is put back only if
- * it still holds what this app set, so a change you make in Xiaomi's settings meanwhile is kept.
+ * before it's changed, and put back when the lend ends; also when the keeper starts or Shizuku
+ * connects with no app lent, so a crash, a restart or Shizuku stopping partway can't leave them
+ * changed for good. A value is put back only if it still holds what this app set, so a change you
+ * make in Xiaomi's settings meanwhile is kept.
  *
  * Runs the shell, so never on the main thread.
  */
@@ -162,19 +179,44 @@ object RearTweaks {
         if (value == current.value && saved?.ours == value) return
         val tweak = TweakRules.beforeChange(saved, current.value, value)
         save(context, kind, tweak)
-        BackScreen.log("${kind.label}: $value (was ${tweak.original ?: "unset"}): ${kind.write(rear, value)}")
+        val result = kind.write(rear, value)
+        BackScreen.log("${kind.label}: $value (was ${tweak.original ?: "unset"}): $result")
+        if (result != "ok") afterFailedWrite(context, kind, rear, tweak, earlier = saved)
     }
 
-    /** Puts [kind] back, if this app changed it. */
+    /**
+     * Puts [kind] back, if this app changed it. Forgotten only once it's back, or you changed it
+     * meanwhile; if the write fails it's kept, and tried again at the next chance (the keeper
+     * starting, Shizuku connecting, a lend ending).
+     */
     fun putBack(context: Context, kind: TweakKind, rear: Int) {
         val saved = load(context, kind) ?: return
         val current = kind.read(rear) ?: return BackScreen.log("${kind.label}: couldn't read it to put it back; trying later")
-        if (TweakRules.shouldPutBack(saved, current.value)) {
-            BackScreen.log("${kind.label}: back to ${saved.original ?: "unset"}: ${kind.write(rear, saved.original)}")
-        } else {
-            BackScreen.log("${kind.label}: changed meanwhile (${current.value}), so left as it is")
+        if (!TweakRules.shouldPutBack(saved, current.value)) {
+            if (current.value == saved.original) {
+                BackScreen.log("${kind.label}: back to ${saved.original ?: "unset"} already")
+            } else {
+                BackScreen.log("${kind.label}: changed meanwhile (${current.value}), so left as it is")
+            }
+            return clear(context, kind)
         }
-        clear(context, kind)
+        val result = kind.write(rear, saved.original)
+        BackScreen.log("${kind.label}: back to ${saved.original ?: "unset"}: $result")
+        if (result == "ok") clear(context, kind) else afterFailedWrite(context, kind, rear, saved)
+    }
+
+    /** A write failed: keep what [TweakRules.afterFailedWrite] says, so the put-back is still right. */
+    private fun afterFailedWrite(context: Context, kind: TweakKind, rear: Int, tweak: Tweak, earlier: Tweak? = null) {
+        when (val keep = TweakRules.afterFailedWrite(tweak, kind.read(rear), earlier)) {
+            null -> {
+                clear(context, kind)
+                BackScreen.log("${kind.label}: still ${tweak.original ?: "unset"}, so nothing to put back")
+            }
+            else -> {
+                save(context, kind, keep)
+                BackScreen.log("${kind.label}: ${keep.original ?: "unset"} goes back later")
+            }
+        }
     }
 
     /** Puts back everything a lend changed. */

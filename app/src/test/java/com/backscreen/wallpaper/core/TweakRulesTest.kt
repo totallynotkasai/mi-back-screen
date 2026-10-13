@@ -69,6 +69,36 @@ class TweakRulesTest {
     }
 
     @Test
+    fun aFailedWriteThatChangedNothingIsForgotten() {
+        // Shizuku dropped before 2 min was written: Xiaomi's 10 s is still there, nothing to put back.
+        assertNull(TweakRules.afterFailedWrite(Tweak("10000", "120000"), Current("10000", "10000")))
+        // The same for a put-back that failed but went through: it's back already.
+        assertNull(TweakRules.afterFailedWrite(Tweak(null, "lock 3|enabled"), Current(null, "")))
+    }
+
+    @Test
+    fun aHalfDoneRotationIsSavedAsWhatItHolds() {
+        // Locked, but Shizuku dropped before the display was fixed to it: that's what's put back
+        // from, so the put-back still sees it as this app's and frees it.
+        val tweak = Tweak("free|default", "lock 3|enabled")
+        assertEquals(Tweak("free|default", "lock 3|default"), TweakRules.afterFailedWrite(tweak, Current("lock 3|default", "lock 3|default")))
+        // A put-back that only half ran: the original is still what goes back.
+        assertEquals(Tweak("free|default", "free|enabled"), TweakRules.afterFailedWrite(tweak, Current("free|enabled", "free|enabled")))
+        // And a second change in one lend that failed: the first original still goes back.
+        assertEquals(Tweak("10000", "120000"), TweakRules.afterFailedWrite(Tweak("10000", "600000"), Current("120000", "120000")))
+    }
+
+    @Test
+    fun anUnreadableSettingKeepsTheTweak() {
+        val tweak = Tweak("260", "156")
+        assertEquals(tweak, TweakRules.afterFailedWrite(tweak, null))
+        // A second change in one lend (2 min, then 5 min) failed and can't be read back: it most
+        // likely still holds 2 min, so that's what the put-back looks for, to put 10 s back.
+        val earlier = Tweak("10000", "120000")
+        assertEquals(earlier, TweakRules.afterFailedWrite(Tweak("10000", "300000"), null, earlier))
+    }
+
+    @Test
     fun readsXiaomisTimeout() {
         assertEquals("10000", TweakRules.timeout("10000\n"))
         assertNull(TweakRules.timeout("null\n"))

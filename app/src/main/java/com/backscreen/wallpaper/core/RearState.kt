@@ -1,7 +1,10 @@
 package com.backscreen.wallpaper.core
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.os.SystemClock
 import android.provider.Settings
+import androidx.annotation.AnyThread
 import androidx.annotation.MainThread
 import com.backscreen.wallpaper.battery.BatterySettings
 import com.backscreen.wallpaper.mirror.MirrorSettings
@@ -10,8 +13,17 @@ import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 /** Why another app has the back screen. */
 enum class LendReason { QUICK_SWITCH, CAMERA }
 
-/** Another app on the back screen: moved there by Quick Switch, or Xiaomi Camera opened there. */
-data class Lend(val reason: LendReason, val taskId: Int, val packageName: String)
+/**
+ * Another app on the back screen: moved there by Quick Switch, or Xiaomi Camera opened there.
+ * [id] tells one lend from the next, since every camera lend has the same reason, task and
+ * package: a late reply about an old one mustn't end a newer one. 0 for a lend saved before ids.
+ */
+data class Lend(val reason: LendReason, val taskId: Int, val packageName: String, val id: Long = 0L) {
+    companion object {
+        /** A fresh [id], for a new lend. */
+        fun newId() = SystemClock.elapsedRealtimeNanos()
+    }
+}
 
 /** What the host shows while it owns the back screen. */
 enum class HostMode {
@@ -99,10 +111,11 @@ data class RearSnapshot(
     fun lent(lend: Lend) = if (this.lend == null) copy(lend = lend, popover = false, shadeOpen = false) else null
 
     /**
-     * The lent app left. The back screen goes to whichever the Wallpaper switch says now, so a
-     * schedule that fired meanwhile counts.
+     * [lend]'s app left. The back screen goes to whichever the Wallpaper switch says now, so a
+     * schedule that fired meanwhile counts. Only for the lend that's there: a second Bring back,
+     * or a late reply about an earlier lend, mustn't end a newer one.
      */
-    fun returned() = copy(lend = null)
+    fun returned(lend: Lend) = if (lend == this.lend) copy(lend = null) else null
 
     fun openShade() = if (owner == RearOwner.Host(HostMode.WALLPAPER)) copy(shadeOpen = true) else null
 
@@ -126,10 +139,16 @@ object RearState {
     private const val KEY_TASK = "lend_task"
     private const val KEY_PACKAGE = "lend_package"
     private const val KEY_BOOT = "lend_boot"
+    private const val KEY_ID = "lend_id"
 
     private var popover = false
     private var shadeOpen = false
+
+    // Volatile: the shell thread asks whether an app is lent ([isLentAnyThread]).
+    @Volatile
     private var lend: Lend? = null
+
+    @Volatile
     private var loaded = false
 
     fun snapshot(context: Context) =
@@ -137,10 +156,17 @@ object RearState {
 
     fun owner(context: Context) = snapshot(context).owner
 
-    /** Also while Xiaomi's settings are still changed from an earlier lend, until they're put back. */
+    /** Whether another app has the back screen, from any thread. Doesn't load or change anything. */
+    @AnyThread
+    fun isLentAnyThread(context: Context): Boolean = if (loaded) lend != null else readLend(context) != null
+
+    /**
+     * Also while Xiaomi's settings are still changed from an earlier lend, or As set hasn't put
+     * Xiaomi's own Stays lit for back yet: until they're put back.
+     */
     fun keeperNeeded(context: Context) =
         snapshot(context).keeperNeeded(BatterySettings.isEnabled(context), MirrorSettings.isEnabled(context)) ||
-            RearTweaks.pending(context)
+            RearTweaks.pending(context) || XiaomiLitTime.owed(context)
 
     fun wallpaperChanged(context: Context, on: Boolean) = apply(context, snapshot(context).withWallpaper(on))
 
@@ -150,7 +176,8 @@ object RearState {
 
     fun lend(context: Context, lend: Lend) = apply(context, snapshot(context).lent(lend))
 
-    fun endLend(context: Context) = apply(context, snapshot(context).returned())
+    /** False unless [lend] is the one there (see [RearSnapshot.returned]). */
+    fun endLend(context: Context, lend: Lend) = apply(context, snapshot(context).returned(lend))
 
     fun openShade(context: Context) = apply(context, snapshot(context).openShade())
 
@@ -165,19 +192,30 @@ object RearState {
         return true
     }
 
+    @AnyThread
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun loadLend(context: Context): Lend? {
         if (loaded) return lend
-        val p = prefs(context)
-        val reason = LendReason.entries.firstOrNull { it.name == p.getString(KEY_REASON, null) }
-        val pkg = p.getString(KEY_PACKAGE, null)
-        val sameBoot = p.getInt(KEY_BOOT, UNKNOWN_BOOT) == bootCount(context)
-        lend = if (reason != null && pkg != null && sameBoot) Lend(reason, p.getInt(KEY_TASK, -1), pkg) else null
+        lend = readLend(context)
         loaded = true
         return lend
     }
 
+    /** The saved lend, from disk. */
+    @AnyThread
+    private fun readLend(context: Context): Lend? {
+        val p = prefs(context)
+        val reason = LendReason.entries.firstOrNull { it.name == p.getString(KEY_REASON, null) }
+        val pkg = p.getString(KEY_PACKAGE, null)
+        val sameBoot = p.getInt(KEY_BOOT, UNKNOWN_BOOT) == bootCount(context)
+        if (reason == null || pkg == null || !sameBoot) return null
+        return Lend(reason, p.getInt(KEY_TASK, -1), pkg, p.getLong(KEY_ID, 0L))
+    }
+
+    // commit, not apply: on disk before the app is moved, so a process death straight after
+    // sending can't put the wallpaper over it and Xiaomi's settings back under it.
+    @SuppressLint("ApplySharedPref")
     private fun saveLend(context: Context, value: Lend?) {
         lend = value
         loaded = true
@@ -189,11 +227,13 @@ object RearState {
                 putInt(KEY_TASK, value.taskId)
                 putString(KEY_PACKAGE, value.packageName)
                 putInt(KEY_BOOT, bootCount(context))
+                putLong(KEY_ID, value.id)
             }
-        }.apply()
+        }.commit()
     }
 
     /** How many times the phone has started; any app may read it. */
+    @AnyThread
     private fun bootCount(context: Context) =
         Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, UNKNOWN_BOOT)
 

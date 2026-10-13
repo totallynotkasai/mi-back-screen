@@ -38,9 +38,35 @@ class RearSnapshotTest {
         // A schedule turned the wallpaper off while YouTube was on the back screen.
         val lent = wallpaper.lent(youtube)!!.withWallpaper(false)
         assertEquals(RearOwner.Lent(youtube), lent.owner)
-        assertEquals(RearOwner.Xiaomi, lent.returned().owner)
+        assertEquals(RearOwner.Xiaomi, lent.returned(youtube)!!.owner)
         // And on again.
-        assertEquals(RearOwner.Host(HostMode.WALLPAPER), lent.withWallpaper(true).returned().owner)
+        assertEquals(RearOwner.Host(HostMode.WALLPAPER), lent.withWallpaper(true).returned(youtube)!!.owner)
+    }
+
+    @Test
+    fun onlyTheLendThatsThereCanEnd() {
+        // A second Bring back, or a late reply about an earlier lend, changes nothing.
+        val lent = wallpaper.lent(youtube)!!
+        assertNull(lent.returned(youtube.copy(id = 7)))
+        assertNull(lent.returned(camera))
+        assertEquals(RearOwner.Lent(youtube), lent.owner)
+    }
+
+    @Test
+    fun nothingEndsWithNoLend() {
+        assertNull(wallpaper.returned(youtube))
+        assertNull(wallpaper.lent(youtube)!!.returned(youtube)!!.returned(youtube))
+    }
+
+    @Test
+    fun twoCameraLendsAreDistinct() {
+        // Same reason, task and package; only the id tells an old camera lend from a new one.
+        val first = Lend(LendReason.CAMERA, -1, "com.android.camera", id = 1)
+        val second = Lend(LendReason.CAMERA, -1, "com.android.camera", id = 2)
+        assertFalse(first == second)
+        val lent = xiaomi.lent(second)!!
+        assertNull(lent.returned(first))
+        assertEquals(RearOwner.Xiaomi, lent.returned(second)!!.owner)
     }
 
     @Test
@@ -89,7 +115,7 @@ class RearSnapshotTest {
     fun aLendEndsAPopover() {
         val lent = xiaomi.startPopover()!!.lent(camera)!!
         assertFalse(lent.popover)
-        assertEquals(RearOwner.Xiaomi, lent.returned().owner)
+        assertEquals(RearOwner.Xiaomi, lent.returned(camera)!!.owner)
     }
 
     @Test

@@ -122,4 +122,46 @@ class TaskListTest {
         assertEquals(emptyList<String>(), TaskList.packagesOn("", 1))
         assertEquals(emptyList<String>(), TaskList.packagesOn("Error: unknown command", 1))
     }
+
+    // YouTube sent to the back screen, where it has since opened a second task (a full-screen
+    // player, say), over the wallpaper; and another YouTube task left on the main screen.
+    private val youtubeOnBack = """
+        RootTask id=3401 bounds=[0,0][976,596] displayId=1 userId=0
+          taskId=3401: app.revanced.android.youtube/com.google.android.apps.youtube.app.watchwhile.WatchWhileActivity bounds=[0,0][976,596] userId=0 visible=true
+        RootTask id=3377 bounds=[0,0][976,596] displayId=1 userId=0
+          taskId=3377: app.revanced.android.youtube/app.revanced.android.youtube.revanced_rounded_2 bounds=[0,0][976,596] userId=0 visible=false
+        RootTask id=3363 bounds=[0,0][976,596] displayId=1 userId=0
+          taskId=3363: com.backscreen.wallpaper/com.backscreen.wallpaper.rear.RearHostActivity bounds=[0,0][976,596] userId=0 visible=false
+        RootTask id=3390 bounds=[0,0][1200,2608] displayId=0 userId=0
+          taskId=3390: app.revanced.android.youtube/com.google.android.youtube.ShortsActivity bounds=[0,0][1200,2608] userId=0 visible=true
+    """.trimIndent()
+
+    private val youtube = "app.revanced.android.youtube"
+
+    @Test
+    fun bringBackFindsEveryTaskOfTheAppOnTheBackScreen() {
+        assertEquals(
+            listOf(TaskList.Task(3401, youtube), TaskList.Task(3377, youtube)),
+            TaskList.tasksOf(youtubeOnBack, 1, youtube),
+        )
+    }
+
+    @Test
+    fun bringBackIgnoresTheAppOnOtherDisplays() {
+        assertEquals(listOf(TaskList.Task(3390, youtube)), TaskList.tasksOf(youtubeOnBack, 0, youtube))
+        assertEquals(emptyList<TaskList.Task>(), TaskList.tasksOf(youtubeOnBack, 1, "com.google.android.apps.maps"))
+    }
+
+    @Test
+    fun bringBackFindsNothingOnceTheAppHasLeft() {
+        // Moved back to the main screen: only the wallpaper is left on the back screen.
+        val back = """
+            RootTask id=3401 bounds=[0,0][1200,2608] displayId=0 userId=0
+              taskId=3401: app.revanced.android.youtube/com.google.android.apps.youtube.app.watchwhile.WatchWhileActivity bounds=[0,0][1200,2608] userId=0 visible=true
+            RootTask id=3363 bounds=[0,0][976,596] displayId=1 userId=0
+              taskId=3363: com.backscreen.wallpaper/com.backscreen.wallpaper.rear.RearHostActivity bounds=[0,0][976,596] userId=0 visible=true
+        """.trimIndent()
+        assertEquals(emptyList<TaskList.Task>(), TaskList.tasksOf(back, 1, youtube))
+        assertEquals(listOf(TaskList.Task(3401, youtube)), TaskList.tasksOf(back, 0, youtube))
+    }
 }

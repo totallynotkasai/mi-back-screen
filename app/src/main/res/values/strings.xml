@@ -340,6 +340,8 @@
     <string name="qs_off">Quick Switch is off</string>
     <string name="qs_no_back_screen">No back screen</string>
     <string name="qs_failed">Couldn\'t move it</string>
+    <string name="qs_failed_back">Couldn\'t bring it back</string>
+    <string name="qs_failed_back_toast">Couldn\'t bring %1$s back. Try again.</string>
     <string name="qs_was_asleep">Mi Back Screen was asleep. Go back to your app and tap Quick Switch again</string>
     <string name="lent_channel">App on the back screen</string>
     <string name="lent_title">%1$s is on the back screen</string>
@@ -382,5 +384,6 @@
     <string name="keeper_title">Mi Back Screen is on</string>
     <string name="keeper_text">Android shows this while the app looks after the back screen. Hide switches it off for good; the app carries on.</string>
     <string name="keeper_waiting">Waiting for Shizuku to start</string>
+    <string name="keeper_putting_back">Putting Xiaomi\'s back screen settings back once Shizuku is running</string>
     <string name="hide">Hide</string>
 </resources>

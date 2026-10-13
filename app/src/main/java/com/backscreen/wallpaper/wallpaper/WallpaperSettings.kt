@@ -4,6 +4,7 @@ import android.content.Context
 import com.backscreen.wallpaper.ToggleTile
 import com.backscreen.wallpaper.ToggleWidget
 import com.backscreen.wallpaper.core.FeatureSettings
+import com.backscreen.wallpaper.core.Schedules
 
 /**
  * The Wallpaper section's settings. The file and keys are the ones every earlier version used,
@@ -24,9 +25,14 @@ object WallpaperSettings : FeatureSettings("backscreen") {
     private const val KEY_PAN_SKIP_SHORT = "pan_skip_short"
     private const val KEY_PAN_MIN_TRAVEL = "pan_min_travel"
 
-    /** The tile and widget show this switch, so they follow it. */
+    /**
+     * The tile and widget show this switch, so they follow it. A change is when the switch was
+     * last decided, so a schedule change missed before it isn't caught up later ([Schedules.catchUp]).
+     */
     override fun setEnabled(context: Context, enabled: Boolean) {
+        val changed = enabled != isEnabled(context)
         super.setEnabled(context, enabled)
+        if (changed) Schedules.decided(context)
         ToggleWidget.updateAll(context)
         ToggleTile.requestUpdate(context)
     }

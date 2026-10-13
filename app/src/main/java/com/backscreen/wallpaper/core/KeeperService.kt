@@ -1,5 +1,6 @@
 package com.backscreen.wallpaper.core
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -42,6 +43,7 @@ import com.backscreen.wallpaper.wallpaper.ClockAlarm
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import rikka.shizuku.Shizuku
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import kotlin.math.max
 
 /**
@@ -80,7 +82,8 @@ import kotlin.math.max
  * Quick Switch ([QuickSwitch]): while an app is lent the back screen, a watchdog checks it's
  * still there ([LendWatchdog]), the app's notification says so with Bring back, and covering the
  * back can bring it back ([BackCover]). Whatever the lend changed in Xiaomi's settings
- * ([RearTweaks]) is put back when it ends, or when this starts with nothing lent.
+ * ([RearTweaks]) is put back when it ends, or when this starts with nothing lent; if that can't
+ * be done yet (Shizuku has stopped), this keeps running, says so, and tries again when it can.
  *
  * Xiaomi Camera ([XiaomiCamera]): a swipe left on the wallpaper, or Open camera, opens it on the
  * back screen as another lend, watched the same way. It closes when the back screen dims or goes
@@ -102,6 +105,17 @@ class KeeperService : Service() {
 
     // What the notification said when it was last posted; null until the service is in the foreground.
     private var posted: NotificationSays? = null
+
+    // Set first thing in onDestroy: shell work posted or queued after that is dropped.
+    private var destroyed = false
+
+    // The latest start. Stopping with it can't race a start that's still on its way, which
+    // would then find no service to call startForeground.
+    private var lastStartId = 0
+
+    // A put-back of Xiaomi's settings couldn't run, or didn't finish: the notification says that's
+    // why this is still running (see puttingBack).
+    private var putBackStalled = false
 
     // Set if a direct launch fails while unlocked; from then on use the main display route.
     private var directLaunchBlocked = false
@@ -237,9 +251,17 @@ class KeeperService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
         // Once in the foreground, a command needn't post it again, so a notification you swiped
         // away stays away.
-        updateNotification()
+        if (!updateNotification()) {
+            // Android wouldn't let it into the foreground: restarted from the background after
+            // the process was killed, say. Stop rather than crash; the next alarm, restart, app
+            // open or tile tap starts it properly.
+            BackScreen.log("Couldn't start in the foreground; stopping until the next start")
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_RESTORE -> restore()
             ACTION_TOGGLE -> if (WallpaperSettings.isEnabled(this)) restore() else turnOn()
@@ -273,6 +295,8 @@ class KeeperService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true
+        waitingForShizuku.clear()
         instance = null
         BackScreen.mainHandler.removeCallbacks(checkRear)
         BackScreen.mainHandler.removeCallbacks(checkRearLate)
@@ -296,17 +320,20 @@ class KeeperService : Service() {
         super.onDestroy()
     }
 
-    /** Stops the service once no section needs it. */
+    /** Stops the service once no section needs it, unless another start is on its way. */
     private fun stopIfIdle() {
-        if (!RearState.keeperNeeded(this)) stopSelf()
+        if (destroyed || RearState.keeperNeeded(this)) return
+        stopSelfResult(lastStartId)
     }
 
     /**
      * Works with no images too: the back screen is black, with the clock if that's on. [byYou]:
-     * from the app, tile or widget, where the switch going back off says Shizuku isn't ready.
-     * A schedule's turn-on waits for Shizuku instead.
+     * from the app, tile or widget. If Shizuku isn't ready, only switching it on from off gives
+     * up (the switch going back off says so); a schedule's turn-on, or an option changed while
+     * it's on (more images, Avoid camera), waits for Shizuku instead.
      */
     private fun turnOn(byYou: Boolean = true) {
+        val wasOn = WallpaperSettings.isEnabled(this)
         WallpaperSettings.setEnabled(this, true)
         RearState.wallpaperChanged(this, true)
         displayOptions.update()
@@ -318,7 +345,7 @@ class KeeperService : Service() {
             BackScreen.log("Wallpaper on; it shows when ${owner.lend.packageName} leaves the back screen")
             return
         }
-        apply(orWait = !byYou)
+        apply(orWait = !byYou || isWaitingForShizuku || wasOn)
     }
 
     /**
@@ -345,14 +372,21 @@ class KeeperService : Service() {
 
     private fun applyIfWaiting() {
         if (!isWaitingForShizuku || !RearCommands.isReady()) return
-        isWaitingForShizuku = false
-        updateNotification()
+        stopWaiting()
         BackScreen.log("Shizuku is ready")
         if (RearState.snapshot(this).guardsWallpaper) apply()
     }
 
+    /** No longer waiting for Shizuku: it's ready, or the wallpaper went off. The notification stops saying so. */
+    private fun stopWaiting() {
+        if (!isWaitingForShizuku) return
+        isWaitingForShizuku = false
+        updateNotification()
+    }
+
     /** Launches the host, replacing it if it's up. It shows whatever [RearState] says. */
     private fun launchHost(what: String, onUnavailable: () -> Unit = ::fail) {
+        if (destroyed) return
         RearHostActivity.finishCurrent()
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
         BackScreen.log(what)
@@ -429,10 +463,7 @@ class KeeperService : Service() {
         WallpaperSettings.setEnabled(this, false)
         RearState.wallpaperChanged(this, false)
         displayOptions.update()
-        if (isWaitingForShizuku) {
-            isWaitingForShizuku = false
-            updateNotification()
-        }
+        stopWaiting()
         awaitingDirectLaunch = false
         wakeWhenShown = false
         BackScreen.mainHandler.removeCallbacks(directLaunchTimeout)
@@ -462,6 +493,7 @@ class KeeperService : Service() {
         WallpaperSettings.setEnabled(this, false)
         RearState.wallpaperChanged(this, false)
         displayOptions.update()
+        stopWaiting()
         RearHostActivity.finishCurrent()
         ClockAlarm.update(this)
         stopIfIdle()
@@ -505,6 +537,8 @@ class KeeperService : Service() {
     fun onLent(lend: Lend): Boolean {
         endPopover("${lend.packageName} took the back screen")
         if (!RearState.lend(this, lend)) return false
+        // Anything still to put back is the lend's now, and is put back when it ends.
+        putBackStalled = false
         BackScreen.mainHandler.removeCallbacks(putBack)
         BackScreen.mainHandler.removeCallbacks(checkRear)
         BackScreen.mainHandler.removeCallbacks(checkRearLate)
@@ -517,11 +551,12 @@ class KeeperService : Service() {
     }
 
     /**
-     * The lent app left the back screen: it goes to the wallpaper or Xiaomi's screen, whichever
-     * is on now, and whatever the lend changed in Xiaomi's settings is put back.
+     * [lend]'s app left the back screen: it goes to the wallpaper or Xiaomi's screen, whichever
+     * is on now, and whatever the lend changed in Xiaomi's settings is put back. Nothing if
+     * [lend] has ended already, or isn't the one there: callers pass the lend they acted on.
      */
-    fun onLendEnded() {
-        if (!RearState.endLend(this)) return
+    fun onLendEnded(lend: Lend) {
+        if (!RearState.endLend(this, lend)) return
         BackScreen.log("Back screen returned")
         watchdog.stop()
         backCover.stop()
@@ -542,7 +577,7 @@ class KeeperService : Service() {
     /** The watchdog found the lent app gone: closed, moved back, or sent behind. */
     private fun onLentAppGone(lend: Lend) {
         BackScreen.log("${lend.packageName} left the back screen")
-        onLendEnded()
+        onLendEnded(lend)
     }
 
     /** An app came or went: the notification and the tile say so, and the wallpaper's display options follow. */
@@ -555,23 +590,50 @@ class KeeperService : Service() {
     /** An option on the Back screen display card changed. */
     fun displaySettingsChanged() = displayOptions.update()
 
-    /** Makes Xiaomi's timeout match Stays lit for, in case something reset it; nothing while it's As set. */
-    private fun checkLitTime() {
+    /**
+     * Makes Xiaomi's timeout match Stays lit for, in case something reset it, or after it changed
+     * ([XiaomiLitTime.changed]); nothing while it's As set, once Xiaomi's own value is back.
+     */
+    fun checkLitTime() {
         if (DisplaySettings.litTime(this).ms == null && DisplaySettings.xiaomiLitTime(this) == null) return
-        shell(onUnavailable = {}) { XiaomiLitTime.apply(this) }
+        // If Shizuku isn't ready, it's tried again when it connects.
+        shell(onUnavailable = ::putBackDidntRun) {
+            XiaomiLitTime.apply(this)
+            BackScreen.mainHandler.post(::afterPutBack)
+        }
     }
 
     /** Puts back what an earlier lend changed in Xiaomi's settings, once nothing is lent. */
     private fun putBackTweaksIfIdle() {
         if (RearState.owner(this) is RearOwner.Lent || !RearTweaks.pending(this)) return
         val rear = rearDisplayId() ?: return
-        // If Shizuku isn't ready, it's tried again when it connects.
-        shell(onUnavailable = {}) {
-            if (RearState.owner(this) is RearOwner.Lent) return@shell
+        // If Shizuku isn't ready, or a write fails, it's tried again when it connects, the keeper
+        // starts or a lend ends.
+        shell(onUnavailable = ::putBackDidntRun) {
+            if (RearState.isLentAnyThread(this)) return@shell
             RearTweaks.putBackAll(this, rear)
-            BackScreen.mainHandler.post { stopIfIdle() }
+            BackScreen.mainHandler.post(::afterPutBack)
         }
     }
+
+    // While an app is lent, the settings it changed are its own, not a put-back that's stuck.
+    private fun putBackDidntRun() {
+        if (RearState.owner(this) is RearOwner.Lent) return
+        putBackStalled = true
+        updateNotification()
+    }
+
+    /** A put-back ran: the notification says if anything's still waiting, and this stops if nothing is. */
+    private fun afterPutBack() {
+        val lent = RearState.owner(this) is RearOwner.Lent
+        putBackStalled = !lent && (RearTweaks.pending(this) || XiaomiLitTime.owed(this))
+        updateNotification()
+        stopIfIdle()
+    }
+
+    /** Xiaomi's settings are still changed, nothing is lent, and putting them back hasn't worked yet. */
+    private fun puttingBack(lend: Lend?) =
+        putBackStalled && lend == null && (RearTweaks.pending(this) || XiaomiLitTime.owed(this))
 
     /**
      * Mirror was switched on or off, or one of its options changed. Switching it off brings back
@@ -897,15 +959,18 @@ class KeeperService : Service() {
     /**
      * Runs [block] with Shizuku on the shell thread, waiting briefly for its connection if needed.
      * If Shizuku isn't ready, [onUnavailable] runs instead, on the main thread; by default that
-     * switches the wallpaper off.
+     * switches the wallpaper off. Once the service has stopped, neither runs.
      */
     fun shell(onUnavailable: () -> Unit = ::fail, block: () -> Unit) {
+        if (destroyed) return BackScreen.trace("The keeper has stopped; shell work dropped")
         val task = {
-            if (RearCommands.isReady()) {
-                executor.execute(block)
-            } else {
-                BackScreen.log("Shizuku isn't running or this app isn't allowed")
-                onUnavailable()
+            when {
+                destroyed -> BackScreen.trace("The keeper has stopped; shell work dropped")
+                RearCommands.isReady() -> execute(block)
+                else -> {
+                    BackScreen.log("Shizuku isn't running or this app isn't allowed")
+                    onUnavailable()
+                }
             }
         }
         if (Shizuku.pingBinder()) {
@@ -914,6 +979,15 @@ class KeeperService : Service() {
             waitingForShizuku += task
             BackScreen.mainHandler.removeCallbacks(shizukuTimeout)
             BackScreen.mainHandler.postDelayed(shizukuTimeout, SHIZUKU_WAIT_MS)
+        }
+    }
+
+    /** On the shell thread, unless the service stopped in the meantime and shut it. */
+    private fun execute(block: () -> Unit) {
+        try {
+            executor.execute(block)
+        } catch (e: RejectedExecutionException) {
+            BackScreen.trace("The keeper has stopped; shell work dropped")
         }
     }
 
@@ -972,7 +1046,13 @@ class KeeperService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(KEEPER_CHANNEL_ID, getString(R.string.keeper_channel), NotificationManager.IMPORTANCE_MIN)
         )
-        val text = getString(if (isWaitingForShizuku) R.string.keeper_waiting else R.string.keeper_text)
+        val text = getString(
+            when {
+                isWaitingForShizuku -> R.string.keeper_waiting
+                puttingBack(lend = null) -> R.string.keeper_putting_back
+                else -> R.string.keeper_text
+            }
+        )
         val hide = PendingIntent.getActivity(
             this, REQUEST_HIDE, hideIntent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -987,20 +1067,28 @@ class KeeperService : Service() {
     }
 
     /**
-     * Shows whether it's waiting for Shizuku, or which app is on the back screen. Posted only when
-     * the service isn't in the foreground yet, or what it says has changed. Through the service,
-     * which needs no notification permission.
+     * Shows whether it's waiting for Shizuku or to put Xiaomi's settings back, or which app is on
+     * the back screen. Posted only when the service isn't in the foreground yet, or what it says
+     * has changed. Through the service, which needs no notification permission. False if Android
+     * wouldn't let it into the foreground.
      */
-    private fun updateNotification() {
+    private fun updateNotification(): Boolean {
+        if (destroyed) return false
         val lend = (RearState.owner(this) as? RearOwner.Lent)?.lend
-        val says = NotificationSays(lend, isWaitingForShizuku && lend == null)
-        if (says == posted) return
+        val says = NotificationSays(lend, isWaitingForShizuku && lend == null, puttingBack(lend))
+        if (says == posted) return true
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } catch (e: ForegroundServiceStartNotAllowedException) {
+            BackScreen.log("Android didn't allow the keeper into the foreground: ${e.message}")
+            return false
+        }
         posted = says
-        startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        return true
     }
 
-    /** What the notification says: which app is on the back screen, or whether it's waiting for Shizuku. */
-    private data class NotificationSays(val lend: Lend?, val waiting: Boolean)
+    /** What the notification says: which app is on the back screen, or whether it's waiting for Shizuku or a put-back. */
+    private data class NotificationSays(val lend: Lend?, val waiting: Boolean, val puttingBack: Boolean)
 
     companion object {
         const val ACTION_APPLY = "com.backscreen.wallpaper.APPLY"

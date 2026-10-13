@@ -10,19 +10,17 @@ import com.backscreen.wallpaper.core.Schedules
 import com.backscreen.wallpaper.wallpaper.ClockAlarm
 
 /**
- * Receives the schedule alarm, and re-sets it whenever the system may have dropped or moved
- * it: after a restart, an app update, a clock or time zone change, or exact alarms being allowed.
- * The clock's alarm too: after the time is set back, the minute it was set for is far off.
+ * Receives the schedule alarm. Also catches up with a schedule change the phone may have missed,
+ * and sets the alarm again, whenever the system may have dropped or moved it: after a restart, an
+ * app update, a clock or time zone change, or exact alarms being allowed. The clock's alarm too:
+ * after the time is set back, the minute it was set for is far off.
  *
  * After a restart or an update, it also starts KeeperService again if a section needs it.
  */
 class ScheduleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Schedules.ACTION_ALARM) {
-            Schedules.onAlarm(context)
-            return
-        }
-        Schedules.update(context)
+        Schedules.catchUp(context)
+        if (intent.action == Schedules.ACTION_ALARM) return
         ClockAlarm.update(context)
         when (intent.action) {
             // A lend from before a restart is forgotten by RearState itself. This also arrives

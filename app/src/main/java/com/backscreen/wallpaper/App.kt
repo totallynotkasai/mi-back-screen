@@ -11,7 +11,8 @@ class App : Application() {
         // Material You: take the app's colours from the phone's wallpaper.
         DynamicColors.applyToActivitiesIfAvailable(this)
         Gallery.migrate(this)
-        // Force stopping the app cancels its alarms; this sets the next schedule change again.
-        Schedules.update(this)
+        // Force stopping the app cancels its alarms: catch up with a schedule change missed
+        // meanwhile, and set the next one again.
+        Schedules.catchUp(this)
     }
 }
