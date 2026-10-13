@@ -20,7 +20,7 @@ Your own images, animated GIFs, a clock and your notifications on the **Xiaomi 1
 
 ## Features
 
-The app has five tabs, each with its own switch and a **?** that explains it.
+The app has five tabs, each with its own switch.
 
 **Wallpaper**
 - Images and looping GIFs from the photo picker, or a gallery (several images or a folder) that changes every 1 minute to 1 day, in order or shuffled.
