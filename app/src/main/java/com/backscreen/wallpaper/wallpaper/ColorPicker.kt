@@ -1,5 +1,6 @@
 package com.backscreen.wallpaper.wallpaper
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -129,6 +130,7 @@ object ColorPicker {
         }
 
         /** Shows [hsv] everywhere; [from] is the control that changed it, left alone. */
+        @SuppressLint("SetTextI18n") // a hex code such as #FF8800, the same in every language
         fun sync(from: View? = null) {
             syncing = true
             val color = Color.HSVToColor(hsv)

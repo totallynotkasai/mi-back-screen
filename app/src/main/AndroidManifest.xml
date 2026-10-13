@@ -35,9 +35,11 @@
         </intent>
     </queries>
 
+    <!-- No backups, and nothing moved to a new phone either (see data_extraction_rules.xml). -->
     <application
         android:name=".App"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.BackScreen">
