@@ -184,9 +184,27 @@ class NotificationLayer @JvmOverloads constructor(
 
     /** [key] was cleared on the phone: the banner goes if it shows it, or counts one fewer. */
     fun removeFromBanner(key: String) {
-        if (stack.remove(key)) return hideBanner()
-        val shown = bannerShown ?: return
-        banner.bind(shown, context.getString(R.string.ago_now), stack.more)
+        when (stack.remove(key)) {
+            BannerStack.Removed.SHOWN -> hideBanner()
+            BannerStack.Removed.COUNTED -> {
+                val shown = bannerShown ?: return
+                banner.bind(shown, context.getString(R.string.ago_now), stack.more)
+                onShownChanged?.invoke()
+            }
+            // Nothing to draw again, or to push to a dimmed back screen.
+            BannerStack.Removed.ABSENT -> {}
+        }
+    }
+
+    /**
+     * What the banner shows of [n] changed, as the phone locked or unlocked, say: it says the new
+     * version, keeping its time and count. Nothing unless it's showing [n].
+     */
+    fun updateBanner(n: ShownNotification) {
+        val shown = bannerShowing ?: return
+        if (shown.key != n.key || shown == n) return
+        bannerShown = n
+        banner.bind(n, context.getString(R.string.ago_now), stack.more)
         onShownChanged?.invoke()
     }
 
@@ -474,7 +492,7 @@ class NotificationLayer @JvmOverloads constructor(
 
         fun bind(n: ShownNotification, whenText: String, moreCount: Int) {
             val appIcon = if (n.packageName == SampleNotification.PACKAGE) AppCompatResources.getDrawable(context, R.drawable.ic_sample_chat)
-            else AppIcons.get(context, n.packageName)
+            else AppIcons.get(context, n.uid, n.packageName)
             fallbackIcon = appIcon == null
             icon.setImageDrawable(appIcon ?: AppCompatResources.getDrawable(context, R.drawable.ic_notifications))
             app.text = context.getString(R.string.notification_header, n.appName, whenText)

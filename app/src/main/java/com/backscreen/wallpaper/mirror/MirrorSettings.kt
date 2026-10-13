@@ -32,6 +32,7 @@ enum class RearOrientation(val label: Int) {
 object MirrorSettings : FeatureSettings("mirror") {
     private const val KEY_KEEP_LIT = "keep_lit"
     private const val KEY_COVER_RETURN = "cover_return"
+    private const val KEY_LOCK_RETURN = "lock_return"
     private const val KEY_SIZE = "size"
     private const val KEY_ORIENTATION = "orientation"
     private const val KEY_TILE_ADDED = "tile_added"
@@ -53,6 +54,16 @@ object MirrorSettings : FeatureSettings("mirror") {
 
     fun setCoverReturn(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean(KEY_COVER_RETURN, on).apply()
+    }
+
+    /**
+     * An app left on the back screen comes back to the main screen once the locked phone's back
+     * screen has been dark a few seconds ([LockReturn]). On by default.
+     */
+    fun lockReturn(context: Context) = prefs(context).getBoolean(KEY_LOCK_RETURN, true)
+
+    fun setLockReturn(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_LOCK_RETURN, on).apply()
     }
 
     fun size(context: Context) =

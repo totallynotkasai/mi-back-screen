@@ -38,6 +38,26 @@ class NotificationFilterTest {
     }
 
     @Test
+    fun aPausedAppsNotificationsDontShow() {
+        // Paused by Digital Wellbeing or a Focus mode.
+        assertFalse(NotificationFilter.shows(message.copy(suspended = true), own))
+    }
+
+    @Test
+    fun oneDoNotDisturbHidesFromTheListDoesntShow() {
+        assertFalse(NotificationFilter.shows(message.copy(hiddenFromList = true), own))
+        // Held back from a banner by Do Not Disturb, it's still in the list.
+        assertTrue(NotificationFilter.shows(message.copy(passesDnd = false), own))
+    }
+
+    @Test
+    fun oneWhosePopUpsAreHiddenGetsNoBanner() {
+        assertEquals(HeldBack.NO_POP_UP, NotificationFilter.heldBack(message.copy(noPopUp = true), previous = null))
+        // It still shows in the list.
+        assertTrue(NotificationFilter.shows(message.copy(noPopUp = true), own))
+    }
+
+    @Test
     fun aNewOneGetsABanner() {
         assertNull(NotificationFilter.heldBack(message, previous = null))
         // "Alert once" only matters for updates.
@@ -100,11 +120,24 @@ class NotificationFilterTest {
     fun clearingOneOnThePhoneTakesItOffTheBanner() {
         val stack = BannerStack()
         listOf("a", "b", "c").forEach(stack::push)
-        assertFalse(stack.remove("a"))
+        assertEquals(BannerStack.Removed.COUNTED, stack.remove("a"))
         assertEquals(1, stack.more)
-        assertTrue(stack.remove("c"))
+        assertEquals(BannerStack.Removed.SHOWN, stack.remove("c"))
         assertNull(stack.current)
         stack.push("d")
         assertEquals(0, stack.more)
+    }
+
+    @Test
+    fun clearingOneTheBannerNeverHadChangesNothing() {
+        val stack = BannerStack()
+        assertEquals(BannerStack.Removed.ABSENT, stack.remove("a"))
+        listOf("a", "b").forEach(stack::push)
+        assertEquals(BannerStack.Removed.ABSENT, stack.remove("z"))
+        assertEquals("b", stack.current)
+        assertEquals(1, stack.more)
+        // Gone once, it isn't there to count again.
+        assertEquals(BannerStack.Removed.COUNTED, stack.remove("a"))
+        assertEquals(BannerStack.Removed.ABSENT, stack.remove("a"))
     }
 }

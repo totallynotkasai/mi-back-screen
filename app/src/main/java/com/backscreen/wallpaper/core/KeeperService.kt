@@ -13,6 +13,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.database.ContentObserver
 import android.graphics.drawable.Icon
 import android.hardware.display.DisplayManager
 import android.os.IBinder
@@ -83,7 +84,8 @@ import kotlin.math.max
  *
  * Quick Switch ([QuickSwitch]): while an app is lent the back screen, a watchdog checks it's
  * still there ([LendWatchdog]), the app's notification says so with Bring back, and covering the
- * back can bring it back ([BackCover]). Whatever the lend changed in Xiaomi's settings
+ * back can bring it back ([BackCover]), as can the locked phone's back screen going dark
+ * ([QuickSwitch.checkLockReturn]). Whatever the lend changed in Xiaomi's settings
  * ([RearTweaks]) is put back when it ends, or when this starts with nothing lent; if that can't
  * be done yet (Shizuku has stopped), this keeps running, says so, and tries again when it can.
  *
@@ -203,6 +205,7 @@ class KeeperService : Service() {
             // The main screen turning off or upright may be what a sent app's light waits for.
             if (displayId == Display.DEFAULT_DISPLAY) {
                 displayOptions.update()
+                mainScreenChanged()
                 return tryLightForLend()
             }
             val rear = BackScreen.findRearDisplay(this@KeeperService) ?: return
@@ -213,6 +216,8 @@ class KeeperService : Service() {
             // Xiaomi Camera closes when the back screen dims or goes off.
             if (changed) camera.rearChanged(rear.state == Display.STATE_ON)
             if (changed) displayOptions.update()
+            // A Quick Switch app on a locked phone comes back once the back screen has been dark a while.
+            if (changed) quickSwitch.checkLockReturn()
             tryLightForLend()
             if (rear.state != Display.STATE_ON) return
             // The gallery doesn't move on while the phone sleeps; catch up now it can be seen.
@@ -237,10 +242,22 @@ class KeeperService : Service() {
         }
     }
 
-    // Unlocking: the back screen may need keeping lit now.
+    // Unlocking: the back screen may need keeping lit now, and may show more of a notification.
     private val userPresent = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = displayOptions.update()
+        override fun onReceive(context: Context, intent: Intent) {
+            displayOptions.update()
+            RearHostActivity.privacyChanged()
+            quickSwitch.checkLockReturn()
+        }
     }
+
+    // Your lock screen's notification settings: what the back screen shows while locked follows them.
+    private val lockScreenSettings = object : ContentObserver(BackScreen.mainHandler) {
+        override fun onChange(selfChange: Boolean) = RearHostActivity.privacyChanged()
+    }
+
+    // Whether the main screen was on when last seen, to tell it turning on or off from its other changes.
+    private var mainScreenOn: Boolean? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -254,6 +271,7 @@ class KeeperService : Service() {
         registerReceiver(subScreenOn, IntentFilter(ACTION_SUB_SCREEN_ON), RECEIVER_EXPORTED)
         // Only the system sends it, and it reaches receivers that aren't exported.
         registerReceiver(userPresent, IntentFilter(Intent.ACTION_USER_PRESENT), RECEIVER_NOT_EXPORTED)
+        for (uri in NotificationAccess.lockScreenSettings) contentResolver.registerContentObserver(uri, false, lockScreenSettings)
         getSystemService(NotificationManager::class.java).deleteNotificationChannel(OLD_CHANNEL_ID)
         BackScreen.logRearDisplay(this)
         charging.start()
@@ -269,6 +287,8 @@ class KeeperService : Service() {
         }
         checkLitTime()
         displayOptions.update()
+        // Restarted with an app lent on a locked phone: it may be due back, or soon.
+        quickSwitch.checkLockReturn()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -330,11 +350,13 @@ class KeeperService : Service() {
         backCover.stop()
         displayOptions.stop()
         camera.ended()
+        quickSwitch.stop()
         Shizuku.removeBinderReceivedListener(binderReceived)
         Shizuku.removeRequestPermissionResultListener(permissionResult)
         getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
         unregisterReceiver(subScreenOn)
         unregisterReceiver(userPresent)
+        contentResolver.unregisterContentObserver(lockScreenSettings)
         charging.stop()
         super.onDestroy()
     }
@@ -459,7 +481,9 @@ class KeeperService : Service() {
         shell(onUnavailable = { abandonHost("Shizuku isn't ready", token) }) {
             val result = RearCommands.moveTaskToDisplay(taskId, rear)
             BackScreen.log("Move to back screen: $result")
-            if (result != "ok") BackScreen.mainHandler.post { abandonHost("it couldn't be moved", token) }
+            BackScreen.mainHandler.post {
+                if (result == "ok") RearHostActivity.movedToRear(token) else abandonHost("it couldn't be moved", token)
+            }
         }
     }
 
@@ -612,6 +636,7 @@ class KeeperService : Service() {
         watchdog.watch(lend)
         updateCover()
         lentChanged()
+        quickSwitch.checkLockReturn()
         return true
     }
 
@@ -628,6 +653,7 @@ class KeeperService : Service() {
         camera.ended()
         lightForLendUntil = 0L
         BackScreen.mainHandler.removeCallbacks(lightForLendAgain)
+        quickSwitch.checkLockReturn()
         ClockAlarm.update(this)
         lentChanged()
         putBackTweaksIfIdle()
@@ -717,7 +743,20 @@ class KeeperService : Service() {
             if (MirrorSettings.isEnabled(this)) quickSwitch.settingsChanged() else quickSwitch.bringBack("Quick Switch was switched off")
         }
         updateCover()
+        quickSwitch.checkLockReturn()
         QuickSwitchTile.requestUpdate(this)
+    }
+
+    /**
+     * The main screen turned on or off. A secure phone counts as locked once it's off, so what the
+     * back screen shows follows, and a Quick Switch app may be due to come back.
+     */
+    private fun mainScreenChanged() {
+        val on = mainDisplay()?.state == Display.STATE_ON
+        if (on == mainScreenOn) return
+        mainScreenOn = on
+        RearHostActivity.privacyChanged()
+        quickSwitch.checkLockReturn()
     }
 
     /**
@@ -832,7 +871,8 @@ class KeeperService : Service() {
     private fun mainDisplay(): Display? = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
 
     /** Keeps the CPU awake for [ms], for work that outlasts the broadcast or callback that started it. */
-    private fun stayAwake(ms: Long, tag: String) {
+    /** Keeps the phone from sleeping for [ms], for something that must happen meanwhile. */
+    fun stayAwake(ms: Long, tag: String) {
         getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, tag).acquire(ms)
     }
 
@@ -909,8 +949,10 @@ class KeeperService : Service() {
         if (owner is RearOwner.Lent) return BackScreen.log("Notification; ${owner.lend.packageName} has the back screen")
         if (owner != RearOwner.Host(HostMode.WALLPAPER)) return
         NotificationFilter.heldBack(n, previous)?.let { return BackScreen.log("Notification held back: ${it.why}") }
+        // Locked, with no notifications on the lock screen: no banner, and no light-up for it.
+        if (!RearHostActivity.mayShow(n)) return BackScreen.log("Notification; nothing of it may show while locked")
         if (mainDisplay()?.state == Display.STATE_ON) {
-            if (NotificationAccess.isLocked(this)) return showNotification(n, wake = false)
+            if (PhoneLock.hidesContent(this)) return showNotification(n, wake = false)
             // Not from the app you're using, if it's open on the main screen.
             return shell(onUnavailable = { showNotification(n, wake = false) }) {
                 val open = RearCommands.taskList()?.let { TaskList.packagesOn(it, Display.DEFAULT_DISPLAY).firstOrNull() }

@@ -5,6 +5,7 @@ import android.app.NotificationManager
 /** Why a notification that shows on the back screen gets no banner. */
 enum class HeldBack(val why: String) {
     DND("Do Not Disturb"),
+    NO_POP_UP("Do Not Disturb hides its pop-ups"),
     ALERT_ONCE("an update that doesn't alert again"),
     NOTHING_NEW("an update with nothing new"),
     APP_OPEN("its app is open on the main screen"),
@@ -16,18 +17,21 @@ enum class HeldBack(val why: String) {
  *
  * Shown, in a banner and in the list: what's news. Not this app's own, ongoing ones and
  * foreground services', media players, progress bars such as downloads, group summaries (the
- * group's own notifications show instead), silent or minimised ones, or secret ones.
+ * group's own notifications show instead), silent or minimised ones, or secret ones; nor those
+ * of an app that's paused (by Digital Wellbeing or a Focus mode, say), or that Do Not Disturb
+ * hides from the notification list.
  *
- * A banner interrupts, so it also waits for Do Not Disturb, and isn't shown again for an update
- * that asks not to alert again or says nothing new, nor for the app that's open on the main
- * screen. The list, which you open yourself, shows them all.
+ * A banner interrupts, so it also waits for Do Not Disturb, and isn't shown when that hides
+ * pop-ups, or again for an update that asks not to alert again or says nothing new, nor for the
+ * app that's open on the main screen. The list, which you open yourself, shows them all.
  */
 object NotificationFilter {
 
     /** Whether [n] belongs on the back screen at all. [ownPackage]: this app's. */
     fun shows(n: RearNotification, ownPackage: String) =
         n.packageName != ownPackage && !n.ongoing && !n.groupSummary && !n.media && !n.progress &&
-            n.importance >= NotificationManager.IMPORTANCE_DEFAULT && n.privacy != Privacy.SECRET
+            n.importance >= NotificationManager.IMPORTANCE_DEFAULT && n.privacy != Privacy.SECRET &&
+            !n.suspended && !n.hiddenFromList
 
     /**
      * Why [n] gets no banner, or null if it does. [previous]: the notification it updates, if
@@ -35,6 +39,7 @@ object NotificationFilter {
      */
     fun heldBack(n: RearNotification, previous: RearNotification?, foregroundApp: String? = null) = when {
         !n.passesDnd -> HeldBack.DND
+        n.noPopUp -> HeldBack.NO_POP_UP
         previous != null && n.alertOnce -> HeldBack.ALERT_ONCE
         previous != null && previous.content == n.content && previous.publicContent == n.publicContent ->
             HeldBack.NOTHING_NEW
@@ -83,12 +88,25 @@ class BannerStack {
         keys.add(key)
     }
 
-    /** [key] was cleared. True if it was the one shown, which then goes. */
-    fun remove(key: String): Boolean {
+    /** Where a notification cleared on the phone was in the banner. */
+    enum class Removed {
+        /** The one shown, so the banner goes. */
+        SHOWN,
+
+        /** One of the others, so it counts one fewer. */
+        COUNTED,
+
+        /** Not in it at all, so nothing changes. */
+        ABSENT,
+    }
+
+    /** [key] was cleared. If it was the one shown, the banner goes. */
+    fun remove(key: String): Removed {
         val wasCurrent = key == current
-        keys.remove(key)
-        if (wasCurrent) keys.clear()
-        return wasCurrent
+        if (!keys.remove(key)) return Removed.ABSENT
+        if (!wasCurrent) return Removed.COUNTED
+        keys.clear()
+        return Removed.SHOWN
     }
 
     /** The banner went away. */

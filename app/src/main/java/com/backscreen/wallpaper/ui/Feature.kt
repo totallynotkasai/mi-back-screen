@@ -41,7 +41,11 @@ enum class Feature(
     ),
     MIRROR(
         R.id.nav_mirror, R.string.tab_mirror, R.string.mirror_switch, R.drawable.ic_swap,
-        listOf(HelpSection(R.string.good_to_know, R.string.mirror_limits)),
+        listOf(
+            HelpSection(R.string.help_mirror_lock_title, R.string.help_mirror_lock),
+            HelpSection(R.string.good_to_know, R.string.mirror_limits),
+            HelpSection(R.string.help_mirror_uninstall_title, R.string.help_mirror_uninstall),
+        ),
     ),
     CAMERA(
         R.id.nav_camera, R.string.tab_camera, R.string.camera_switch, R.drawable.ic_camera,

@@ -1,11 +1,12 @@
 package com.backscreen.wallpaper.notifications
 
-import android.app.KeyguardManager
 import android.app.NotificationManager
+import android.app.admin.DevicePolicyManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.RearCommands
@@ -59,22 +60,30 @@ object NotificationAccess {
         }
     }
 
-    /** What your lock screen shows. If it can't be read, sensitive content counts as hidden. */
+    /**
+     * What your lock screen shows, less what a device admin turns off (a work or school one,
+     * say). If your settings can't be read, sensitive content counts as hidden.
+     */
     fun lockScreen(context: Context): LockScreen {
         val resolver = context.contentResolver
+        val adminDisabled = try {
+            // Every admin's, for this profile; any app may ask.
+            context.getSystemService(DevicePolicyManager::class.java)?.getKeyguardDisabledFeatures(null) ?: 0
+        } catch (e: SecurityException) {
+            0
+        }
         return try {
-            LockScreen(
+            LockScreen.of(
                 showNotifications = Settings.Secure.getInt(resolver, SHOW_NOTIFICATIONS, 1) != 0,
                 showSensitive = Settings.Secure.getInt(resolver, SHOW_SENSITIVE, 0) != 0,
+                adminDisabled = adminDisabled,
             )
         } catch (e: SecurityException) {
-            LockScreen(showNotifications = true, showSensitive = false)
+            LockScreen.of(showNotifications = true, showSensitive = false, adminDisabled = adminDisabled)
         }
     }
 
-    /**
-     * Whether the phone is locked with a PIN, pattern, password or biometrics, the lock screens
-     * that hide sensitive content. A lock screen you just swipe away hides nothing.
-     */
-    fun isLocked(context: Context) = context.getSystemService(KeyguardManager::class.java).isDeviceLocked
+    /** The two settings [lockScreen] reads, to watch for changes. */
+    val lockScreenSettings: List<Uri>
+        get() = listOf(Settings.Secure.getUriFor(SHOW_NOTIFICATIONS), Settings.Secure.getUriFor(SHOW_SENSITIVE))
 }

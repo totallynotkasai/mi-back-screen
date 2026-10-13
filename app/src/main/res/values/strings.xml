@@ -43,7 +43,7 @@
     <string name="help_notifications_off_title">With the wallpaper off</string>
     <string name="help_notifications_off">Xiaomi\'s own back screen shows notifications while the phone is locked.</string>
     <string name="help_notifications_locked_title">While the phone is locked</string>
-    <string name="help_notifications_locked">The back screen follows your lock screen: if that hides sensitive content, only the app shows.</string>
+    <string name="help_notifications_locked">The back screen follows your lock screen: if that hides sensitive content, only the app shows, and if it shows no notifications, nothing does. It counts as locked as soon as the main screen goes off. Notifications from a work profile always show as on a locked phone.</string>
     <string name="help_battery_when_title">When it plays</string>
     <string name="help_battery_when">When you plug in, wired or wireless, with Charging animation on. It doesn\'t play:\n• if the back screen is dark and Light up back screen when plugged in is off;\n• while the back is covered, such as lying face up on a table;\n• while the main screen is on and turned sideways;\n• within 10 seconds of the back screen last lighting up for something;\n• while another app or Xiaomi Camera is on the back screen.\nPlugging in again within 5 seconds doesn\'t play it again.</string>
     <string name="help_battery_glow_title">Edge glow</string>
@@ -325,6 +325,8 @@
     <string name="keep_lit_10min">10 min</string>
     <string name="cover_return_title">Cover the back to bring it back</string>
     <string name="cover_return_summary">Cover the camera for a moment, or lay the phone on its back</string>
+    <string name="lock_return_title">Bring back when the phone locks</string>
+    <string name="lock_return_summary">Once the locked phone\'s back screen goes dark</string>
     <string name="size_title">App size</string>
     <string name="size_summary">Smaller fits more on the back screen</string>
     <string name="size_default">Default</string>
@@ -335,6 +337,10 @@
     <string name="orientation_landscape">Landscape</string>
     <string name="orientation_portrait">Portrait</string>
     <string name="mirror_options_note">These apply only while an app is on the back screen, and Xiaomi\'s settings are put back when it leaves.</string>
+    <string name="help_mirror_lock_title">When the phone locks</string>
+    <string name="help_mirror_lock">With Bring back when the phone locks on, an app you leave on the back screen comes back to the main screen, behind the lock screen, once the locked phone\'s back screen has been dark for 5 seconds. Until then you can go on using it there. With it off, the app stays, and a double tap lights the back screen with it again.</string>
+    <string name="help_mirror_uninstall_title">Before you uninstall</string>
+    <string name="help_mirror_uninstall">Bring back any app on the back screen, and set Stays lit for (Wallpaper tab) to As set. Both change Xiaomi\'s own settings, and uninstalling can\'t put them back.</string>
     <string name="mirror_limits">• With the main screen on sideways, the back screen lights once you turn the phone over or press Power. Touching it before then brings up Xiaomi\'s \"Press the Power button\" message.\n• A video playing full screen may start again from the app\'s home page.\n• The keyboard may open on the main screen.\n• Some video apps show black on a second screen.\n• The main screen stays as it was, and turns off as usual.</string>
     <string name="mirror_notifications_denied">Without notifications, bring apps back with the tile or this tab</string>
     <string name="qs_tile_off">Off in Mi Back Screen</string>

@@ -56,6 +56,19 @@ data class ClockSettings(
 )
 
 /**
+ * The colours of what's drawn over the wallpaper: the notification banner and list, and the
+ * charging animation. The clock's, so they match the wallpaper, with a background from the image
+ * under the clock as it is now ([ClockLayer.freshBgColor]); light on dark without a clock.
+ */
+data class OverlayColors(val text: Int, val background: Int) {
+    companion object {
+        /** From [clock], or light on dark if there's none showing. */
+        fun of(clock: ClockLayer?) =
+            if (clock == null) OverlayColors(Color.WHITE, Color.BLACK) else OverlayColors(clock.textColor, clock.freshBgColor())
+    }
+}
+
+/**
  * The time and date, drawn over the wallpaper. Everything is sized as a share of the layer's
  * height, so the app's small preview looks just like the rear display. Keep it clear of the
  * camera with padding.

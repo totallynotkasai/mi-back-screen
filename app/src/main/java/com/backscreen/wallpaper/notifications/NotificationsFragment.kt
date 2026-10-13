@@ -2,7 +2,6 @@ package com.backscreen.wallpaper.notifications
 
 import android.content.Context
 import android.content.res.ColorStateList
-import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -21,6 +20,7 @@ import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
 import com.backscreen.wallpaper.wallpaper.ClockLayer
+import com.backscreen.wallpaper.wallpaper.OverlayColors
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import com.google.android.material.R as MaterialR
@@ -252,8 +252,8 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
 
     /** The clock's colours, so it matches the wallpaper; light on dark without one. */
     private fun matchClockColors() {
-        if (backdrop.clockShown) notifications.setColors(clock.textColor, clock.autoBgColor)
-        else notifications.setColors(Color.WHITE, Color.BLACK)
+        val colors = OverlayColors.of(clock.takeIf { backdrop.clockShown })
+        notifications.setColors(colors.text, colors.background)
     }
 
     private companion object {

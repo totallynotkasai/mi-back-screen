@@ -1,6 +1,8 @@
 package com.backscreen.wallpaper.notifications
 
+import android.app.admin.DevicePolicyManager
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -80,18 +82,68 @@ class NotificationFormatterTest {
     }
 
     @Test
-    fun lockedWithNoNotificationsOnTheLockScreenOnlyTheAppShows() {
+    fun lockedWithNoNotificationsOnTheLockScreenNothingShows() {
         val none = LockScreen(showNotifications = false, showSensitive = true)
-        shown(message.copy(privacy = Privacy.PUBLIC), locked = true, lockScreen = none)!!.let {
-            assertNull(it.title)
-            assertNull(it.text)
-        }
+        // Not even the app's name, however public it is.
+        assertNull(shown(message.copy(privacy = Privacy.PUBLIC), locked = true, lockScreen = none))
+        assertNull(shown(locked = true, lockScreen = none, style = NotificationStyle.DISCREET))
+        // So the pull-down list is off too, while locked.
+        assertFalse(NotificationFormatter.showsAny(locked = true, lockScreen = none))
+        assertTrue(NotificationFormatter.showsAny(locked = false, lockScreen = none))
+        assertTrue(NotificationFormatter.showsAny(locked = true, lockScreen = hidesSensitive))
     }
 
     @Test
     fun unlockedTheLockScreenDoesntMatter() {
         val none = LockScreen(showNotifications = false, showSensitive = false)
         assertEquals("Running late, save me a seat", shown(locked = false, lockScreen = none)!!.text)
+    }
+
+    @Test
+    fun anotherProfilesPrivateOneAlwaysShowsItsPublicVersion() {
+        val work = message.copy(otherProfile = true)
+        // Unlocked, and with a lock screen that shows everything: as if locked and hiding sensitive content.
+        shown(work, locked = false, lockScreen = showsAll)!!.let {
+            assertEquals("1 new message", it.title)
+            assertNull(it.text)
+        }
+        assertNull(shown(work.copy(publicContent = null), locked = false, lockScreen = showsAll)!!.title)
+        // One its app made public shows in full.
+        assertEquals("Running late, save me a seat", shown(work.copy(privacy = Privacy.PUBLIC), lockScreen = showsAll)!!.text)
+        // And nothing while locked with no notifications on the lock screen.
+        assertNull(shown(work, locked = true, lockScreen = LockScreen(showNotifications = false)))
+    }
+
+    @Test
+    fun aDeviceAdminCanTurnOffWhatTheLockScreenShows() {
+        assertEquals(LockScreen(true, true), LockScreen.of(showNotifications = true, showSensitive = true, adminDisabled = 0))
+        val noSensitive = LockScreen.of(true, true, DevicePolicyManager.KEYGUARD_DISABLE_UNREDACTED_NOTIFICATIONS)
+        assertEquals(LockScreen(showNotifications = true, showSensitive = false), noSensitive)
+        val none = LockScreen.of(true, true, DevicePolicyManager.KEYGUARD_DISABLE_SECURE_NOTIFICATIONS)
+        assertFalse(none.showNotifications)
+        // An admin can't show more than you chose.
+        assertEquals(LockScreen(false, false), LockScreen.of(showNotifications = false, showSensitive = false, adminDisabled = 0))
+        // Other features it turns off, such as the camera, change nothing here.
+        assertEquals(LockScreen(true, true), LockScreen.of(true, true, DevicePolicyManager.KEYGUARD_DISABLE_SECURE_CAMERA))
+        // Locked, the admin's rule applies like your own.
+        shown(locked = true, lockScreen = noSensitive)!!.let { assertEquals("1 new message", it.title) }
+        assertNull(shown(locked = true, lockScreen = none))
+    }
+
+    @Test
+    fun aLongMessageIsntCutInsideACharacter() {
+        val max = NotificationFormatter.TEXT_MAX
+        // An emoji is two chars; one straddling the limit goes whole.
+        val emoji = "😀"
+        val pair = shown(message.copy(content = NoteContent("Alex", "x".repeat(max - 1) + emoji + "y")))!!.text!!
+        assertEquals("x".repeat(max - 1), pair)
+        // A family is one character of eight chars, joined by zero-width joiners.
+        val family = "👨‍👩‍👧"
+        val joined = shown(message.copy(content = NoteContent("Alex", "x".repeat(max - 4) + family)))!!.text!!
+        assertEquals("x".repeat(max - 4), joined)
+        // One that ends right at the limit stays.
+        val fits = "x".repeat(max - family.length) + family
+        assertEquals(fits, shown(message.copy(content = NoteContent("Alex", fits + "more")))!!.text)
     }
 
     @Test

@@ -21,6 +21,7 @@ import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
 import com.backscreen.wallpaper.wallpaper.ClockLayer
+import com.backscreen.wallpaper.wallpaper.OverlayColors
 import com.backscreen.wallpaper.wallpaper.ColorPicker
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
@@ -254,8 +255,8 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
      * takes the image's colour.
      */
     private fun matchClockColors() {
-        if (backdrop.clockShown) charging.setColors(clock.textColor, clock.autoBgColor)
-        else charging.setColors(Color.WHITE, Color.BLACK)
+        val colors = OverlayColors.of(clock.takeIf { backdrop.clockShown })
+        charging.setColors(colors.text, colors.background)
         charging.setAutoAccent(backdrop.colour)
         if (view != null) showStyle()
     }

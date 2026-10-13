@@ -10,6 +10,7 @@ import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.Lend
 import com.backscreen.wallpaper.core.LendReason
+import com.backscreen.wallpaper.core.PhoneLock
 import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
@@ -17,7 +18,7 @@ import com.backscreen.wallpaper.core.RearTweaks
 import com.backscreen.wallpaper.core.TaskList
 import com.backscreen.wallpaper.core.TweakKind
 import com.backscreen.wallpaper.core.TweakRules
-import java.util.concurrent.ConcurrentHashMap
+import com.backscreen.wallpaper.core.VersionedCache
 import kotlin.math.roundToInt
 
 /**
@@ -33,7 +34,8 @@ import kotlin.math.roundToInt
  * Bringing back: put Xiaomi's settings back, then move every task the app has on the back screen
  * to the main screen. The lend ends only once the app has left; if it's still there, its settings
  * go back as they were and you're told it couldn't. If the app closes or leaves by itself, the
- * keeper's watchdog notices and ends the lend.
+ * keeper's watchdog notices and ends the lend. With Bring back when the phone locks on, it comes
+ * back by itself once the locked phone's back screen has been dark a few seconds ([LockReturn]).
  */
 class QuickSwitch(private val keeper: KeeperService) {
 
@@ -48,6 +50,16 @@ class QuickSwitch(private val keeper: KeeperService) {
     // changes meanwhile are ignored, and queued ones don't change Xiaomi's settings again.
     @Volatile
     private var bringingBack = false
+
+    // Bring back when the phone locks: when the back screen went dark, and when the phone locked
+    // (elapsedRealtime), each 0 while it isn't. The dark time counts only from the lock.
+    private var darkSince = 0L
+    private var lockedSince = 0L
+    private val lockCheck = Runnable { checkLockReturn() }
+
+    // The lock (its lockedSince) in which the app was last brought back by itself: if that
+    // failed, it isn't tried again until the phone has been unlocked.
+    private var lockReturnTried = 0L
 
     /** The app Quick Switch has on the back screen, if any. */
     val lend: Lend?
@@ -186,6 +198,49 @@ class QuickSwitch(private val keeper: KeeperService) {
     }
 
     /**
+     * Bring back when the phone locks ([LockReturn]): brings the app back if it's time, or looks
+     * again when it could be, staying awake for that. The keeper calls this when either screen
+     * turns on or off, the phone unlocks, an app is sent or comes back, or an option changes.
+     */
+    fun checkLockReturn() {
+        BackScreen.mainHandler.removeCallbacks(lockCheck)
+        val now = SystemClock.elapsedRealtime()
+        val locked = PhoneLock.isLocked(keeper)
+        lockedSince = if (!locked) 0L else lockedSince.takeIf { it != 0L } ?: now
+        val lend = lend
+        if (lend == null || keeper.isRearLit()) {
+            darkSince = 0L
+            return
+        }
+        if (darkSince == 0L) darkSince = now
+        // Lend.newId() is the time it was sent, in elapsedRealtime nanoseconds.
+        val sentAt = lend.id / NANOS_PER_MS
+        // Dark since the lock, and since the app was sent: pressing Power with the back screen
+        // already dark leaves you a moment to light it.
+        val darkFor = if (locked) now - maxOf(darkSince, lockedSince, sentAt) else 0L
+        val lendAge = now - sentAt
+        val on = MirrorSettings.isEnabled(keeper) && MirrorSettings.lockReturn(keeper)
+        if (LockReturn.shouldBringBack(on, locked, rearLit = false, darkFor, lendAge, XIAOMI_SETTLE_MS)) {
+            if (lockReturnTried == lockedSince || bringingBack) return
+            lockReturnTried = lockedSince
+            // The phone may be asleep: awake until the app has moved, which takes a few commands.
+            keeper.stayAwake(BRING_BACK_AWAKE_MS, "BackScreen:lock-return")
+            return bringBack("the phone is locked and the back screen went dark")
+        }
+        // Unlocking or the option changing looks again anyway; only the wait needs a timer.
+        if (!on || !locked) return
+        val wait = LockReturn.waitMs(darkFor, lendAge, XIAOMI_SETTLE_MS)
+        keeper.stayAwake(wait + AWAKE_EXTRA_MS, "BackScreen:lock-return")
+        BackScreen.mainHandler.postDelayed(lockCheck, wait)
+    }
+
+    /** The keeper is stopping. */
+    fun stop() {
+        BackScreen.mainHandler.removeCallbacks(lockCheck)
+        darkSince = 0L
+    }
+
+    /**
      * Moves every task [lend]'s app has on the back screen to the main screen, the one in front
      * last so it stays in front. True once none is left there. Shell thread.
      */
@@ -236,6 +291,15 @@ class QuickSwitch(private val keeper: KeeperService) {
         // Xiaomi's app is back within 0.5 s of a restart, and the back screen settles a moment later.
         private const val XIAOMI_SETTLE_MS = 1500L
 
+        private const val NANOS_PER_MS = 1_000_000L
+
+        // Awake a little past a lock-return check, so the phone can't sleep through it.
+        private const val AWAKE_EXTRA_MS = 500L
+
+        // Awake while a lock return brings the app back: Xiaomi's settings, the task list and the
+        // moves, each with a time limit of a few seconds.
+        private const val BRING_BACK_AWAKE_MS = 15_000L
+
         /**
          * Portrait is the back screen turned so the camera is at the top: rotation 3 (270°) from
          * its natural landscape, where the camera is on the left.
@@ -245,18 +309,22 @@ class QuickSwitch(private val keeper: KeeperService) {
 }
 
 /**
- * App names, for "YouTube is on the back screen". The manifest's `<queries>` lets the app see
- * apps that have a launcher icon, which every app you can send does.
+ * App names, for "YouTube is on the back screen", kept until the app is updated
+ * ([VersionedCache]). The manifest's `<queries>` lets the app see apps that have a launcher icon,
+ * which every app you can send does.
  */
 object AppLabels {
-    private val labels = ConcurrentHashMap<String, String>()
+    private val labels = VersionedCache<String, String>()
 
-    /** Looks up [packageName]'s name if it isn't known yet. Not on the main thread. */
+    /**
+     * Reads [packageName]'s name, unless it's kept for this version of the app: an update can
+     * rename it. Each send does this. Not on the main thread.
+     */
     fun load(context: Context, packageName: String) {
-        if (labels.containsKey(packageName)) return
         val pm = context.packageManager
         try {
-            labels[packageName] = pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+            val info = pm.getApplicationInfo(packageName, 0)
+            labels.get(packageName, info.sourceDir.orEmpty()) { pm.getApplicationLabel(info).toString() }
         } catch (e: PackageManager.NameNotFoundException) {
             BackScreen.trace("No name for $packageName")
         }
@@ -264,8 +332,8 @@ object AppLabels {
 
     /** [packageName]'s name, looked up now if it hasn't been, or the package name if there's none. */
     fun get(context: Context, packageName: String): String {
-        labels[packageName]?.let { return it }
+        labels.peek(packageName)?.let { return it }
         load(context, packageName)
-        return labels[packageName] ?: packageName
+        return labels.peek(packageName) ?: packageName
     }
 }

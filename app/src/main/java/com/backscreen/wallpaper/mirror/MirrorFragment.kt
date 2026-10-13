@@ -43,6 +43,8 @@ class MirrorFragment : Fragment(R.layout.fragment_mirror), Refreshable {
     private lateinit var keepLitChips: ChipGroup
     private lateinit var coverRow: View
     private lateinit var coverSwitch: MaterialSwitch
+    private lateinit var lockReturnRow: View
+    private lateinit var lockReturnSwitch: MaterialSwitch
     private lateinit var sizeChips: ChipGroup
     private lateinit var orientationChips: ChipGroup
 
@@ -65,6 +67,8 @@ class MirrorFragment : Fragment(R.layout.fragment_mirror), Refreshable {
         keepLitChips = view.findViewById(R.id.keepLitChips)
         coverRow = view.findViewById(R.id.coverRow)
         coverSwitch = view.findViewById(R.id.coverSwitch)
+        lockReturnRow = view.findViewById(R.id.lockReturnRow)
+        lockReturnSwitch = view.findViewById(R.id.lockReturnSwitch)
         sizeChips = view.findViewById(R.id.sizeChips)
         orientationChips = view.findViewById(R.id.orientationChips)
 
@@ -93,6 +97,13 @@ class MirrorFragment : Fragment(R.layout.fragment_mirror), Refreshable {
         coverSwitch.isChecked = MirrorSettings.coverReturn(ctx)
         coverSwitch.setOnCheckedChangeListener { _, checked ->
             MirrorSettings.setCoverReturn(ctx, checked)
+            optionChanged()
+        }
+        SwitchRow.bind(lockReturnRow, lockReturnSwitch)
+        lockReturnSwitch.isChecked = MirrorSettings.lockReturn(ctx)
+        lockReturnSwitch.setOnCheckedChangeListener { _, checked ->
+            MirrorSettings.setLockReturn(ctx, checked)
+            BackScreen.log(if (checked) "Bring back when the phone locks: on" else "Bring back when the phone locks: off")
             optionChanged()
         }
     }
@@ -144,6 +155,8 @@ class MirrorFragment : Fragment(R.layout.fragment_mirror), Refreshable {
         }
         coverRow.isEnabled = on
         coverSwitch.isEnabled = on
+        lockReturnRow.isEnabled = on
+        lockReturnSwitch.isEnabled = on
     }
 
     private fun switched(on: Boolean) {

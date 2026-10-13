@@ -29,11 +29,11 @@ The app has five tabs, each with its own switch.
 - **Back screen display:** choose how long it stays lit (5 s to 5 min), keep it fully lit while unlocked, and light it again when you pick the phone up.
 - A Quick Settings tile, a home-screen widget, and schedules (e.g. off overnight). It puts itself back after anything closes it, and after a restart once Shizuku is running.
 
-**Notifications** — new ones slide in at the top showing just the app, the sender, or the message too. Pull down for the ones you haven't cleared. While locked it follows your lock screen's privacy setting.
+**Notifications** — new ones slide in at the top showing just the app, the sender, or the message too. Pull down for the ones you haven't cleared. While locked it follows your lock screen: just the app if that hides sensitive content, nothing if it shows no notifications. Work-profile notifications always show as on a locked phone.
 
 **Battery** — plug in and the back screen plays a short charging animation with the level: **Ring**, **Edge glow** or **Minimal**, in a colour taken from the image or one you pick.
 
-**Mirror** — **Quick Switch**, a Quick Settings tile, moves the app you're using to the back screen and back. It can show smaller or in portrait there, and Xiaomi's settings are put back when it leaves.
+**Mirror** — **Quick Switch**, a Quick Settings tile, moves the app you're using to the back screen and back. It can show smaller or in portrait there, and Xiaomi's settings are put back when it leaves. With **Bring back when the phone locks** (on by default), an app left there comes back to the main screen once the locked phone's back screen has been dark for 5 seconds.
 
 **Camera** — swipe left on the wallpaper and Xiaomi Camera opens on the back screen in its own back-screen mode, locked or unlocked. Cover the camera, use Xiaomi's back strip or tap the notification to close it.
 
@@ -56,7 +56,7 @@ No internet permission, no storage permission.
 
 - **A dimmed back screen takes no touches.** Double-tap it to light it, then swipe.
 - **Lying on its back,** the back screen switches off, and after a while Xiaomi leaves it off when you pick the phone up. **Light up when you pick it up** (on by default) fixes that while the phone is unlocked.
-- **Before uninstalling,** set **Stays lit for** to **As set**: it changes Xiaomi's own setting, which otherwise stays as you chose it.
+- **Before uninstalling,** bring back any app on the back screen and set **Stays lit for** to **As set**. Both change Xiaomi's own settings, and uninstalling can't put them back.
 - **The "Mi Back Screen is on" notification** is required by Android for background work. **Hide** on it turns it off for good; the app carries on as before.
 - **Apps on the back screen:** a full-screen video may restart from the app's home page, the keyboard may open on the main screen, and some video apps show black on a second screen.
 - **Xiaomi Camera** closes itself when the back screen isn't touched for a while, even while recording, so tap it now and then during a long video.

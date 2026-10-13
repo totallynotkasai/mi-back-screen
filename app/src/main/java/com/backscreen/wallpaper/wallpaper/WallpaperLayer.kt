@@ -34,6 +34,9 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
     /** The image showing has a different colour for the charging animation's Auto ([WallpaperColour]), or none. */
     var onColourChanged: ((Int?) -> Unit)? = null
 
+    /** The first load has ended: its image is up, or there's none, or it couldn't be shown. Called once. */
+    var onFirstLoad: (() -> Unit)? = null
+
     /** The image showing's colour for the charging animation's Auto, or null for none. */
     var colour: Int? = null
         private set
@@ -67,7 +70,8 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
 
     /**
      * The window can be seen: shows the gallery's image, moving on if it's time. Also how the
-     * first image goes up, off the main thread, so the screen is black for a moment first.
+     * first image goes up, off the main thread; the window waits for it a moment before it
+     * draws ([onFirstLoad]).
      */
     fun resume() {
         paused = false
@@ -100,12 +104,19 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
             }
             BackScreen.mainHandler.post {
                 if (released || !reload.ended(load)) return@post
-                if (decoded == null) return@post scheduleNextImage()
-                val uri = decoded.shown.image
-                val result = decoded.result
-                if (uri != null && result != null) setImage(uri, result.first, result.second, fade = true)
-                if (uri == null) clearImage()
-                setNextImage(decoded.shown.nextChangeAt)
+                if (decoded == null) {
+                    scheduleNextImage()
+                } else {
+                    val uri = decoded.shown.image
+                    val result = decoded.result
+                    if (uri != null && result != null) setImage(uri, result.first, result.second, fade = true)
+                    if (uri == null) clearImage()
+                    setNextImage(decoded.shown.nextChangeAt)
+                }
+                onFirstLoad?.let {
+                    onFirstLoad = null
+                    it()
+                }
             }
         }
     }

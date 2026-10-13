@@ -145,6 +145,7 @@ class PreviewBackdrop(
         val glow = glow ?: return
         glow.accent = BatterySettings.color(context)
         glow.setAutoAccent(colour)
-        glow.setColors(if (clockShown) clock.textColor else Color.WHITE, Color.BLACK)
+        val colors = OverlayColors.of(clock.takeIf { clockShown })
+        glow.setColors(colors.text, colors.background)
     }
 }
