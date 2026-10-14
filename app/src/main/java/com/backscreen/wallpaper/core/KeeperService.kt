@@ -280,6 +280,13 @@ class KeeperService : Service() {
             // Saved before this process last stopped: make sure it's still there before trusting it.
             BackScreen.log("Checking ${lend.packageName} is still on the back screen")
             watchdog.watch(lend, now = true)
+            // Its name, for the notification and the tile, read now and off the main thread.
+            if (lend.reason == LendReason.QUICK_SWITCH) {
+                AppLabels.warm(this, lend.packageName) {
+                    if (!destroyed) updateNotification()
+                    QuickSwitchTile.requestUpdate(this)
+                }
+            }
             camera.resumed()
             updateCover()
         } else {
@@ -1092,8 +1099,10 @@ class KeeperService : Service() {
             )
         }
         val lend = quickSwitch.lend ?: return buildKeeperNotification()
+        // Read when it was sent, or just after a restart (onCreate), which posts this again.
+        val name = AppLabels.cached(lend.packageName) ?: lend.packageName
         return buildLentNotification(
-            R.drawable.ic_swap, getString(R.string.lent_title, AppLabels.get(this, lend.packageName)), getString(R.string.lent_text),
+            R.drawable.ic_swap, getString(R.string.lent_title, name), getString(R.string.lent_text),
             getString(R.string.bring_back), ACTION_BRING_BACK, REQUEST_BRING_BACK,
         )
     }
@@ -1164,7 +1173,8 @@ class KeeperService : Service() {
     private fun updateNotification(): Boolean {
         if (destroyed) return false
         val lend = (RearState.owner(this) as? RearOwner.Lent)?.lend
-        val says = NotificationSays(lend, isWaitingForShizuku && lend == null, puttingBack(lend), lend == null && folderLost())
+        val name = lend?.let { AppLabels.cached(it.packageName) }
+        val says = NotificationSays(lend, name, isWaitingForShizuku && lend == null, puttingBack(lend), lend == null && folderLost())
         if (says == posted) return true
         try {
             startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
@@ -1177,10 +1187,12 @@ class KeeperService : Service() {
     }
 
     /**
-     * What the notification says: which app is on the back screen, or whether it's waiting for
-     * Shizuku or a put-back, or can't open the wallpaper's folder.
+     * What the notification says: which app is on the back screen (and its name, once read), or
+     * whether it's waiting for Shizuku or a put-back, or can't open the wallpaper's folder.
      */
-    private data class NotificationSays(val lend: Lend?, val waiting: Boolean, val puttingBack: Boolean, val folderLost: Boolean)
+    private data class NotificationSays(
+        val lend: Lend?, val name: String?, val waiting: Boolean, val puttingBack: Boolean, val folderLost: Boolean,
+    )
 
     companion object {
         const val ACTION_APPLY = "com.backscreen.wallpaper.APPLY"

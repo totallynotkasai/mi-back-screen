@@ -37,10 +37,10 @@ import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.HostMode
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.LendReason
-import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.core.RearTweaks
+import com.backscreen.wallpaper.core.ShizukuState
 import com.backscreen.wallpaper.mirror.AppLabels
 import com.backscreen.wallpaper.mirror.MirrorSettings
 import com.backscreen.wallpaper.notifications.NotificationAccess
@@ -50,7 +50,6 @@ import com.backscreen.wallpaper.wallpaper.ClockAlarm
 import com.google.android.material.R as MaterialR
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import rikka.shizuku.Shizuku
 
 /**
  * A dialog from the menu that keeps itself up to date while it's on screen: once a second,
@@ -185,7 +184,7 @@ object AppDialogs {
         val rear = BackScreen.findRearDisplay(context)
         return listOfNotNull(
             context.getString(R.string.diag_version, info.versionName, info.longVersionCode.toInt()),
-            context.getString(R.string.diag_shizuku, context.getString(shizukuStatus())),
+            context.getString(R.string.diag_shizuku, context.getString(shizukuStatus(ShizukuState.read(context)))),
             context.getString(R.string.diag_owner, ownerName(context)),
             context.getString(R.string.diag_rear_state, BackScreen.stateName(rear?.state)),
             context.getString(R.string.diag_notifications, notificationsStatus(context)),
@@ -220,7 +219,8 @@ object AppDialogs {
         if (!MirrorSettings.isEnabled(context)) return context.getString(R.string.diag_mirror_off)
         val lend = (RearState.owner(context) as? RearOwner.Lent)?.lend?.takeIf { it.reason == LendReason.QUICK_SWITCH }
             ?: return context.getString(R.string.diag_mirror_on)
-        return context.getString(R.string.diag_mirror_lent, AppLabels.get(context, lend.packageName))
+        // Diagnostics refreshes each second, so the name shows once it's read.
+        return context.getString(R.string.diag_mirror_lent, AppLabels.shown(context, lend.packageName) {})
     }
 
     /** Whether swipe left is on, whether Xiaomi Camera is up, and which way it last opened. */
@@ -235,16 +235,27 @@ object AppDialogs {
         ).joinToString(", ")
     }
 
-    /** Shizuku's state, as a line for the app. */
-    fun shizukuStatus() = when {
-        RearCommands.isReady() -> R.string.shizuku_ready
-        Shizuku.pingBinder() -> R.string.shizuku_not_allowed
-        else -> R.string.shizuku_not_running
+    /** Shizuku's [state], as a line for the app. */
+    private fun shizukuStatus(state: ShizukuState) = when (state) {
+        ShizukuState.READY -> R.string.shizuku_ready
+        ShizukuState.NOT_ALLOWED -> R.string.shizuku_not_allowed
+        ShizukuState.BLOCKED -> R.string.shizuku_blocked
+        ShizukuState.NOT_RUNNING -> R.string.shizuku_not_running
+        ShizukuState.NOT_INSTALLED -> R.string.shizuku_not_installed
+    }
+
+    /** What Setup help's Shizuku step offers to do about [state], as the banner does. */
+    private fun shizukuAction(state: ShizukuState) = when (state) {
+        ShizukuState.READY -> null
+        ShizukuState.NOT_ALLOWED -> R.string.allow_access
+        ShizukuState.BLOCKED, ShizukuState.NOT_RUNNING -> R.string.open_shizuku
+        ShizukuState.NOT_INSTALLED -> R.string.get_shizuku
     }
 
     /** Fills [list] with Setup help's steps, unless they're as [shown]; returns what it shows. */
     fun fillSetupSteps(activity: Activity, list: LinearLayout, shown: List<Any>?): List<Any> {
-        val shizukuReady = RearCommands.isReady()
+        val shizuku = ShizukuState.read(activity)
+        val shizukuReady = shizuku == ShizukuState.READY
         val alarms = activity.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
         val battery = activity.getSystemService(PowerManager::class.java)
             .isIgnoringBatteryOptimizations(activity.packageName)
@@ -264,17 +275,16 @@ object AppDialogs {
         // The keeper's own notification, once it has run and made its channel.
         val keeperRan = nm.getNotificationChannel(KeeperService.KEEPER_CHANNEL_ID) != null
         val keeperShown = KeeperService.isNotificationShown(activity)
-        val state = listOf(shizukuStatus(), alarms, battery, notifications, notificationAccess, mirror, posting, keeperRan, keeperShown)
+        val state = listOf(shizuku, alarms, battery, notifications, notificationAccess, mirror, posting, keeperRan, keeperShown)
         if (state == shown) return state
         list.removeAllViews()
         addStep(
             list, R.string.shizuku_title,
-            activity.getString(R.string.setup_shizuku_text) + "\n" + activity.getString(shizukuStatus()),
-            shizukuReady,
-            if (!shizukuReady && Shizuku.pingBinder()) R.string.allow_access else null,
-        ) { (activity as? MainActivity)?.requestShizuku() }
+            activity.getString(R.string.setup_shizuku_text) + "\n" + activity.getString(shizukuStatus(shizuku)),
+            Step.of(shizukuReady), shizukuAction(shizuku),
+        ) { (activity as? MainActivity)?.fixShizuku(shizuku) }
         addStep(
-            list, R.string.setup_alarms_title, activity.getString(R.string.setup_alarms_text), alarms,
+            list, R.string.setup_alarms_title, activity.getString(R.string.setup_alarms_text), Step.of(alarms),
             R.string.allow_alarms,
         ) {
             activity.startActivity(
@@ -282,12 +292,17 @@ object AppDialogs {
             )
         }
         addStep(
-            list, R.string.setup_battery_title, activity.getString(R.string.setup_battery_text), battery,
+            list, R.string.setup_battery_title, activity.getString(R.string.setup_battery_text), Step.of(battery),
+            R.string.open_app_settings, appSettings,
+        )
+        // HyperOS's own switch, which Android doesn't let apps read: always offered, never ticked.
+        addStep(
+            list, R.string.setup_autostart_title, activity.getString(R.string.setup_autostart_text), Step.UNKNOWN,
             R.string.open_app_settings, appSettings,
         )
         if (notifications) {
             addStep(
-                list, R.string.access_title, activity.getString(R.string.setup_notifications_text), notificationAccess,
+                list, R.string.access_title, activity.getString(R.string.setup_notifications_text), Step.of(notificationAccess),
                 if (shizukuReady) R.string.allow_access else R.string.open_settings,
             ) {
                 if (shizukuReady) NotificationAccess.grant(activity) {} else NotificationAccess.openSettings(activity)
@@ -296,7 +311,7 @@ object AppDialogs {
         if (mirror) {
             addStep(
                 list, R.string.setup_mirror_notifications_title, activity.getString(R.string.setup_mirror_notifications_text),
-                posting, R.string.allow,
+                Step.of(posting), R.string.allow,
             ) {
                 activity.startActivity(
                     Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
@@ -309,43 +324,43 @@ object AppDialogs {
                 list, R.string.setup_keeper_title,
                 activity.getString(R.string.setup_keeper_text) + "\n" +
                     activity.getString(if (keeperShown) R.string.setup_keeper_shown else R.string.setup_keeper_hidden),
-                done = null, if (keeperShown) R.string.hide else R.string.show,
+                Step.CHOICE, if (keeperShown) R.string.hide else R.string.show,
             ) { activity.startActivity(KeeperService.hideIntent(activity)) }
         }
         return state
     }
 
-    /** A step: [done] says whether it's done, or null for a choice that isn't needed either way. */
+    /** Where a step stands: its icon, and what TalkBack calls it. */
+    private enum class Step(val icon: Int, val tint: Int, val description: Int?) {
+        DONE(R.drawable.ic_check_circle, MaterialR.attr.colorPrimary, R.string.setup_done),
+        NEEDED(R.drawable.ic_error, MaterialR.attr.colorError, R.string.setup_needed_short),
+
+        /** It may be needed, but the app can't see whether it's done. */
+        UNKNOWN(R.drawable.ic_help, MaterialR.attr.colorOnSurfaceVariant, R.string.setup_unknown),
+
+        /** Not needed either way; the title says what it is. */
+        CHOICE(R.drawable.ic_notifications, MaterialR.attr.colorOnSurfaceVariant, null);
+
+        companion object {
+            fun of(done: Boolean) = if (done) DONE else NEEDED
+        }
+    }
+
+    /** A step, where it stands, and the button that does it (not once it's done). */
     private fun addStep(
-        list: LinearLayout, title: Int, text: String, done: Boolean?, action: Int?, onAction: () -> Unit,
+        list: LinearLayout, title: Int, text: String, step: Step, action: Int?, onAction: () -> Unit,
     ) {
         val row = LayoutInflater.from(list.context).inflate(R.layout.item_setup_step, list, false)
         row.findViewById<ImageView>(R.id.stepIcon).apply {
-            setImageResource(
-                when (done) {
-                    true -> R.drawable.ic_check_circle
-                    false -> R.drawable.ic_error
-                    null -> R.drawable.ic_notifications
-                }
-            )
-            imageTintList = ColorStateList.valueOf(
-                MaterialColors.getColor(
-                    this,
-                    when (done) {
-                        true -> MaterialR.attr.colorPrimary
-                        false -> MaterialR.attr.colorError
-                        null -> MaterialR.attr.colorOnSurfaceVariant
-                    }
-                )
-            )
-            // The title says what it is when it isn't a step to do.
-            contentDescription = done?.let { list.context.getString(if (it) R.string.setup_done else R.string.setup_needed_short) }
-            if (done == null) importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            setImageResource(step.icon)
+            imageTintList = ColorStateList.valueOf(MaterialColors.getColor(this, step.tint))
+            contentDescription = step.description?.let(list.context::getString)
+            if (step.description == null) importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         row.findViewById<TextView>(R.id.stepTitle).setText(title)
         row.findViewById<TextView>(R.id.stepText).text = text
         row.findViewById<Button>(R.id.stepButton).apply {
-            if (done == true || action == null) {
+            if (step == Step.DONE || action == null) {
                 visibility = View.GONE
             } else {
                 setText(action)

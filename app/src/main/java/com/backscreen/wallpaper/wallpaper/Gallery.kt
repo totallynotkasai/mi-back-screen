@@ -261,25 +261,43 @@ object Gallery {
         null
     }
 
+    /** How many images there are in the app's own copies (none while a folder is chosen). Quick: it only lists their names. */
+    fun copyCount(context: Context): Int = if (folder(context) != null) 0 else imagesDir(context).list()?.size ?: 0
+
     /**
-     * Replaces the images with copies of [picked]. Slow for big files: on [io]. Throws if a copy
-     * fails, and then nothing has changed.
+     * Adds copies of [picked] after the images there are; the one showing stays. With a folder
+     * chosen they take its place instead, as [setImages]. Slow for big files: on [io]. Throws if a
+     * copy fails, and then nothing has changed.
+     */
+    fun addImages(context: Context, picked: List<Uri>) {
+        if (folder(context) != null) return setImages(context, picked)
+        val dir = imagesDir(context)
+        val staging = copyIn(context, picked)
+        synchronized(lock) {
+            // Moved in one by one, and taken out again if one won't go; nothing lists them meanwhile.
+            dir.mkdirs()
+            val added = mutableListOf<File>()
+            for (file in staging.listFiles().orEmpty().sortedBy { it.name }) {
+                val target = File(dir, file.name)
+                if (!file.renameTo(target)) {
+                    added.forEach { it.delete() }
+                    staging.deleteRecursively()
+                    throw IOException("couldn't add ${file.name}")
+                }
+                added += target
+            }
+            forgetKept()
+        }
+        staging.deleteRecursively()
+    }
+
+    /**
+     * Replaces the images, or the folder, with copies of [picked]. Slow for big files: on [io].
+     * Throws if a copy fails, and then nothing has changed.
      */
     fun setImages(context: Context, picked: List<Uri>) {
         val dir = imagesDir(context)
-        val staging = File(context.filesDir, "images_new").apply { deleteRecursively(); mkdirs() }
-        try {
-            // New names, so the back screen doesn't take a new image for one it already shows.
-            val names = CopyNames.next(dir.list().orEmpty().toList(), picked.size, System.currentTimeMillis())
-            picked.forEachIndexed { i, uri ->
-                // Copy: the picker's access to the originals is temporary.
-                val input = context.contentResolver.openInputStream(uri) ?: throw FileNotFoundException("couldn't open $uri")
-                input.use { File(staging, names[i]).outputStream().use { out -> it.copyTo(out) } }
-            }
-        } catch (e: Exception) {
-            staging.deleteRecursively()
-            throw e
-        }
+        val staging = copyIn(context, picked)
         val old = File(context.filesDir, "images_old")
         synchronized(lock) {
             // The old copies go aside, the new ones take their place, and the old ones come back
@@ -299,6 +317,24 @@ object Gallery {
             forgetKept()
         }
         old.deleteRecursively()
+    }
+
+    /** Copies [picked] into a staging folder, named after the copies there are. Throws if one fails, leaving nothing behind. */
+    private fun copyIn(context: Context, picked: List<Uri>): File {
+        val staging = File(context.filesDir, "images_new").apply { deleteRecursively(); mkdirs() }
+        try {
+            // New names, so the back screen doesn't take a new image for one it already shows.
+            val names = CopyNames.next(imagesDir(context).list().orEmpty().toList(), picked.size, System.currentTimeMillis())
+            picked.forEachIndexed { i, uri ->
+                // Copy: the picker's access to the originals is temporary.
+                val input = context.contentResolver.openInputStream(uri) ?: throw FileNotFoundException("couldn't open $uri")
+                input.use { File(staging, names[i]).outputStream().use { out -> it.copyTo(out) } }
+            }
+        } catch (e: Exception) {
+            staging.deleteRecursively()
+            throw e
+        }
+        return staging
     }
 
     /** Takes [folder]'s images instead. On [io]. */

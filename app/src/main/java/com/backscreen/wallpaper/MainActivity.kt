@@ -1,8 +1,11 @@
 package com.backscreen.wallpaper
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Process
 import android.os.SystemClock
 import android.view.MenuItem
 import android.view.View
@@ -18,6 +21,7 @@ import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearState
+import com.backscreen.wallpaper.core.ShizukuState
 import com.backscreen.wallpaper.mirror.MirrorFragment
 import com.backscreen.wallpaper.notifications.NotificationsFragment
 import com.backscreen.wallpaper.ui.AppDialogs
@@ -29,6 +33,7 @@ import com.backscreen.wallpaper.wallpaper.WallpaperFragment
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.navigation.NavigationBarView
 import com.google.android.material.snackbar.Snackbar
 import rikka.shizuku.Shizuku
@@ -56,8 +61,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Shizuku isn't ready, and has had its moment to connect since the app started: the banner
+     * shows, and the tabs that need it say they're waiting for it. As of the last refresh.
+     */
+    var shizukuMissing = false
+        private set
+
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { _, result ->
-        BackScreen.log(if (result == PackageManager.PERMISSION_GRANTED) "Shizuku access granted" else "Shizuku access denied")
+        val granted = result == PackageManager.PERMISSION_GRANTED
+        BackScreen.log(if (granted) "Shizuku access granted" else "Shizuku access denied")
+        // It may not ask again, but Shizuku's own app can still allow it.
+        if (!granted) snackbar(R.string.shizuku_denied, Snackbar.LENGTH_LONG, R.string.open_shizuku, ::openShizuku)
         refresh()
     }
 
@@ -66,7 +81,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        createdAt = SystemClock.uptimeMillis()
+        // For the banner's grace: kept through turning the phone, so the tabs don't go back to
+        // waiting a moment for Shizuku each time, but not into a new process.
+        createdAt = savedInstanceState?.getLong(KEY_CREATED_AT)?.takeIf { it >= Process.getStartUptimeMillis() }
+            ?: SystemClock.uptimeMillis()
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         nav = findViewById(R.id.nav)
@@ -122,6 +140,7 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString(KEY_TAB, current.name)
+        outState.putLong(KEY_CREATED_AT, createdAt)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -159,7 +178,7 @@ class MainActivity : AppCompatActivity() {
     private fun toggleWallpaper() {
         val on = !WallpaperSettings.isEnabled(this)
         if (on && !RearCommands.isReady()) {
-            snackbar(R.string.need_shizuku)
+            needShizuku()
             return
         }
         KeeperService.setWallpaper(this, on)
@@ -213,41 +232,89 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * The banner, while Shizuku isn't ready. Its connection arrives just after the app starts,
-     * so wait a moment before saying it isn't there.
+     * The banner, while Shizuku isn't ready, with the one thing to do about it. Its connection
+     * arrives just after the app starts, so wait a moment before saying it isn't there.
      */
     private fun refreshBanner() {
-        val ready = RearCommands.isReady()
-        val running = Shizuku.pingBinder()
+        val state = ShizukuState.read(this)
+        val running = state == ShizukuState.NOT_ALLOWED || state == ShizukuState.BLOCKED
         val settled = SystemClock.uptimeMillis() - createdAt > BANNER_GRACE_MS
-        banner.visibility = if (!ready && (running || settled)) View.VISIBLE else View.GONE
-        if (ready) return
-        if (running) {
-            bannerTitle.setText(R.string.shizuku_banner_not_allowed)
-            bannerText.setText(R.string.shizuku_banner_not_allowed_text)
-            bannerButton.setText(R.string.allow_access)
-            bannerButton.setOnClickListener { requestShizuku() }
-        } else {
-            bannerTitle.setText(R.string.shizuku_banner_not_running)
-            bannerText.setText(R.string.shizuku_banner_not_running_text)
-            bannerButton.setText(R.string.setup_help)
-            bannerButton.setOnClickListener { showSetupHelp() }
+        shizukuMissing = state != ShizukuState.READY && (running || settled)
+        banner.visibility = if (shizukuMissing) View.VISIBLE else View.GONE
+        val (title, text, button) = when (state) {
+            ShizukuState.READY -> return
+            ShizukuState.NOT_ALLOWED -> Triple(R.string.shizuku_banner_not_allowed, R.string.shizuku_banner_not_allowed_text, R.string.allow_access)
+            ShizukuState.BLOCKED -> Triple(R.string.shizuku_banner_blocked, R.string.shizuku_banner_blocked_text, R.string.open_shizuku)
+            ShizukuState.NOT_RUNNING -> Triple(R.string.shizuku_banner_not_running, R.string.shizuku_banner_not_running_text, R.string.open_shizuku)
+            ShizukuState.NOT_INSTALLED -> Triple(R.string.shizuku_banner_not_installed, R.string.shizuku_banner_not_installed_text, R.string.get_shizuku)
+        }
+        bannerTitle.setText(title)
+        bannerText.setText(text)
+        bannerButton.setText(button)
+        bannerButton.setOnClickListener { fixShizuku(state) }
+    }
+
+    /** What the banner's and Setup help's Shizuku button does for [state]. */
+    fun fixShizuku(state: ShizukuState) {
+        when (state) {
+            ShizukuState.READY -> {}
+            ShizukuState.NOT_ALLOWED -> requestShizuku()
+            ShizukuState.BLOCKED, ShizukuState.NOT_RUNNING -> openShizuku()
+            ShizukuState.NOT_INSTALLED -> getShizuku()
         }
     }
 
-    /** Shizuku's own prompt to allow access: the banner's Allow access, and Setup help's. */
-    fun requestShizuku() {
-        if (Shizuku.pingBinder()) Shizuku.requestPermission(REQUEST_SHIZUKU)
+    /**
+     * Shizuku's own prompt to allow access. After "Deny and don't ask again" it would refuse
+     * without a word, so this says where to allow it instead.
+     */
+    private fun requestShizuku() {
+        when (ShizukuState.read(this)) {
+            ShizukuState.NOT_ALLOWED -> try {
+                Shizuku.requestPermission(REQUEST_SHIZUKU)
+            } catch (e: RuntimeException) {
+                // It stopped just now; the banner says so next.
+                BackScreen.log("Couldn't ask Shizuku: ${e.message}")
+            }
+            ShizukuState.BLOCKED -> MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.shizuku_banner_blocked)
+                .setMessage(R.string.shizuku_banner_blocked_text)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.open_shizuku) { _, _ -> openShizuku() }
+                .show()
+            else -> refresh()
+        }
+    }
+
+    /** Shizuku's app: to start it, or allow the app under Authorized apps. */
+    private fun openShizuku() {
+        val intent = ShizukuState.openIntent(this) ?: return run { snackbar(R.string.shizuku_cant_open) }
+        startActivity(intent)
+    }
+
+    /** Shizuku's download page, in the browser. */
+    private fun getShizuku() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ShizukuState.DOWNLOAD_URL)))
+        } catch (e: ActivityNotFoundException) {
+            BackScreen.log("No browser to open Shizuku's download page")
+            snackbar(R.string.no_browser)
+        }
     }
 
     private fun showSetupHelp() = SetupHelpDialog.show(supportFragmentManager)
+
+    /** Something needs Shizuku, which isn't ready: says so, with Setup help to sort it out. */
+    fun needShizuku() {
+        snackbar(R.string.need_shizuku, Snackbar.LENGTH_LONG, R.string.setup_help, ::showSetupHelp)
+    }
 
     /** Reloads everything and puts the wallpaper up afresh, for when something didn't update. */
     private fun refreshBackScreen() {
         (supportFragmentManager.findFragmentByTag(Feature.WALLPAPER.name) as? WallpaperFragment)?.reloadAll()
         when {
             !WallpaperSettings.isEnabled(this) -> snackbar(R.string.refresh_off)
-            !RearCommands.isReady() -> snackbar(R.string.need_shizuku)
+            !RearCommands.isReady() -> needShizuku()
             else -> {
                 BackScreen.log("Refreshing")
                 KeeperService.setWallpaper(this, true)
@@ -256,10 +323,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Shows [text] just above the bottom bar, or at the bottom in landscape. */
-    fun snackbar(text: Int, length: Int = Snackbar.LENGTH_SHORT): Snackbar =
+    /** Shows [text] just above the bottom bar, or at the bottom in landscape, with [action] if given. */
+    fun snackbar(text: Int, length: Int = Snackbar.LENGTH_SHORT, action: Int? = null, onAction: () -> Unit = {}): Snackbar =
+        snackbar(getText(text), length, action, onAction)
+
+    fun snackbar(text: CharSequence, length: Int = Snackbar.LENGTH_SHORT, action: Int? = null, onAction: () -> Unit = {}): Snackbar =
         Snackbar.make(findViewById(R.id.content), text, length)
             .apply { if (nav is BottomNavigationView) anchorView = nav }
+            .apply { if (action != null) setAction(action) { onAction() } }
             .also { it.show() }
 
     private companion object {
@@ -267,5 +338,6 @@ class MainActivity : AppCompatActivity() {
         const val REFRESH_MS = 1000L
         const val BANNER_GRACE_MS = 1500L
         const val KEY_TAB = "tab"
+        const val KEY_CREATED_AT = "created_at"
     }
 }

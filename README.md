@@ -23,8 +23,8 @@ Your own images, animated GIFs, a clock and your notifications on the **Xiaomi 1
 The app has five tabs, each with its own switch.
 
 **Wallpaper**
-- Images and looping GIFs from the photo picker, or a gallery (several images or a folder) that changes every 1 minute to 1 day, in order or shuffled.
-- Fill, Fit, Stretch or actual size. Images that don't fit the screen's shape pan slowly while the back screen is lit, and **Skip short pans** keeps nearly-fitting ones still.
+- Images and looping GIFs from the photo picker, or a gallery (several images or a folder) that changes every 1 minute to 1 day, in order or shuffled. **Add images** adds to the ones you've picked; switching between them and a folder asks first.
+- Fill, Fit, Stretch or actual size. With **Panning** on, images that don't fit the screen's shape glide slowly across it while the back screen is lit, and **Skip short pans** keeps nearly-fitting ones still.
 - An optional clock in five styles: drag it anywhere, pick any colour (or Auto to stand out from the image) and an optional background. It stays on time on the dimmed back screen.
 - **Back screen display:** choose how long it stays lit (5 s to 5 min), keep it fully lit while unlocked, and light it again when you pick the phone up.
 - A Quick Settings tile, a home-screen widget, and schedules (e.g. off overnight). It puts itself back after anything closes it, and after a restart once Shizuku is running.
@@ -47,7 +47,7 @@ No internet permission, no storage permission.
 ## Setup
 
 1. Install and start Shizuku (wireless debugging or ADB).
-2. Install the APK, open Mi Back Screen and tap **Allow access**.
+2. Install the APK, open Mi Back Screen and tap **Allow access**. Until Shizuku is ready, a banner says what's missing, with **Get Shizuku** or **Open Shizuku**. If you refused once and Shizuku won't ask again, switch Mi Back Screen on in Shizuku's **Authorized apps**.
 3. Pick images (or a folder) and turn on **Show on back screen**.
 4. If the app shows **Setup needed**, allow alarms, and in Settings → Apps → Mi Back Screen turn on **Autostart** and set **Battery saver** to **No restrictions**.
 5. Turn on what you want on the other tabs. Shizuku grants Notification access in the same tap; without it, Android blocks that for sideloaded apps until you open App info → ⋮ → **Allow restricted settings**. For Quick Switch, also add its tile to Quick Settings.

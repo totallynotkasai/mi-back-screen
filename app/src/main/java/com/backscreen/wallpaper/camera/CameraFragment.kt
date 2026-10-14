@@ -21,6 +21,8 @@ import com.backscreen.wallpaper.mirror.MirrorSettings
 import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
+import com.backscreen.wallpaper.ui.needShizuku
+import com.backscreen.wallpaper.ui.shizukuMissing
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import com.google.android.material.snackbar.Snackbar
@@ -98,6 +100,7 @@ class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
                 !on -> R.string.state_off
                 open -> R.string.camera_on_open
                 !wallpaperOn -> R.string.camera_on_no_wallpaper
+                shizukuMissing -> R.string.state_waiting_shizuku
                 else -> R.string.camera_on_ready
             }
         )
@@ -131,7 +134,7 @@ class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
             return
         }
         when {
-            !RearCommands.isReady() -> snackbar(R.string.need_shizuku)
+            !RearCommands.isReady() -> needShizuku()
             RearState.owner(ctx) is RearOwner.Lent -> snackbar(R.string.play_lent)
             else -> {
                 KeeperService.start(ctx, KeeperService.ACTION_OPEN_CAMERA, why = "the Camera tab")
@@ -142,7 +145,7 @@ class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
     }
 
     private fun turnOnWallpaper() {
-        if (!RearCommands.isReady()) return snackbar(R.string.need_shizuku)
+        if (!RearCommands.isReady()) return needShizuku()
         BackScreen.log("Wallpaper on, from the Camera tab")
         KeeperService.setWallpaper(ctx, true)
         refresh()

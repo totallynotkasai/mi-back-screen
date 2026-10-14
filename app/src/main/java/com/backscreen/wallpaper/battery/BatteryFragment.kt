@@ -20,6 +20,8 @@ import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
+import com.backscreen.wallpaper.ui.needShizuku
+import com.backscreen.wallpaper.ui.shizukuMissing
 import com.backscreen.wallpaper.wallpaper.ClockLayer
 import com.backscreen.wallpaper.wallpaper.OverlayColors
 import com.backscreen.wallpaper.wallpaper.ColorPicker
@@ -186,9 +188,11 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
         mainSwitch.setSummary(
             when {
                 !on -> R.string.state_off
+                !wallpaperOn && !BatterySettings.overXiaomi(ctx) -> R.string.battery_on_nowhere
+                // It would play, over the wallpaper or Xiaomi's back screen, once Shizuku is there.
+                shizukuMissing -> R.string.state_waiting_shizuku
                 wallpaperOn -> R.string.battery_on_wallpaper
-                BatterySettings.overXiaomi(ctx) -> R.string.battery_on_xiaomi
-                else -> R.string.battery_on_nowhere
+                else -> R.string.battery_on_xiaomi
             }
         )
         // The style and options are for while it's on.
@@ -229,7 +233,8 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
                 R.string.play_wallpaper_off
             else -> {
                 KeeperService.start(ctx, KeeperService.ACTION_PLAY_CHARGING)
-                if (RearCommands.isReady()) null else R.string.need_shizuku
+                if (!RearCommands.isReady()) needShizuku()
+                null
             }
         }
         message?.let { (requireActivity() as MainActivity).snackbar(it, Snackbar.LENGTH_LONG) }
@@ -268,8 +273,8 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
     private fun showStyle() {
         styleDetail.setText(BatterySettings.style(ctx).summary)
         val chosen = BatterySettings.color(ctx)
+        // TalkBack reads the row's texts, "Colour, #FF8800", as the clock's rows.
         colorValue.text = chosen?.let { "#%06X".format(Locale.US, it and 0xFFFFFF) } ?: getString(R.string.colour_auto)
-        colorRow.contentDescription = getString(if (chosen == null) R.string.charging_colour_auto else R.string.charging_colour_custom)
         colorSwatch.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(charging.accentColor)

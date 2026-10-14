@@ -63,7 +63,9 @@ class QuickSwitchTile : TileService() {
             }
             lend != null -> {
                 tile.state = Tile.STATE_ACTIVE
-                tile.subtitle = AppLabels.get(this, lend.packageName)
+                // Not read here on the main thread: the keeper reads it when it starts, and this
+                // asks for it in the meantime.
+                tile.subtitle = AppLabels.shown(this, lend.packageName) { requestUpdate(this) }
             }
             else -> {
                 tile.state = Tile.STATE_INACTIVE

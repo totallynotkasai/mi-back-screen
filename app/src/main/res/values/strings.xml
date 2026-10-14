@@ -35,7 +35,7 @@
     <string name="help_with">Help with %1$s</string>
     <string name="good_to_know">Good to know</string>
     <string name="help_panning_title">Panning</string>
-    <string name="help_panning">Images that don\'t fit the back screen\'s shape glide slowly across it while it\'s lit, and hold still while it\'s dimmed. With Skip short pans, an image that would barely move stays still in the middle instead; the next one pans as usual.</string>
+    <string name="help_panning">With Panning on, images that don\'t fit the back screen\'s shape glide slowly across it while it\'s lit, and hold still while it\'s dimmed. With Skip short pans, an image that would barely move stays still in the middle instead; the next one pans as usual.</string>
     <string name="help_display_title">Back screen display</string>
     <string name="help_display">• Stays lit for changes Xiaomi\'s own back screen setting, so it counts with the wallpaper off too. After that time the back screen fades for about 6 seconds, then dims. Before you uninstall Mi Back Screen, choose As set to put Xiaomi\'s own time back.\n• Stay fully lit while unlocked keeps the back screen bright while you use the phone, and lets it dim once you lock it. Panning and GIFs keep going all that time, so it uses more battery.\n• Light up when you pick it up: lying on its back, the back screen switches off, and normally comes back dimmed when you pick the phone up. Once it has been dim for 90 seconds, or 5 minutes in the dark, Xiaomi switches it off for good and it stays black. This lights it again as you pick the phone up, while it\'s unlocked.</string>
     <string name="help_dimmed_title">A dimmed back screen</string>
@@ -55,23 +55,37 @@
     <string name="shizuku_title">Shizuku</string>
     <string name="shizuku_ready">Connected</string>
     <string name="shizuku_not_running">Not running. Start it with wireless debugging or from your computer, then come back.</string>
-    <string name="shizuku_not_allowed">Running, but this app isn\'t allowed yet. If the button is blocked, open Shizuku → Authorized apps and switch Mi Back Screen on.</string>
+    <string name="shizuku_not_allowed">Running, but this app isn\'t allowed yet.</string>
+    <string name="shizuku_blocked">Running, but it won\'t ask again for this app. Open Shizuku, go to Authorized apps and switch Mi Back Screen on.</string>
+    <string name="shizuku_not_installed">Not installed. Get the free Shizuku app, start it, then come back.</string>
     <string name="shizuku_banner_not_running">Shizuku isn\'t running</string>
     <string name="shizuku_banner_not_running_text">Mi Back Screen needs Shizuku to use the back screen. Start it with wireless debugging or from your computer, then come back.</string>
     <string name="shizuku_banner_not_allowed">Allow Shizuku access</string>
     <string name="shizuku_banner_not_allowed_text">Shizuku is running, but Mi Back Screen isn\'t allowed to use it yet.</string>
+    <string name="shizuku_banner_blocked">Allow in Shizuku</string>
+    <string name="shizuku_banner_blocked_text">Shizuku won\'t ask again for Mi Back Screen. Open Shizuku, go to Authorized apps and switch Mi Back Screen on.</string>
+    <string name="shizuku_banner_not_installed">Shizuku isn\'t installed</string>
+    <string name="shizuku_banner_not_installed_text">Mi Back Screen needs the free Shizuku app to use the back screen. Get it, start it, then come back.</string>
     <string name="allow_access">Allow access</string>
+    <string name="open_shizuku">Open Shizuku</string>
+    <string name="get_shizuku">Get Shizuku</string>
+    <string name="shizuku_denied">Shizuku access wasn\'t allowed</string>
+    <string name="shizuku_cant_open">Couldn\'t open Shizuku</string>
+    <string name="no_browser">No browser to open it in</string>
     <string name="need_shizuku">Shizuku isn\'t ready</string>
 
     <!-- Setup help. -->
     <string name="setup_shizuku_text">Mi Back Screen runs a few fixed commands through Shizuku to use the back screen.</string>
     <string name="setup_alarms_title">Alarms</string>
     <string name="setup_alarms_text">Lets schedules switch on time and the clock stay right while the phone sleeps.</string>
-    <string name="setup_battery_title">Battery</string>
-    <string name="setup_battery_text">HyperOS pauses apps in the background, which holds up schedules and the clock. In app settings, turn on Autostart and set Battery saver to No restrictions.</string>
+    <string name="setup_battery_title">Battery saver</string>
+    <string name="setup_battery_text">HyperOS pauses apps in the background, which holds up schedules and the clock. In app settings, set Battery saver to No restrictions.</string>
+    <string name="setup_autostart_title">Autostart</string>
+    <string name="setup_autostart_text">Lets HyperOS start the app again after a restart, or after it closes it in the background. In app settings, turn on Autostart. The app can\'t see this setting, so check it yourself.</string>
     <string name="setup_notifications_text">Lets the back screen show new notifications. They\'re read on the phone only, and never stored or sent anywhere.</string>
     <string name="setup_done">Done</string>
     <string name="setup_needed_short">Needed</string>
+    <string name="setup_unknown">Can\'t tell</string>
     <string name="setup_keeper_title">\"Mi Back Screen is on\" notification</string>
     <string name="setup_keeper_text">Android shows it while the app works in the background. You can switch it off; the app carries on.</string>
     <string name="setup_keeper_shown">Shown</string>
@@ -103,6 +117,20 @@
     <string name="no_wallpaper_summary">The back screen shows black.</string>
     <string name="no_wallpaper_caption">No wallpaper. The back screen shows black.</string>
     <string name="choose_images">Choose images</string>
+    <string name="add_images">Add images</string>
+    <plurals name="images_added">
+        <item quantity="one">%d image added</item>
+        <item quantity="other">%d images added</item>
+    </plurals>
+    <string name="use_folder_title">Use a folder instead?</string>
+    <plurals name="use_folder_message">
+        <item quantity="one">Your image in the app is removed and the back screen shows the folder\'s images. Your photos aren\'t touched.</item>
+        <item quantity="other">Your %d images in the app are removed and the back screen shows the folder\'s images. Your photos aren\'t touched.</item>
+    </plurals>
+    <string name="choose_a_folder">Choose folder</string>
+    <string name="stop_folder_title">Stop using %1$s?</string>
+    <string name="stop_folder_title_unnamed">Stop using your folder?</string>
+    <string name="stop_folder_message">The images you choose take the folder\'s place. The folder and its photos aren\'t touched.</string>
     <string name="choose_folder">Folder</string>
     <string name="choose_folder_again">Choose folder again</string>
     <string name="state_on">On</string>
@@ -215,6 +243,12 @@
     <string name="schedule_switch_description">Schedule %1$s, %2$s</string>
     <string name="schedule_on_at">On at</string>
     <string name="schedule_off_at">Off at</string>
+    <string name="schedule_on_at_time">On at %1$s</string>
+    <string name="schedule_off_at_time">Off at %1$s</string>
+    <string name="schedule_deleted">Schedule deleted</string>
+    <string name="undo">Undo</string>
+    <string name="schedule_setup_note">Schedules may switch late until the setup at the top of this tab is done.</string>
+    <string name="show_setup">Show setup</string>
     <string name="schedule_overnight">Turns off the next day</string>
     <string name="schedule_days">Days</string>
     <string name="add_schedule">Add schedule</string>
@@ -232,7 +266,7 @@
 
     <!-- Battery tab, and the charging animation itself. -->
     <string name="battery_preview">Preview of the charging animation</string>
-    <string name="battery_caption">Plays on the back screen for about 3 seconds when you plug in</string>
+    <string name="battery_caption">Plays on the back screen for about 3.5 seconds when you plug in</string>
     <string name="play">Play</string>
     <string name="battery_light_up">Light up back screen when plugged in</string>
     <string name="battery_light_up_summary">Not while the back is covered, such as lying face up on a table</string>
@@ -255,8 +289,6 @@
     <string name="style_minimal_summary">A small bolt and the level by the clock: below it, or beside it where there\'s no room</string>
     <string name="charging_colour">Colour</string>
     <string name="colour_auto_wallpaper">A colour from the image on the back screen</string>
-    <string name="charging_colour_auto">Colour, Auto</string>
-    <string name="charging_colour_custom">Colour, custom</string>
 
     <!-- Notifications tab, and notifications on the back screen. -->
     <string name="notifications_on_wallpaper">On · shows over the wallpaper</string>
@@ -357,7 +389,7 @@
     <string name="lent_channel">App on the back screen</string>
     <string name="lent_title">%1$s is on the back screen</string>
     <string name="lent_text">Tap to bring it back here</string>
-    <string name="setup_mirror_notifications_title">Notifications</string>
+    <string name="setup_mirror_notifications_title">Mi Back Screen\'s notifications</string>
     <string name="setup_mirror_notifications_text">Shows what\'s on the back screen, with Bring back or Close camera.</string>
     <string name="allow">Allow</string>
     <string name="diag_mirror">Quick Switch: %1$s</string>

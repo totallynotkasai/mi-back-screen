@@ -926,11 +926,18 @@ class RearHostActivity : Activity() {
             showingWallpaper()?.updateGestures()
         }
 
-        /** Loads the gallery's current image again. False if the wallpaper isn't up. */
-        fun reload(): Boolean {
+        /**
+         * Loads the gallery's current image again, or with [force] false only if it isn't the one
+         * showing (images were added: the one showing stays, panning on). A dimmed back screen is
+         * woken to show it, unless nothing there changes. False if the wallpaper isn't up.
+         */
+        fun reload(force: Boolean = true): Boolean {
             val activity = showingWallpaper() ?: return false
-            activity.wallpaper?.showImage(advance = false, force = true)
-            KeeperService.instance?.showChanges()
+            val wallpaper = activity.wallpaper
+            // Added to a gallery that had nothing to show, the first image goes up; otherwise the same one stays.
+            val changes = force || wallpaper?.showsImage != true
+            wallpaper?.showImage(advance = false, force = force)
+            if (changes) KeeperService.instance?.showChanges()
             return true
         }
 

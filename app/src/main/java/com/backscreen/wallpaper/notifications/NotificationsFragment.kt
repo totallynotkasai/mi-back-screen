@@ -19,6 +19,8 @@ import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
+import com.backscreen.wallpaper.ui.needShizuku
+import com.backscreen.wallpaper.ui.shizukuMissing
 import com.backscreen.wallpaper.wallpaper.ClockLayer
 import com.backscreen.wallpaper.wallpaper.OverlayColors
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
@@ -142,6 +144,7 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
                 !on -> R.string.state_off
                 !allowed -> R.string.notifications_on_no_access
                 !WallpaperSettings.isEnabled(ctx) -> R.string.notifications_on_xiaomi
+                shizukuMissing -> R.string.state_waiting_shizuku
                 else -> R.string.notifications_on_wallpaper
             }
         )
@@ -228,7 +231,8 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
             RearState.owner(ctx) is RearOwner.Lent -> R.string.play_lent
             else -> {
                 KeeperService.start(ctx, KeeperService.ACTION_TRY_NOTIFICATION)
-                if (RearCommands.isReady()) null else R.string.need_shizuku
+                if (!RearCommands.isReady()) needShizuku()
+                null
             }
         }
         message?.let { (requireActivity() as MainActivity).snackbar(it, Snackbar.LENGTH_LONG) }

@@ -3,6 +3,7 @@ package com.backscreen.wallpaper.wallpaper
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -495,6 +496,9 @@ class ClockLayer @JvmOverloads constructor(
 
     private fun isLight(color: Int) = ColorUtils.calculateLuminance(color) > 0.4
 
+    // A drag target, not a button: there's no click to perform. The Position buttons are how to
+    // move it with TalkBack.
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val onMoved = onMoved ?: return false
         when (event.actionMasked) {

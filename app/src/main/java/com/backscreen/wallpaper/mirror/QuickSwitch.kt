@@ -19,6 +19,7 @@ import com.backscreen.wallpaper.core.TaskList
 import com.backscreen.wallpaper.core.TweakKind
 import com.backscreen.wallpaper.core.TweakRules
 import com.backscreen.wallpaper.core.VersionedCache
+import kotlin.concurrent.thread
 import kotlin.math.roundToInt
 
 /**
@@ -335,5 +336,38 @@ object AppLabels {
         labels.peek(packageName)?.let { return it }
         load(context, packageName)
         return labels.peek(packageName) ?: packageName
+    }
+
+    /** [packageName]'s name if it's been read, without reading it: for the main thread. */
+    fun cached(packageName: String): String? = labels.peek(packageName)
+
+    /**
+     * For the main thread: [packageName]'s name if it's been read, or the package name for now,
+     * with the name read ([warm]) and [then] run once it's there.
+     */
+    fun shown(context: Context, packageName: String, then: () -> Unit): String =
+        cached(packageName) ?: packageName.also { warm(context, it, then) }
+
+    // Main thread: the packages being read, with what to run once each is; and ones that had no
+    // name, which aren't read again.
+    private val warming = mutableMapOf<String, MutableList<() -> Unit>>()
+    private val nameless = mutableSetOf<String>()
+
+    /**
+     * Reads [packageName]'s name on a thread of its own, then runs [then] if there was one: after
+     * the process restarted with an app on the back screen, nothing has read it yet. Main thread.
+     */
+    fun warm(context: Context, packageName: String, then: () -> Unit) {
+        if (packageName in nameless) return
+        warming[packageName]?.let { it += then; return }
+        warming[packageName] = mutableListOf(then)
+        val app = context.applicationContext
+        thread(name = "BackScreen-labels") {
+            load(app, packageName)
+            BackScreen.mainHandler.post {
+                val waiting = warming.remove(packageName).orEmpty()
+                if (cached(packageName) == null) nameless += packageName else waiting.forEach { it() }
+            }
+        }
     }
 }

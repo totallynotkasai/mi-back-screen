@@ -27,12 +27,14 @@
     <!--
         Quick Switch says which app it moved ("YouTube is on the back screen"). This lets the
         app read the names of apps with a launcher icon; it can't see anything else about them.
+        And whether Shizuku is installed, to offer to get it or open it.
     -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <package android:name="moe.shizuku.privileged.api" />
     </queries>
 
     <!-- No backups, and nothing moved to a new phone either (see data_extraction_rules.xml). -->

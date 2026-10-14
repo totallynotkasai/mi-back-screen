@@ -22,6 +22,7 @@ import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
+import com.backscreen.wallpaper.ui.shizukuMissing
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -134,11 +135,12 @@ class MirrorFragment : Fragment(R.layout.fragment_mirror), Refreshable {
         if (view == null) return
         val on = MirrorSettings.isEnabled(ctx)
         val lend = (RearState.owner(ctx) as? RearOwner.Lent)?.lend?.takeIf { it.reason == LendReason.QUICK_SWITCH }
-        val name = lend?.let { AppLabels.get(ctx, it.packageName) }
+        val name = lend?.let { AppLabels.shown(ctx, it.packageName, ::refresh) }
         mainSwitch.isChecked = on
         mainSwitch.setSummary(
             when {
                 !on -> getString(R.string.state_off)
+                shizukuMissing -> getString(R.string.state_waiting_shizuku)
                 name != null -> getString(R.string.mirror_on_lent, name)
                 else -> getString(R.string.mirror_on_ready)
             }

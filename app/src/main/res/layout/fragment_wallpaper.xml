@@ -133,6 +133,7 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/setupTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/setup_title"
@@ -875,6 +876,31 @@
                         android:layout_marginTop="2dp"
                         android:textAppearance="?attr/textAppearanceBodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant" />
+
+                    <!-- While a schedule is on and the Setup needed card at the top shows. -->
+                    <LinearLayout
+                        android:id="@+id/scheduleSetupNote"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/schedule_setup_note"
+                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:textColor="?attr/colorError" />
+
+                        <Button
+                            android:id="@+id/showSetupButton"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="-12dp"
+                            android:text="@string/show_setup" />
+                    </LinearLayout>
 
                     <LinearLayout
                         android:id="@+id/scheduleList"

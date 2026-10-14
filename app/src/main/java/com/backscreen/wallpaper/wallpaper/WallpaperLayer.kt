@@ -52,6 +52,10 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         }
 
     @Volatile private var shown: Uri? = null
+
+    /** Whether an image is up, rather than black. */
+    val showsImage: Boolean get() = shown != null
+
     private val reload = ReloadRule()
     private var released = false
 

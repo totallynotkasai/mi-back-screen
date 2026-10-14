@@ -1,5 +1,6 @@
 package com.backscreen.wallpaper.wallpaper
 
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
@@ -12,6 +13,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -19,7 +21,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree
 import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
-import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
 import com.backscreen.wallpaper.MainActivity
 import com.backscreen.wallpaper.R
@@ -27,12 +29,14 @@ import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
 import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.Schedule
+import com.backscreen.wallpaper.core.ScheduleDialog
 import com.backscreen.wallpaper.core.ScheduleEditor
 import com.backscreen.wallpaper.core.Schedules
 import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
+import com.backscreen.wallpaper.ui.needShizuku
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -62,6 +66,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private lateinit var scheduleSummary: TextView
     private lateinit var scheduleList: LinearLayout
     private lateinit var setupCard: View
+    private lateinit var scheduleSetupNote: View
     private lateinit var alarmWarning: View
     private lateinit var batteryWarning: View
     private lateinit var displayCard: DisplayCard
@@ -69,6 +74,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     private lateinit var clock: ClockLayer
     private lateinit var galleryCard: View
     private lateinit var gallerySummary: TextView
+    private lateinit var chooseButton: Button
     private lateinit var folderButton: Button
     private lateinit var galleryRotation: View
     private lateinit var intervalValue: TextView
@@ -97,6 +103,9 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
     private var schedules = emptyList<Schedule>()
     private var previewUri: Uri? = null
+
+    // The chosen folder's name, as the gallery card last showed it, for asking before it's replaced.
+    private var folderName: String? = null
 
     // Whether the folder could be opened when the preview was last loaded.
     private var previewAccess = FolderAccess.OK
@@ -132,12 +141,14 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         scheduleSummary = view.findViewById(R.id.scheduleSummary)
         scheduleList = view.findViewById(R.id.scheduleList)
         setupCard = view.findViewById(R.id.setupCard)
+        scheduleSetupNote = view.findViewById(R.id.scheduleSetupNote)
         alarmWarning = view.findViewById(R.id.alarmWarning)
         batteryWarning = view.findViewById(R.id.batteryWarning)
         displayCard = DisplayCard(view.findViewById(R.id.displayCard), layoutInflater)
         clock = view.findViewById(R.id.clock)
         galleryCard = view.findViewById(R.id.galleryCard)
         gallerySummary = view.findViewById(R.id.gallerySummary)
+        chooseButton = view.findViewById(R.id.chooseButton)
         folderButton = view.findViewById(R.id.folderButton)
         galleryRotation = view.findViewById(R.id.galleryRotation)
         intervalValue = view.findViewById(R.id.intervalValue)
@@ -171,15 +182,14 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             refresh()
         }
 
-        val choose = View.OnClickListener {
-            pickImages.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
-        }
-        view.findViewById<View>(R.id.chooseButton).setOnClickListener(choose)
+        val choose = View.OnClickListener { chooseImages() }
+        // At once, rather than once the gallery card has been read.
+        chooseButton.setText(if (Gallery.copyCount(ctx) > 0) R.string.add_images else R.string.choose_images)
+        chooseButton.setOnClickListener(choose)
         view.findViewById<View>(R.id.emptyChooseButton).setOnClickListener(choose)
         view.findViewById<View>(R.id.previewCard).setOnClickListener(choose)
         view.findViewById<View>(R.id.removeButton).setOnClickListener { confirmRemoveImages() }
-        // Opens where the chosen folder is, so it's quick to choose again.
-        folderButton.setOnClickListener { pickFolder.launch(Gallery.folder(ctx)) }
+        folderButton.setOnClickListener { chooseFolder() }
 
         view.findViewById<View>(R.id.intervalRow).setOnClickListener { chooseInterval() }
         SwitchRow.bind(view.findViewById(R.id.shuffleRow), shuffleSwitch)
@@ -216,6 +226,11 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         }
 
         view.findViewById<View>(R.id.addScheduleButton).setOnClickListener { editSchedule(null) }
+        // The editor's answer, after a rotation too.
+        childFragmentManager.setFragmentResultListener(ScheduleDialog.RESULT, viewLifecycleOwner) { _, result ->
+            onScheduleEdited(result)
+        }
+        view.findViewById<View>(R.id.showSetupButton).setOnClickListener { showSetup() }
         view.findViewById<View>(R.id.alarmButton).setOnClickListener {
             startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")))
         }
@@ -312,6 +327,20 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         alarmWarning.visibility = if (needed && !exact) View.VISIBLE else View.GONE
         batteryWarning.visibility = if (needed && !unrestricted) View.VISIBLE else View.GONE
         setupCard.visibility = if (needed && !(exact && unrestricted)) View.VISIBLE else View.GONE
+        // The card is at the top, far from the schedules it's mostly for.
+        val schedulesOn = schedules.any { it.enabled }
+        scheduleSetupNote.visibility = if (schedulesOn && !(exact && unrestricted)) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Scrolls up to the Setup needed card, and TalkBack goes on from its title: you asked to go
+     * there, and the button you tapped has scrolled out of sight.
+     */
+    @SuppressLint("AccessibilityFocus")
+    private fun showSetup() {
+        val margin = (8 * resources.displayMetrics.density).toInt()
+        requireView().findViewById<NestedScrollView>(R.id.scroll).smoothScrollTo(0, (setupCard.top - margin).coerceAtLeast(0))
+        setupCard.findViewById<View>(R.id.setupTitle).performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
     }
 
     private fun showSchedules() {
@@ -339,12 +368,33 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         scheduleList.visibility = if (schedules.isEmpty()) View.GONE else View.VISIBLE
     }
 
-    private fun editSchedule(schedule: Schedule?) {
-        ScheduleEditor.show(requireActivity() as AppCompatActivity, schedule) { edited ->
-            val others = schedules.filter { it.id != schedule?.id }
-            saveSchedules(if (edited == null) others else others + edited)
+    private fun editSchedule(schedule: Schedule?) = ScheduleDialog.show(childFragmentManager, schedule)
+
+    /** The editor saved a schedule, or deleted one, which Undo puts back. */
+    private fun onScheduleEdited(result: Bundle) {
+        val schedule = ScheduleDialog.schedule(result)
+        val others = schedules.filter { it.id != schedule.id }
+        if (!ScheduleDialog.deleted(result)) {
+            saveSchedules(others + schedule)
             showSchedules()
+            return
         }
+        saveSchedules(others)
+        showSchedules()
+        BackScreen.log("Schedule deleted")
+        val app = ctx.applicationContext
+        snackbar(R.string.schedule_deleted, Snackbar.LENGTH_LONG, R.string.undo) { undoDelete(app, schedule) }
+    }
+
+    /** Puts back [schedule], just deleted, unless it's back already. The tab may have been turned since. */
+    private fun undoDelete(app: Context, schedule: Schedule) {
+        val now = Schedules.load(app)
+        if (now.none { it.id == schedule.id }) Schedules.save(app, now + schedule)
+        BackScreen.log("Schedule put back")
+        if (view == null) return
+        schedules = Schedules.load(app)
+        showSchedules()
+        refresh()
     }
 
     private fun saveSchedules(list: List<Schedule>) {
@@ -356,7 +406,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     /** With no images the back screen is black, with the clock if that's on. */
     private fun turnOn() {
         if (!RearCommands.isReady()) {
-            snackbar(R.string.need_shizuku)
+            needShizuku()
             return // the next refresh flips the switch back off
         }
         KeeperService.setWallpaper(ctx, true)
@@ -369,13 +419,58 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
     // Changes to the images go through Gallery.io, so one asked for just before the tab is turned
     // or closed still happens. The back screen hears of it either way; the tab, if it's still here.
 
+    /**
+     * The photo picker. Its images are added to the app's copies; while a folder is chosen they
+     * take its place instead, so that asks first.
+     */
+    private fun chooseImages() = afterChanges { _, hasFolder ->
+        val pick = { pickImages.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) }
+        if (!hasFolder) return@afterChanges pick()
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(folderName?.let { getString(R.string.stop_folder_title, it) } ?: getString(R.string.stop_folder_title_unnamed))
+            .setMessage(R.string.stop_folder_message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.choose_images) { _, _ -> pick() }
+            .show()
+    }
+
+    /**
+     * The folder picker, opening where the chosen folder is, so it's quick to choose again. A
+     * folder removes the app's copies, so with some that asks first.
+     */
+    private fun chooseFolder() = afterChanges { copies, _ ->
+        val pick = { pickFolder.launch(Gallery.folder(ctx)) }
+        if (copies == 0) return@afterChanges pick()
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.use_folder_title)
+            .setMessage(resources.getQuantityString(R.plurals.use_folder_message, copies, copies))
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.choose_a_folder) { _, _ -> pick() }
+            .show()
+    }
+
+    /**
+     * [then], with how many copies there are and whether a folder is chosen, once any change to
+     * the images asked for before has been made: an add still copying would otherwise be missed.
+     */
+    private fun afterChanges(then: (copies: Int, hasFolder: Boolean) -> Unit) {
+        val app = ctx.applicationContext
+        Gallery.io.execute {
+            val copies = Gallery.copyCount(app)
+            val hasFolder = Gallery.folder(app) != null
+            BackScreen.mainHandler.post { if (view != null) then(copies, hasFolder) }
+        }
+    }
+
     private fun onImagesPicked(uris: List<Uri>) {
         val app = ctx.applicationContext
         val copying = snackbar(R.string.copying_images, Snackbar.LENGTH_INDEFINITE)
         Gallery.io.execute {
+            // Instead of a folder they're a new gallery, from the first; otherwise added to it.
+            val replacing = Gallery.folder(app) != null
             val error = try {
-                Gallery.setImages(app, uris)
-                BackScreen.log("Chose ${uris.size} image(s)")
+                Gallery.addImages(app, uris)
+                BackScreen.log(if (replacing) "Chose ${uris.size} image(s) instead of the folder" else "Added ${uris.size} image(s)")
                 null
             } catch (e: Exception) {
                 BackScreen.log("Couldn't copy images: ${e.message}")
@@ -384,11 +479,15 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             BackScreen.mainHandler.post {
                 copying.dismiss()
                 // The back screen whether or not this tab is still there: it may have been turned
-                // or left while copying, and the image on the back screen has been deleted.
-                if (error == null) showOnBackScreen(app)
+                // or left while copying. The image showing stays, unless the folder's went.
+                if (error == null) showOnBackScreen(app, force = replacing)
                 if (view == null) return@post
-                if (error != null) snackbar(R.string.copy_failed)
-                loadPreview()
+                when {
+                    error != null -> snackbar(R.string.copy_failed)
+                    !replacing -> snackbar(resources.getQuantityString(R.plurals.images_added, uris.size, uris.size))
+                }
+                // Not reloaded if it's the same image, so its pan carries on; refresh() sees a new one.
+                if (replacing || previewUri == null) loadPreview()
                 showGallery()
             }
         }
@@ -463,6 +562,9 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
 
     private fun showGallery(count: Int, folder: String?, access: FolderAccess) {
         val hasFolder = Gallery.folder(ctx) != null
+        folderName = folder
+        // With images of its own, more are added to them.
+        chooseButton.setText(if (!hasFolder && count > 0) R.string.add_images else R.string.choose_images)
         galleryCard.visibility = if (count > 0 || hasFolder) View.VISIBLE else View.GONE
         fitCard.visibility = if (count > 0) View.VISIBLE else View.GONE
         galleryRotation.visibility = if (count > 1 || hasFolder) View.VISIBLE else View.GONE
@@ -774,15 +876,20 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         emptyCaption.visibility = if (empty && clockOn) View.VISIBLE else View.GONE
     }
 
-    private fun snackbar(text: Int, length: Int = Snackbar.LENGTH_SHORT) =
-        (requireActivity() as MainActivity).snackbar(text, length)
+    private fun snackbar(text: Int, length: Int = Snackbar.LENGTH_SHORT, action: Int? = null, onAction: () -> Unit = {}) =
+        (requireActivity() as MainActivity).snackbar(text, length, action, onAction)
+
+    private fun snackbar(text: CharSequence) = (requireActivity() as MainActivity).snackbar(text)
 
     private companion object {
         const val DEFAULT_BG_OPACITY = 50
 
-        /** The images changed: the back screen shows the gallery's first image, or black. Needs no tab. */
-        fun showOnBackScreen(app: Context) {
-            if (WallpaperSettings.isEnabled(app) && !RearHostActivity.reload()) {
+        /**
+         * The images changed: the back screen shows the gallery's image, or black. Without [force]
+         * (images added), the one showing stays. Needs no tab.
+         */
+        fun showOnBackScreen(app: Context, force: Boolean = true) {
+            if (WallpaperSettings.isEnabled(app) && !RearHostActivity.reload(force)) {
                 KeeperService.start(app, KeeperService.ACTION_APPLY)
             }
         }
