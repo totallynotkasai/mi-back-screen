@@ -25,6 +25,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.VisibleForTesting
+import androidx.appcompat.R as AppCompatR
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDialogFragment
@@ -332,8 +333,8 @@ object AppDialogs {
 
     /** Where a step stands: its icon, and what TalkBack calls it. */
     private enum class Step(val icon: Int, val tint: Int, val description: Int?) {
-        DONE(R.drawable.ic_check_circle, MaterialR.attr.colorPrimary, R.string.setup_done),
-        NEEDED(R.drawable.ic_error, MaterialR.attr.colorError, R.string.setup_needed_short),
+        DONE(R.drawable.ic_check_circle, AppCompatR.attr.colorPrimary, R.string.setup_done),
+        NEEDED(R.drawable.ic_error, AppCompatR.attr.colorError, R.string.setup_needed_short),
 
         /** It may be needed, but the app can't see whether it's done. */
         UNKNOWN(R.drawable.ic_help, MaterialR.attr.colorOnSurfaceVariant, R.string.setup_unknown),

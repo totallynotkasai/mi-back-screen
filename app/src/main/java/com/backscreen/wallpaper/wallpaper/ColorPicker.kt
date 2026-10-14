@@ -32,6 +32,7 @@ import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
+import com.google.android.material.slider.TickVisibilityMode
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -115,7 +116,7 @@ object ColorPicker {
         val brightness = Slider(ctx).apply {
             valueFrom = 0f
             valueTo = 100f
-            isTickVisible = false
+            tickVisibilityMode = TickVisibilityMode.TICK_VISIBILITY_HIDDEN
             contentDescription = ctx.getString(R.string.colour_brightness)
             setLabelFormatter { ctx.getString(R.string.percent, it.roundToInt()) }
         }
@@ -284,7 +285,7 @@ object ColorPicker {
         private val dp = resources.displayMetrics.density
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val outline = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOutline, Color.GRAY)
-        private val primary = MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, Color.BLUE)
+        private val primary = MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, Color.BLUE)
 
         var chosen = false
             set(value) {

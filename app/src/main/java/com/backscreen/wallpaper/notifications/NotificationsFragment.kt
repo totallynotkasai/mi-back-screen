@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.appcompat.R as AppCompatR
 import androidx.fragment.app.Fragment
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.core.BackScreen
@@ -28,7 +29,6 @@ import com.backscreen.wallpaper.wallpaper.ClockLayer
 import com.backscreen.wallpaper.wallpaper.OverlayColors
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
-import com.google.android.material.R as MaterialR
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -152,7 +152,7 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
         val shizuku = RearCommands.isReady()
         accessIcon.setImageResource(if (allowed) R.drawable.ic_check_circle else R.drawable.ic_error)
         accessIcon.imageTintList = ColorStateList.valueOf(
-            MaterialColors.getColor(accessIcon, if (allowed) MaterialR.attr.colorPrimary else MaterialR.attr.colorError)
+            MaterialColors.getColor(accessIcon, if (allowed) AppCompatR.attr.colorPrimary else AppCompatR.attr.colorError)
         )
         accessIcon.contentDescription = getString(if (allowed) R.string.setup_done else R.string.setup_needed_short)
         accessText.setText(

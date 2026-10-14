@@ -7,11 +7,14 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Display
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import com.backscreen.wallpaper.battery.BatterySettings
 import com.backscreen.wallpaper.battery.ChargingLayer
 import com.backscreen.wallpaper.battery.ChargingStatus
@@ -141,6 +144,9 @@ class RearHostActivity : Activity() {
         }
     }
 
+    // Xiaomi's back strip, by Android's own route (see onBack).
+    private val backCallback = OnBackInvokedCallback { onBack() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Exported, since the shell launches it; so on either screen it closes unless the keeper
@@ -186,6 +192,7 @@ class RearHostActivity : Activity() {
         addCharging(root, display)
         if (!popover) addNotifications(root, display)
         gestures = RearGestures(this, swipes)
+        onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback)
 
         getSystemService(DisplayManager::class.java).registerDisplayListener(displayListener, BackScreen.mainHandler)
         onRearStateChanged()
@@ -399,13 +406,15 @@ class RearHostActivity : Activity() {
     // Xiaomi's back gesture strip on the rear's right edge sends BACK: it closes the notification
     // list if that's down, and otherwise the host stays put. A swipe left that starts on the strip
     // reaches us only as BACK, so that opens the camera, as a swipe left does.
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
+    //
+    // For an app targeting Android 16 (predictive back), BACK should arrive only through a
+    // callback, never onBackPressed, and with no callback Android closes the window itself. But
+    // HyperOS still sends the back screen's BACK down the old key path, past any callback, to
+    // onKeyUp. So both come here: the callback, registered on the back screen only, and onKeyUp
+    // there. On its way there on the main screen, the window has neither: BACK closes it, as it
+    // always did.
+    private fun onBack() {
         when {
-            !onRear -> {
-                @Suppress("DEPRECATION")
-                super.onBackPressed()
-            }
             notifications?.isShadeOpen == true -> notifications?.closeShade(animate = true)
             !started || !isLit() -> {}
             // Not a swipe for the camera unless that's on.
@@ -416,6 +425,14 @@ class RearHostActivity : Activity() {
             }
             else -> BackScreen.log("BACK just after the wallpaper came back; not opening the camera")
         }
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (onRear && keyCode == KeyEvent.KEYCODE_BACK && event.isTracking && !event.isCanceled) {
+            onBack()
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     /** A swipe left: Xiaomi Camera, while that section is on. */

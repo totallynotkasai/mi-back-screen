@@ -18,12 +18,12 @@ fun signingSetting(name: String): String? = System.getenv(name) ?: localProperti
 
 android {
     namespace = "com.backscreen.wallpaper"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.backscreen.wallpaper"
-        minSdk = 33 // needed for the system photo picker (no storage permission)
-        targetSdk = 35
+        minSdk = 35 // Android 15 and up; the one phone it's for runs Android 16 (HyperOS 3)
+        targetSdk = 36
         versionCode = 9
         versionName = "2.0.2"
     }
@@ -61,6 +61,9 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true // Robolectric
+        // Robolectric at SDK 36 sets up each app's file descriptors through a JDK class that Java
+        // keeps to itself unless told otherwise.
+        unitTests.all { it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED") }
     }
 }
 
@@ -72,8 +75,8 @@ kotlin {
 
 dependencies {
     // Material 3 UI components (Google's design system). No network code.
-    implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.8.0")
+    implementation("com.google.android.material:material:1.14.0")
 
     // Picks the charging animation's Auto colour from the wallpaper image, on the phone. No network code.
     implementation("androidx.palette:palette:1.0.0")

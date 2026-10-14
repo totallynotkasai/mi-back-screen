@@ -89,6 +89,8 @@ class MainSwitchBar @JvmOverloads constructor(
 
     override fun getAccessibilityClassName(): CharSequence = Switch::class.java.name
 
+    // setChecked(Boolean) is deprecated in Android 16, but its replacement needs Android 16.
+    @Suppress("DEPRECATION")
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
         info.isCheckable = true

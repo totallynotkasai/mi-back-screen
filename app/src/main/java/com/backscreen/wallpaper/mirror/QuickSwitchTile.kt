@@ -1,11 +1,9 @@
 package com.backscreen.wallpaper.mirror
 
-import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.backscreen.wallpaper.LaunchCommand
@@ -91,16 +89,10 @@ class QuickSwitchTile : TileService() {
         }
     }
 
-    @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openApp() {
         val intent = LaunchCommand.intent(this, KeeperService.ACTION_QUICK_SWITCH)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
-        } else {
-            @Suppress("DEPRECATION")
-            startActivityAndCollapse(intent)
-        }
+        startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
     }
 
     companion object {

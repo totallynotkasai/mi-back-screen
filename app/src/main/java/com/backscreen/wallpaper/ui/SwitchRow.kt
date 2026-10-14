@@ -21,6 +21,8 @@ object SwitchRow {
         // The settings say whether it's on. Restored after a rotation it could flip, and save, a stale value.
         switch.isSaveEnabled = false
         row.accessibilityDelegate = object : View.AccessibilityDelegate() {
+            // setChecked(Boolean) is deprecated in Android 16, but its replacement needs Android 16.
+            @Suppress("DEPRECATION")
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
                 super.onInitializeAccessibilityNodeInfo(host, info)
                 info.className = Switch::class.java.name

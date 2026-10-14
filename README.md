@@ -41,7 +41,7 @@ No internet permission, no storage permission.
 
 ## Requirements
 
-- Xiaomi 17 Pro Max on HyperOS (Android 13+)
+- Xiaomi 17 Pro Max on HyperOS 3 (Android 16)
 - [Shizuku](https://shizuku.rikka.app/), running and authorised for Mi Back Screen
 
 ## Setup
@@ -83,7 +83,7 @@ Only the images or folder you pick are shared with the app, and chosen images ar
 
 ## Building
 
-Requires JDK 17 and the Android SDK.
+Requires JDK 21 (Robolectric needs it for the Android 16 tests) and the Android SDK.
 
 ```bash
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/

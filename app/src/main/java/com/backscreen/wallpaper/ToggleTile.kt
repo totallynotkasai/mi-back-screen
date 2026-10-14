@@ -1,11 +1,9 @@
 package com.backscreen.wallpaper
 
-import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.backscreen.wallpaper.core.BackScreen
@@ -42,17 +40,11 @@ class ToggleTile : TileService() {
         }
     }
 
-    @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openAppToToggle() {
         val intent = LaunchCommand.intent(this, KeeperService.ACTION_TOGGLE)
             // Reach an already open app through onNewIntent rather than just bringing it forward.
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
-        } else {
-            @Suppress("DEPRECATION")
-            startActivityAndCollapse(intent)
-        }
+        startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
     }
 
     companion object {
