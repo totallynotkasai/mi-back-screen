@@ -29,7 +29,7 @@ The app has five tabs, each with its own switch.
 - **Back screen display:** choose how long it stays lit (5 s to 5 min), keep it fully lit while unlocked, and light it again when you pick the phone up.
 - A Quick Settings tile, a home-screen widget, and schedules (e.g. off overnight). It puts itself back after anything closes it, and after a restart once Shizuku is running.
 
-**Notifications** — new ones slide in at the top showing just the app, the sender, or the message too. Pull down for the ones you haven't cleared. While locked it follows your lock screen: just the app if that hides sensitive content, nothing if it shows no notifications. Work-profile notifications always show as on a locked phone.
+**Notifications** — new ones slide in at the top showing just the app, the sender, or the message too. Pull down for the ones you haven't cleared. While locked it follows your lock screen: just the app if that hides sensitive content, nothing if it shows no notifications. Work-profile notifications always show as on a locked phone. Do Not Disturb and Focus mode apply too.
 
 **Battery** — plug in and the back screen plays a short charging animation with the level: **Ring**, **Edge glow** or **Minimal**, in a colour taken from the image or one you pick.
 
@@ -79,7 +79,7 @@ Measured on a 17 Pro Max over an hour, locked, with the clock on the dimmed back
 
 ## Privacy
 
-Only the images or folder you pick are shared with the app, and chosen images are copied into its private storage (**Remove images** deletes them). Notifications are read only with Notification access and only while that tab is on; their text is shown on the back screen, kept in memory only while it's in your shade, and never stored or sent. Quick Switch reads only the names of apps with a launcher icon. There's no camera permission: Xiaomi Camera takes and saves the photos. Nothing leaves the phone.
+Only the images or folder you pick are shared with the app, and chosen images are copied into its private storage (**Remove images** deletes them). Notifications are read only with Notification access and only while that tab is on; their text is shown on the back screen, kept in memory only while it's in your shade, and never stored or sent. Quick Switch reads only the names of apps with a launcher icon. There's no camera permission: Xiaomi Camera takes and saves the photos. Nothing leaves the phone, and the app's data is left out of backups and transfers to a new phone.
 
 ## Building
 
@@ -88,7 +88,10 @@ Requires JDK 21 (Robolectric needs it for the Android 16 tests) and the Android 
 ```bash
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/
 ./gradlew testDebugUnitTest    # unit tests
+./gradlew assembleRelease      # app/build/outputs/apk/release/
 ```
+
+A release build is signed using four settings, `MBS_STORE_FILE`, `MBS_STORE_PASSWORD`, `MBS_KEY_ALIAS` and `MBS_KEY_PASSWORD`, taken from environment variables or from `local.properties` (which isn't committed). Without them, `assembleRelease` makes an unsigned APK. Published releases are all signed with the same key, so each one installs over the last and keeps your settings. Every push runs the tests, lint and an unsigned release build on GitHub Actions.
 
 ## Licence
 

@@ -24,8 +24,8 @@ android {
         applicationId = "com.backscreen.wallpaper"
         minSdk = 35 // Android 15 and up; the one phone it's for runs Android 16 (HyperOS 3)
         targetSdk = 36
-        versionCode = 9
-        versionName = "2.0.2"
+        versionCode = 10
+        versionName = "2.1"
     }
 
     signingConfigs {
