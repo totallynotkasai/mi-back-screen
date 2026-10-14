@@ -26,6 +26,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.widget.doAfterTextChanged
 import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.ui.DISABLED_ALPHA
 import com.backscreen.wallpaper.ui.SwitchRow
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -116,7 +117,7 @@ object ColorPicker {
             valueTo = 100f
             isTickVisible = false
             contentDescription = ctx.getString(R.string.colour_brightness)
-            setLabelFormatter { "${it.roundToInt()}%" }
+            setLabelFormatter { ctx.getString(R.string.percent, it.roundToInt()) }
         }
         manual.addView(brightness, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             topMargin = (8 * dp).toInt()
@@ -141,7 +142,7 @@ object ColorPicker {
             spectrum.value = hsv[2]
             for (p in presets) p.chosen = !isAuto && p.color == color
             autoSwitch.isChecked = isAuto
-            manual.alpha = if (isAuto) 0.38f else 1f
+            manual.alpha = if (isAuto) DISABLED_ALPHA else 1f
             syncing = false
         }
 
@@ -186,8 +187,8 @@ object ColorPicker {
         builder
             .setTitle(title)
             .setView(ScrollView(ctx).apply { addView(content) })
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(android.R.string.ok) { _, _ -> onPicked(if (isAuto) null else Color.HSVToColor(hsv)) }
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.ok) { _, _ -> onPicked(if (isAuto) null else Color.HSVToColor(hsv)) }
             .show()
     }
 

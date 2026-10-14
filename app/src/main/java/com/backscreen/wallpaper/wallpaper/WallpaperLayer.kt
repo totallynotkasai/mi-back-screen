@@ -2,6 +2,7 @@ package com.backscreen.wallpaper.wallpaper
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Insets
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.view.Display
@@ -12,15 +13,21 @@ import kotlin.math.max
 
 /**
  * The back screen's bottom layer: the gallery's images, each fading in over the last, or black
- * with none. Decoding happens on its own thread, so a big image or a slow folder doesn't hold
- * up the screen; the first image too, so the window opens black for a moment. The gallery moves
- * on only while the window can be seen ([pause], [resume]).
+ * with none. Decoding happens on its own thread ([RearImage]), so a big image or a slow folder
+ * doesn't hold up the screen; the first image too, which the window waits a moment for before it
+ * draws ([onFirstLoad]). The gallery moves on only while the window can be seen ([pause], [resume]).
  */
 @SuppressLint("ViewConstructor")
 class WallpaperLayer(context: Context, private val display: Display) : FrameLayout(context) {
 
     /** Whether the back screen is lit. A change only fades in then; a dimmed one would show a moment of it. */
     var isLit: () -> Boolean = { true }
+
+    /**
+     * Each image's padding, which keeps it clear of the camera while Keep clear of the camera is
+     * on, as the Wallpaper tab's preview pads its image. Set before the first image.
+     */
+    var inset: Insets = Insets.NONE
 
     /** What it shows changed: a new image, or none. */
     var onShownChanged: (() -> Unit)? = null
@@ -96,26 +103,17 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
         }
         val load = reload.start(force)
         loader.execute {
-            val decoded = try {
-                Gallery.decodeCurrent(context, advance, alreadyShown = { it == shown && !load.reload }) { uri ->
-                    val drawable = BackScreen.loadImage(context, uri, display, WallpaperSettings.scalingInUse(context))
-                    drawable to WallpaperColour.of(drawable)
-                }
-            } catch (e: Throwable) {
-                // Out of memory too: uncaught on this thread, it would take the app down.
-                BackScreen.log("Couldn't load image: $e")
-                null
-            }
+            val loaded = RearImage.load(context, display, "Couldn't load image", advance, alreadyShown = { it == shown && !load.reload })
             BackScreen.mainHandler.post {
                 if (released || !reload.ended(load)) return@post
-                if (decoded == null) {
+                if (loaded == null) {
                     scheduleNextImage()
                 } else {
-                    val uri = decoded.shown.image
-                    val result = decoded.result
-                    if (uri != null && result != null) setImage(uri, result.first, result.second, fade = true)
+                    val uri = loaded.shown.image
+                    val drawable = loaded.drawable
+                    if (uri != null && drawable != null) setImage(uri, drawable, loaded.colour, loaded.scaling, fade = true)
                     if (uri == null) clearImage()
-                    setNextImage(decoded.shown.nextChangeAt)
+                    setNextImage(loaded.shown.nextChangeAt)
                 }
                 onFirstLoad?.let {
                     onFirstLoad = null
@@ -167,16 +165,15 @@ class WallpaperLayer(context: Context, private val display: Display) : FrameLayo
     }
 
     /**
-     * Puts [drawable] on top, fading it in over the old image (if [fade] and lit), which is then
-     * removed. [colour] is its colour for the charging animation's Auto.
+     * Puts [drawable], decoded for [scaling], on top, fading it in over the old image (if [fade]
+     * and lit), which is then removed. [colour] is its colour for the charging animation's Auto.
      */
-    private fun setImage(uri: Uri, drawable: Drawable, colour: Int?, fade: Boolean) {
+    private fun setImage(uri: Uri, drawable: Drawable, colour: Int?, scaling: Scaling, fade: Boolean) {
         shown = uri
         setColour(colour)
         val view = WallpaperView(context).apply {
-            scaling = WallpaperSettings.scalingInUse(context)
-            pan = WallpaperSettings.pan(context)
-            minTravel = WallpaperSettings.panMinTravel(context)
+            setPadding(inset.left, inset.top, inset.right, inset.bottom)
+            applySettings(scaling)
             setImageDrawable(drawable)
             onPanned = { onBackdropMoved?.invoke() }
             moving = this@WallpaperLayer.moving

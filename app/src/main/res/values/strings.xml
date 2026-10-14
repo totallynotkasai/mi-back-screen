@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Mi Back Screen</string>
-    <string name="title">Mi Back Screen</string>
 
     <!-- Sections: the bottom bar's tabs, and each one's main switch. -->
     <string name="tab_wallpaper">Wallpaper</string>
@@ -93,12 +92,13 @@
     <string name="show">Show</string>
 
     <!-- Diagnostics. -->
+    <string name="diag_on">on</string>
+    <string name="diag_off">off</string>
     <string name="diag_version">Mi Back Screen %1$s (%2$d)</string>
     <string name="diag_shizuku">Shizuku: %1$s</string>
     <string name="diag_owner">Back screen: %1$s</string>
     <string name="diag_rear_state">Back screen display: %1$s</string>
     <string name="diag_notifications">Notifications: %1$s</string>
-    <string name="diag_notifications_off">off</string>
     <string name="diag_notifications_no_access">on, but access isn\'t allowed</string>
     <string name="diag_notifications_waiting">on, waiting for Android to connect</string>
     <plurals name="diag_notifications_reading">
@@ -168,6 +168,7 @@
     <string name="remove_images_message">The back screen shows black instead, with the clock if it\'s on. Only the app\'s own copies are removed; your photos and folders aren\'t touched.</string>
     <string name="images_removed">Images removed</string>
     <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
     <string name="clock_title">Clock</string>
     <string name="clock_summary">Show the time and date over the image</string>
     <string name="clock_classic">Classic</string>
@@ -223,7 +224,9 @@
     <string name="lit_as_set">As set</string>
     <string name="lit_as_set_value">As set (%1$s)</string>
     <string name="lit_5s">5 s</string>
+    <string name="lit_30s">30 s</string>
     <string name="lit_1min">1 min</string>
+    <string name="lit_2min">2 min</string>
     <string name="lit_5min">5 min</string>
     <string name="lit_needs_shizuku">Needs Shizuku, which isn\'t ready</string>
     <string name="stay_lit_title">Stay fully lit while unlocked</string>
@@ -393,8 +396,6 @@
     <string name="setup_mirror_notifications_text">Shows what\'s on the back screen, with Bring back or Close camera.</string>
     <string name="allow">Allow</string>
     <string name="diag_mirror">Quick Switch: %1$s</string>
-    <string name="diag_mirror_off">off</string>
-    <string name="diag_mirror_on">on</string>
     <string name="diag_mirror_lent">on, %1$s on the back screen</string>
     <string name="diag_tweaks">Changed in Xiaomi\'s settings: %1$s</string>
 

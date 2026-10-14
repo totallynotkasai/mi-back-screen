@@ -9,9 +9,9 @@ enum class LitTime(val ms: Int?, val label: Int) {
     /** Xiaomi's own value, left alone (10 s on the 17 Pro Max). */
     AS_SET(null, R.string.lit_as_set),
     SECONDS_5(5_000, R.string.lit_5s),
-    SECONDS_30(30_000, R.string.keep_lit_30s),
+    SECONDS_30(30_000, R.string.lit_30s),
     MINUTE_1(60_000, R.string.lit_1min),
-    MINUTES_2(120_000, R.string.keep_lit_2min),
+    MINUTES_2(120_000, R.string.lit_2min),
     MINUTES_5(300_000, R.string.lit_5min),
 }
 

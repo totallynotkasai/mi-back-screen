@@ -80,7 +80,7 @@ class RearPreviewLayout @JvmOverloads constructor(
         val maxHeight = resources.configuration.screenHeightDp * resources.displayMetrics.density * MAX_HEIGHT_SHARE
         val width = minOf(MeasureSpec.getSize(widthMeasureSpec), (maxHeight * rearWidth / rearHeight).toInt())
         val scale = width.toFloat() / rearWidth
-        // Same padding as the rear wallpaper gets, scaled down, so the crop matches.
+        // The padding each image gets on the back screen (WallpaperLayer.inset), scaled down, so the crop matches.
         val inset = if (avoidCamera) cameraInsets else Insets.NONE
         findViewById<WallpaperView>(R.id.preview)?.ratio = scale
         findViewById<View>(R.id.preview)?.setPadding(

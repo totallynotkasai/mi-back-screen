@@ -33,6 +33,17 @@ object TaskList {
         tasksOn(output, displayId).map { it.packageName }.distinct()
 
     /**
+     * Whether Xiaomi's back screen app has its launcher under [frontPackage] on [displayId], with
+     * [frontPackage] in front. Once that launcher exists, Xiaomi removes whatever is on top each
+     * time the back screen dims; restarting Xiaomi's app brings it back without it. Not while the
+     * launcher is in front: Android would start it again at once.
+     */
+    fun xiaomiLauncherUnder(output: String, displayId: Int, frontPackage: String): Boolean {
+        val packages = packagesOn(output, displayId)
+        return packages.firstOrNull() == frontPackage && RearCommands.XIAOMI_REAR_PACKAGE in packages
+    }
+
+    /**
      * The app in front on the main screen, for Quick Switch to send to the back screen. Null if
      * there's none to send: the home screen or recents is in front, or this app ([ownPackage]).
      * SystemUI's own tasks and a picture-in-picture window are passed over.

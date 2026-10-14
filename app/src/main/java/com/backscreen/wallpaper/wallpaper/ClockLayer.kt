@@ -162,52 +162,49 @@ class ClockLayer @JvmOverloads constructor(
         builtFor = Locale.getDefault()
         when (settings.style) {
             ClockStyle.CLASSIC -> {
-                add(time(), 0.30f, "sans-serif-medium")
-                add(date("EEEEdMMMM"), 0.075f, "sans-serif")
+                addTime(0.30f, "sans-serif-medium")
+                addDate("EEEEdMMMM", 0.075f, "sans-serif")
             }
             ClockStyle.LIGHT -> {
-                add(time(), 0.30f, "sans-serif-thin")
-                add(date("EEEEdMMMM"), 0.07f, "sans-serif-light")
+                addTime(0.30f, "sans-serif-thin")
+                addDate("EEEEdMMMM", 0.07f, "sans-serif-light")
             }
             ClockStyle.STACKED -> {
-                add(clock("hh", "HH"), 0.29f, "sans-serif-black")
-                add(clock("mm", "mm"), 0.29f, "sans-serif-black")
-                add(date("EEEdMMM"), 0.065f, "sans-serif-medium")
+                add("hh", "HH", 0.29f, "sans-serif-black")
+                add("mm", "mm", 0.29f, "sans-serif-black")
+                addDate("EEEdMMM", 0.065f, "sans-serif-medium")
             }
             ClockStyle.DIGITAL -> {
-                add(time(), 0.20f, "monospace")
-                add(date("EEEdMMM"), 0.06f, "monospace")
+                addTime(0.20f, "monospace")
+                addDate("EEEdMMM", 0.06f, "monospace")
             }
             ClockStyle.SERIF -> {
-                add(date("EEEEdMMMM"), 0.05f, "serif") { isAllCaps = true; letterSpacing = 0.2f }
-                add(time(), 0.28f, "serif")
+                addDate("EEEEdMMMM", 0.05f, "serif") { isAllCaps = true; letterSpacing = 0.2f }
+                addTime(0.28f, "serif")
             }
         }
         applyLook()
         updateTime()
     }
 
-    private fun add(formats: Formats, size: Float, font: String, style: TextView.() -> Unit = {}) {
+    /** A line showing the time or date in [format12] or [format24], as the phone's 12/24-hour setting says. */
+    private fun add(format12: String, format24: String, size: Float, font: String, style: TextView.() -> Unit = {}) {
         val text = TextView(context).apply {
             typeface = Typeface.create(font, Typeface.NORMAL)
             includeFontPadding = false
             style()
         }
         box.addView(text)
-        fields += Field(text, size, formats.format12, formats.format24)
+        fields += Field(text, size, format12, format24)
     }
 
-    private class Formats(val format12: String, val format24: String)
-
-    private fun time() = clock("h:mm", "HH:mm")
+    private fun addTime(size: Float, font: String) = add("h:mm", "HH:mm", size, font)
 
     /** The date the way the phone's region writes it, from a [skeleton] like "EEEEdMMMM". */
-    private fun date(skeleton: String): Formats {
+    private fun addDate(skeleton: String, size: Float, font: String, style: TextView.() -> Unit = {}) {
         val pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton)
-        return clock(pattern, pattern)
+        add(pattern, pattern, size, font, style)
     }
-
-    private fun clock(format12: String, format24: String) = Formats(format12, format24)
 
     /**
      * Shows the time now, in the phone's 12 or 24-hour style. Cheap when nothing has changed,

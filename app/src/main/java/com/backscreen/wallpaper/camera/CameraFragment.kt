@@ -1,15 +1,10 @@
 package com.backscreen.wallpaper.camera
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import com.backscreen.wallpaper.MainActivity
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
@@ -17,12 +12,13 @@ import com.backscreen.wallpaper.core.LendReason
 import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
-import com.backscreen.wallpaper.mirror.MirrorSettings
 import com.backscreen.wallpaper.rear.RearHostActivity
+import com.backscreen.wallpaper.ui.AskNotificationsOnce
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.needShizuku
 import com.backscreen.wallpaper.ui.shizukuMissing
+import com.backscreen.wallpaper.ui.snackbar
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import com.google.android.material.snackbar.Snackbar
@@ -43,12 +39,8 @@ class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
 
     private val ctx: Context get() = requireContext()
 
-    // Asked once, when Mirror or Camera is first switched on: the notification while the camera
-    // is up needs it. Refusing leaves this tab and Xiaomi's back strip to close it.
-    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        BackScreen.log(if (granted) "Notifications allowed" else "Notifications refused")
-        if (!granted && view != null) snackbar(R.string.camera_notifications_denied)
-    }
+    // Refusing leaves this tab and Xiaomi's back strip to close the camera.
+    private val askNotifications = AskNotificationsOnce(this, CameraSettings, R.string.camera_notifications_denied)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         mainSwitch = view.findViewById(R.id.mainSwitch)
@@ -109,22 +101,15 @@ class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
         backdrop.refresh()
     }
 
-    private fun cameraIsUp() = (RearState.owner(ctx) as? RearOwner.Lent)?.lend?.reason == LendReason.CAMERA
+    private fun cameraIsUp() = RearState.lendFor(ctx, LendReason.CAMERA) != null
 
     private fun switched(on: Boolean) {
         CameraSettings.setEnabled(ctx, on)
         BackScreen.log(if (on) "Swipe left for Xiaomi Camera on" else "Swipe left for Xiaomi Camera off")
         // The back screen reads swipes only while a section uses them; nothing new to see there.
         RearHostActivity.swipesChanged()
-        if (on) askForNotificationsOnce()
+        if (on) askNotifications.ask()
         refresh()
-    }
-
-    private fun askForNotificationsOnce() {
-        if (MirrorSettings.askedNotifications(ctx)) return
-        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
-        MirrorSettings.setAskedNotifications(ctx)
-        askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     /** Opens Xiaomi Camera on the back screen, or closes it if it's up. */
@@ -135,11 +120,11 @@ class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
         }
         when {
             !RearCommands.isReady() -> needShizuku()
-            RearState.owner(ctx) is RearOwner.Lent -> snackbar(R.string.play_lent)
+            RearState.owner(ctx) is RearOwner.Lent -> snackbar(R.string.play_lent, Snackbar.LENGTH_LONG)
             else -> {
                 KeeperService.start(ctx, KeeperService.ACTION_OPEN_CAMERA, why = "the Camera tab")
                 // Off, it still opens from here, but a swipe won't.
-                if (!CameraSettings.isEnabled(ctx)) snackbar(R.string.camera_opened_switch_off)
+                if (!CameraSettings.isEnabled(ctx)) snackbar(R.string.camera_opened_switch_off, Snackbar.LENGTH_LONG)
             }
         }
     }
@@ -155,9 +140,5 @@ class CameraFragment : Fragment(R.layout.fragment_camera), Refreshable {
     private fun reloadPreview() {
         backdrop.reload()
         refresh()
-    }
-
-    private fun snackbar(text: Int) {
-        (requireActivity() as MainActivity).snackbar(text, Snackbar.LENGTH_LONG)
     }
 }

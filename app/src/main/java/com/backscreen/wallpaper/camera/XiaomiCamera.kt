@@ -7,16 +7,15 @@ import com.backscreen.wallpaper.core.Lend
 import com.backscreen.wallpaper.core.LendMisses
 import com.backscreen.wallpaper.core.LendReason
 import com.backscreen.wallpaper.core.RearCommands
-import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
 
 /**
  * When Xiaomi Camera should close because the back screen isn't lit: it has dimmed or gone off
- * since it was lit with the camera up, or it hasn't lit up within [lightWithinMs] of opening.
+ * since it was lit with the camera up, or it hasn't lit up within [LIGHT_WITHIN_MS] of opening.
  * A camera on a dark back screen can't be used, and shouldn't be left running. Times are from
  * [SystemClock.elapsedRealtime]. Plain Kotlin, so it's unit tested.
  */
-class CameraDim(private val lightWithinMs: Long = LIGHT_WITHIN_MS) {
+class CameraDim {
     private var openedAt = 0L
     private var seenLit = false
 
@@ -33,7 +32,7 @@ class CameraDim(private val lightWithinMs: Long = LIGHT_WITHIN_MS) {
             null
         }
         seenLit -> "the back screen dimmed"
-        now - openedAt >= lightWithinMs -> "the back screen didn't light up"
+        now - openedAt >= LIGHT_WITHIN_MS -> "the back screen didn't light up"
         else -> null
     }
 
@@ -64,7 +63,7 @@ class XiaomiCamera(private val keeper: KeeperService) {
 
     /** Xiaomi Camera's lend of the back screen, if it's there. */
     val lend: Lend?
-        get() = (RearState.owner(keeper) as? RearOwner.Lent)?.lend?.takeIf { it.reason == LendReason.CAMERA }
+        get() = RearState.lendFor(keeper, LendReason.CAMERA)
 
     /** Which way it last opened: 1 (Xiaomi's own command) or 2 (the standard intent), for Diagnostics. */
     var route: Int? = null

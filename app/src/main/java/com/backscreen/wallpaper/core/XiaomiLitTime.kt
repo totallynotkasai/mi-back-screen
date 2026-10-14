@@ -14,12 +14,10 @@ import kotlin.concurrent.thread
  * becomes what the lend puts back; so Quick Switch's As set means what this says. Uninstalling the
  * app leaves Xiaomi's setting as it is, which the Wallpaper help mentions.
  *
- * Runs the shell, so never on the main thread.
+ * Xiaomi's timeout is the same for every display, so this needs no back screen to be found
+ * ([TweakKind.readTimeout]). Runs the shell, so never on the main thread.
  */
 object XiaomiLitTime {
-    // Xiaomi's timeout is the same for every display, so TweakKind.TIMEOUT doesn't use the one it's given.
-    private const val ANY_DISPLAY = -1
-
     /**
      * Makes Xiaomi's timeout match the setting: after a change, and when the keeper starts or
      * Shizuku connects, in case something reset it. Does nothing while As set, once Xiaomi's own
@@ -30,7 +28,7 @@ object XiaomiLitTime {
         val own = DisplaySettings.xiaomiLitTime(context)
         if (chosen == null && own == null) return
         val kind = TweakKind.TIMEOUT
-        val current = kind.read(ANY_DISPLAY) ?: return BackScreen.log("Stays lit for: couldn't read Xiaomi's timeout; trying later")
+        val current = TweakKind.readTimeout() ?: return BackScreen.log("Stays lit for: couldn't read Xiaomi's timeout; trying later")
         val saved = RearTweaks.saved(context, kind)
         val xiaomi = TweakRules.xiaomiOwn(own, saved, current.value)
         // Saved before Xiaomi's value is first changed, and forgotten once it's back.
@@ -38,7 +36,7 @@ object XiaomiLitTime {
         val base = chosen?.toString() ?: xiaomi
         val done = when (val change = TweakRules.baseChanged(saved, current.value, base)) {
             is BaseChange.Write -> {
-                val result = kind.write(ANY_DISPLAY, base)
+                val result = TweakKind.writeTimeout(base)
                 BackScreen.log("Stays lit for: ${base ?: "unset"} (was ${current.value ?: "unset"}): $result")
                 result == "ok"
             }
@@ -60,7 +58,7 @@ object XiaomiLitTime {
     /** Xiaomi's own timeout in ms, for As set's chip; null if it can't be read. Shell thread. */
     fun xiaomiMs(context: Context): Int? {
         DisplaySettings.xiaomiLitTime(context)?.let { return it.value?.toIntOrNull() }
-        val current = TweakKind.TIMEOUT.read(ANY_DISPLAY) ?: return null
+        val current = TweakKind.readTimeout() ?: return null
         return TweakRules.xiaomiOwn(null, RearTweaks.saved(context, TweakKind.TIMEOUT), current.value)?.toIntOrNull()
     }
 

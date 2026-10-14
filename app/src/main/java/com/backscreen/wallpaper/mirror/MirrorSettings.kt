@@ -36,7 +36,6 @@ object MirrorSettings : FeatureSettings("mirror") {
     private const val KEY_SIZE = "size"
     private const val KEY_ORIENTATION = "orientation"
     private const val KEY_TILE_ADDED = "tile_added"
-    private const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
 
     /** 2 minutes by default. */
     fun keepLit(context: Context) =
@@ -86,12 +85,5 @@ object MirrorSettings : FeatureSettings("mirror") {
 
     fun setTileAdded(context: Context, added: Boolean) {
         prefs(context).edit().putBoolean(KEY_TILE_ADDED, added).apply()
-    }
-
-    /** Notification permission is asked for once, when Mirror or Camera is first switched on. */
-    fun askedNotifications(context: Context) = prefs(context).getBoolean(KEY_ASKED_NOTIFICATIONS, false)
-
-    fun setAskedNotifications(context: Context) {
-        prefs(context).edit().putBoolean(KEY_ASKED_NOTIFICATIONS, true).apply()
     }
 }

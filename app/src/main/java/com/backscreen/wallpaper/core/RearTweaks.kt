@@ -104,11 +104,13 @@ object TweakRules {
 
 /** The Xiaomi settings a lend may change, how to read each, and how to set it. Shell thread. */
 enum class TweakKind(val key: String, val label: String) {
-    /** How long the back screen stays lit after the last touch (`subscreen_display_time`, ms). */
+    /**
+     * How long the back screen stays lit after the last touch (`subscreen_display_time`, ms). One
+     * setting for every display, so [rear] isn't used: it's here only because the other kinds need it.
+     */
     TIMEOUT("timeout", "Xiaomi's back screen timeout") {
-        override fun read(rear: Int) = RearCommands.rearTimeout()?.let { Current(TweakRules.timeout(it), it) }
-        override fun write(rear: Int, value: String?) =
-            value?.toIntOrNull()?.let { RearCommands.setRearTimeout(it) } ?: RearCommands.clearRearTimeout()
+        override fun read(rear: Int) = readTimeout()
+        override fun write(rear: Int, value: String?) = writeTimeout(value)
     },
 
     /** The back screen's density, which sets how big apps draw. Xiaomi overrides the panel's 450 to 260. */
@@ -150,6 +152,15 @@ enum class TweakKind(val key: String, val label: String) {
 
     /** Sets it to [value], or unsets it for null. "ok" if it worked. */
     abstract fun write(rear: Int, value: String?): String
+
+    companion object {
+        /** [TIMEOUT] now, which needs no display: Stays lit for reads it with the back screen off too ([XiaomiLitTime]). */
+        fun readTimeout() = RearCommands.rearTimeout()?.let { Current(TweakRules.timeout(it), it) }
+
+        /** Sets [TIMEOUT] to [value], or unsets it for null. */
+        fun writeTimeout(value: String?) =
+            value?.toIntOrNull()?.let { RearCommands.setRearTimeout(it) } ?: RearCommands.clearRearTimeout()
+    }
 }
 
 /**

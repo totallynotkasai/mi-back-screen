@@ -206,7 +206,7 @@ object AppDialogs {
 
     /** Whether notifications are being read for the back screen, and how many it has. */
     private fun notificationsStatus(context: Context): String = when {
-        !NotificationSettings.isEnabled(context) -> context.getString(R.string.diag_notifications_off)
+        !NotificationSettings.isEnabled(context) -> context.getString(R.string.diag_off)
         !NotificationAccess.isGranted(context) -> context.getString(R.string.diag_notifications_no_access)
         !RearNotificationListener.isListening -> context.getString(R.string.diag_notifications_waiting)
         else -> RearNotificationListener.recent().size.let {
@@ -216,17 +216,17 @@ object AppDialogs {
 
     /** Whether Quick Switch is on, and which app it has on the back screen. */
     private fun mirrorStatus(context: Context): String {
-        if (!MirrorSettings.isEnabled(context)) return context.getString(R.string.diag_mirror_off)
-        val lend = (RearState.owner(context) as? RearOwner.Lent)?.lend?.takeIf { it.reason == LendReason.QUICK_SWITCH }
-            ?: return context.getString(R.string.diag_mirror_on)
+        if (!MirrorSettings.isEnabled(context)) return context.getString(R.string.diag_off)
+        val lend = RearState.lendFor(context, LendReason.QUICK_SWITCH)
+            ?: return context.getString(R.string.diag_on)
         // Diagnostics refreshes each second, so the name shows once it's read.
         return context.getString(R.string.diag_mirror_lent, AppLabels.shown(context, lend.packageName) {})
     }
 
     /** Whether swipe left is on, whether Xiaomi Camera is up, and which way it last opened. */
     private fun cameraStatus(context: Context): String {
-        val state = context.getString(if (CameraSettings.isEnabled(context)) R.string.diag_mirror_on else R.string.diag_mirror_off)
-        val up = (RearState.owner(context) as? RearOwner.Lent)?.lend?.reason == LendReason.CAMERA
+        val state = context.getString(if (CameraSettings.isEnabled(context)) R.string.diag_on else R.string.diag_off)
+        val up = RearState.lendFor(context, LendReason.CAMERA) != null
         val route = KeeperService.instance?.camera?.route
         return listOfNotNull(
             state,

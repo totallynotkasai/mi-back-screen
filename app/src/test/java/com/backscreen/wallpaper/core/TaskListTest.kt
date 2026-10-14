@@ -1,7 +1,9 @@
 package com.backscreen.wallpaper.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TaskListTest {
@@ -41,15 +43,34 @@ class TaskListTest {
         assertEquals(TaskList.Task(12, "com.teslacoilsw.launcher"), TaskList.tasksOn(withLauncher, 0).first())
     }
 
+    // Xiaomi brought its launcher back over the wallpaper.
+    private val swapped = withLauncher.lines().let { lines ->
+        val wallpaper = lines.indexOfFirst { it.startsWith("RootTask id=3010") }
+        val launcher = lines.indexOfFirst { it.startsWith("RootTask id=3004") }
+        lines.subList(0, wallpaper) + lines.subList(launcher, lines.size) + lines.subList(wallpaper, launcher)
+    }.joinToString("\n")
+
     @Test
     fun launcherInFront() {
-        // Xiaomi brought its launcher back over the wallpaper.
-        val swapped = withLauncher.lines().let { lines ->
-            val wallpaper = lines.indexOfFirst { it.startsWith("RootTask id=3010") }
-            val launcher = lines.indexOfFirst { it.startsWith("RootTask id=3004") }
-            lines.subList(0, wallpaper) + lines.subList(launcher, lines.size) + lines.subList(wallpaper, launcher)
-        }.joinToString("\n")
         assertEquals(listOf("com.xiaomi.subscreencenter", "com.backscreen.wallpaper"), TaskList.packagesOn(swapped, 1))
+    }
+
+    @Test
+    fun xiaomisLauncherUnderTheWallpaperOrASentApp() {
+        assertTrue(TaskList.xiaomiLauncherUnder(withLauncher, 1, own))
+        // A Quick Switch app over Xiaomi's launcher, with the wallpaper off.
+        assertTrue(TaskList.xiaomiLauncherUnder(withLauncher.replace("$own/", "$youtube/"), 1, youtube))
+    }
+
+    @Test
+    fun xiaomisLauncherInFrontOrNotThere() {
+        // In front, Android would start it again at once if Xiaomi's app were restarted.
+        assertFalse(TaskList.xiaomiLauncherUnder(swapped, 1, own))
+        // Not there at all, or another app in front, or on another display.
+        assertFalse(TaskList.xiaomiLauncherUnder(youtubeInFront, 1, own))
+        assertFalse(TaskList.xiaomiLauncherUnder(withLauncher, 1, youtube))
+        assertFalse(TaskList.xiaomiLauncherUnder(withLauncher, 0, own))
+        assertFalse(TaskList.xiaomiLauncherUnder("", 1, own))
     }
 
     @Test

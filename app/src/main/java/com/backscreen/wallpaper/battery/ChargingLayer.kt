@@ -24,6 +24,7 @@ import android.util.AttributeSet
 import android.view.View
 import android.view.animation.LinearInterpolator
 import androidx.core.graphics.ColorUtils
+import com.backscreen.wallpaper.core.withOpacity
 import com.backscreen.wallpaper.wallpaper.ClockLayer
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -418,7 +419,7 @@ class ChargingLayer @JvmOverloads constructor(
 
     private fun drawRing(canvas: Canvas, f: ChargingFrame) {
         val veil = f.veil * exit
-        if (veil > 0f) canvas.drawColor(withAlpha(veilColor, VEIL_OPACITY * veil))
+        if (veil > 0f) canvas.drawColor(veilColor.withOpacity(VEIL_OPACITY * veil))
         val alpha = f.content * exit
         val u = (height - paddingTop - paddingBottom).toFloat()
         if (alpha <= 0f || u <= 0f) return
@@ -433,10 +434,10 @@ class ChargingLayer @JvmOverloads constructor(
 
         // The ring: a faint track, filled clockwise from the top as far as the level.
         ring.strokeWidth = RING_STROKE * u
-        ring.color = withAlpha(accent, TRACK_OPACITY * alpha)
+        ring.color = accent.withOpacity(TRACK_OPACITY * alpha)
         canvas.drawCircle(cx, cy, r, ring)
         if (f.ring > 0f) {
-            ring.color = withAlpha(accent, alpha)
+            ring.color = accent.withOpacity(alpha)
             oval.set(cx - r, cy - r, cx + r, cy + r)
             canvas.drawArc(oval, -90f, 360f * f.ring, false, ring)
         }
@@ -446,7 +447,7 @@ class ChargingLayer @JvmOverloads constructor(
         // The number, with a smaller percent sign after it, centred together.
         number.textSize = NUMBER_SIZE * u
         percent.textSize = NUMBER_SIZE * PERCENT_SCALE * u
-        number.color = withAlpha(textColor, alpha)
+        number.color = textColor.withOpacity(alpha)
         number.clearShadowLayer()
         percent.color = number.color
         percent.clearShadowLayer()
@@ -460,7 +461,7 @@ class ChargingLayer @JvmOverloads constructor(
         // "Charging", rising into place under the ring as it appears.
         if (f.label > 0f) {
             labelPaint.textSize = LABEL_SIZE * u
-            labelPaint.color = withAlpha(textColor, LABEL_OPACITY * alpha * f.label)
+            labelPaint.color = textColor.withOpacity(LABEL_OPACITY * alpha * f.label)
             canvas.drawText(label, cx, cy + r + (LABEL_GAP + (1 - f.label) * LABEL_RISE) * u, labelPaint)
         }
         canvas.restore()
@@ -573,13 +574,13 @@ class ChargingLayer @JvmOverloads constructor(
 
         // No veil behind it, so a shadow keeps it readable, as the clock's does.
         val shadow = if (ColorUtils.calculateLuminance(textColor) > 0.4) 0x99000000.toInt() else 0x66FFFFFF
-        val shadowAlpha = withAlpha(shadow, alpha)
+        val shadowAlpha = shadow.withOpacity(alpha)
         val accent = accentNow()
         boltFill.setShadowLayer(0.02f * u, 0f, 0.005f * u, shadowAlpha)
         drawBolt(canvas, left + boltWidth / 2, y + contentHeight / 2, boltHeight, accent, 0f, 1f, alpha)
         boltFill.clearShadowLayer()
 
-        number.color = withAlpha(textColor, alpha)
+        number.color = textColor.withOpacity(alpha)
         number.setShadowLayer(0.02f * u, 0f, 0.005f * u, shadowAlpha)
         percent.color = number.color
         percent.setShadowLayer(0.02f * u, 0f, 0.005f * u, shadowAlpha)
@@ -620,21 +621,18 @@ class ChargingLayer @JvmOverloads constructor(
         canvas.scale(scale, scale)
         canvas.translate(-BOLT_CENTRE_X, -BOLT_CENTRE_Y)
         if (fill > 0f) {
-            boltFill.color = withAlpha(color, alpha * fill)
+            boltFill.color = color.withOpacity(alpha * fill)
             canvas.drawPath(BOLT, boltFill)
         }
         if (trace > 0f) {
             traced.reset()
             boltMeasure.getSegment(0f, boltLength * trace, traced, true)
             boltLine.strokeWidth = BOLT_LINE
-            boltLine.color = withAlpha(color, alpha)
+            boltLine.color = color.withOpacity(alpha)
             canvas.drawPath(traced, boltLine)
         }
         canvas.restore()
     }
-
-    private fun withAlpha(color: Int, opacity: Float) =
-        ColorUtils.setAlphaComponent(color, (Color.alpha(color) * opacity.coerceIn(0f, 1f)).roundToInt())
 
     private fun alpha255(opacity: Float) = (255 * opacity.coerceIn(0f, 1f)).roundToInt()
 

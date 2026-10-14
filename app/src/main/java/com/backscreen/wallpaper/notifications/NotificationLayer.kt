@@ -14,7 +14,6 @@ import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.View
 import android.view.ViewConfiguration
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
@@ -25,6 +24,7 @@ import android.widget.TextView
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.ColorUtils
 import com.backscreen.wallpaper.R
+import com.backscreen.wallpaper.core.withOpacity
 import com.backscreen.wallpaper.rear.Swipes
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -437,7 +437,7 @@ class NotificationLayer @JvmOverloads constructor(
 
     override fun dispatchDraw(canvas: Canvas) {
         // The list's veil, over the whole screen, camera area included.
-        if (progress > 0f) canvas.drawColor(withAlpha(cardColor, VEIL_OPACITY * progress))
+        if (progress > 0f) canvas.drawColor(cardColor.withOpacity(VEIL_OPACITY * progress))
         super.dispatchDraw(canvas)
     }
 
@@ -450,8 +450,8 @@ class NotificationLayer @JvmOverloads constructor(
     }
 
     private fun applyFooterColors() {
-        footerShape.setColor(withAlpha(cardTone(), CARD_OPACITY))
-        footer.setTextColor(withAlpha(textColor, SECONDARY_OPACITY))
+        footerShape.setColor(cardTone().withOpacity(CARD_OPACITY))
+        footer.setTextColor(textColor.withOpacity(SECONDARY_OPACITY))
     }
 
     /** A card's colour: the clock's background colour, lifted a little towards its text. */
@@ -460,9 +460,6 @@ class NotificationLayer @JvmOverloads constructor(
     private fun unit() = (height - paddingTop - paddingBottom).toFloat()
 
     private fun margin() = (MARGIN * unit()).roundToInt()
-
-    private fun withAlpha(color: Int, opacity: Float) =
-        ColorUtils.setAlphaComponent(color, (Color.alpha(color) * opacity.coerceIn(0f, 1f)).roundToInt())
 
     /** One notification on a card: the app's icon, its name and when, then the title and message. */
     private inner class Card(private val textLines: Int) {
@@ -522,11 +519,11 @@ class NotificationLayer @JvmOverloads constructor(
         }
 
         fun applyColors() {
-            shape.setColor(withAlpha(cardTone(), CARD_OPACITY))
-            app.setTextColor(withAlpha(textColor, SECONDARY_OPACITY))
-            more.setTextColor(withAlpha(textColor, SECONDARY_OPACITY))
+            shape.setColor(cardTone().withOpacity(CARD_OPACITY))
+            app.setTextColor(textColor.withOpacity(SECONDARY_OPACITY))
+            more.setTextColor(textColor.withOpacity(SECONDARY_OPACITY))
             title.setTextColor(textColor)
-            text.setTextColor(withAlpha(textColor, TEXT_OPACITY))
+            text.setTextColor(textColor.withOpacity(TEXT_OPACITY))
             // App icons keep their own colours; the stand-in bell takes the text's.
             icon.imageTintList = if (fallbackIcon) ColorStateList.valueOf(textColor) else null
         }

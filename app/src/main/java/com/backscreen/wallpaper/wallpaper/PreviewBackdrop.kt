@@ -85,18 +85,10 @@ class PreviewBackdrop(
         val app = context.applicationContext
         asked = Gallery.shown(context)
         loader.execute {
-            val scaling = WallpaperSettings.scalingInUse(app)
-            val drawable = try {
-                Gallery.decodeCurrent(app, advance = false) { BackScreen.loadImage(app, it, display, scaling) }.result
-            } catch (e: Throwable) {
-                // Out of memory too: uncaught on this thread, it would take the app down.
-                BackScreen.log("Preview failed: $e")
-                null
-            }
-            val colour = drawable?.let(WallpaperColour::of)
+            val loaded = RearImage.load(app, display, "Preview failed")
             BackScreen.mainHandler.post {
                 if (released || load != loads) return@post
-                show(drawable, colour, scaling)
+                show(loaded?.drawable, loaded?.colour, loaded?.scaling ?: WallpaperSettings.scalingInUse(app))
             }
         }
     }
@@ -104,10 +96,8 @@ class PreviewBackdrop(
     private fun show(drawable: Drawable?, colour: Int?, scaling: Scaling) {
         this.colour = colour
         image.setBackgroundColor(Color.BLACK)
-        image.scaling = scaling
         // It doesn't move here; with panning on, it holds where a pan starts.
-        image.pan = WallpaperSettings.pan(context)
-        image.minTravel = WallpaperSettings.panMinTravel(context)
+        image.applySettings(scaling)
         image.setImageDrawable(drawable)
         clock.backdropChanged()
         matchGlow()

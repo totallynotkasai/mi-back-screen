@@ -103,8 +103,8 @@ object RearCommands {
     fun stopXiaomiCamera() = run(AM, "force-stop", CAMERA_PACKAGE)
 
     // Xiaomi's settings that a lend changes, and always puts back (see RearTweaks). The setting
-    // names and the display are fixed; only the values vary, and those are numbers or one of
-    // a few fixed words.
+    // names are fixed and the display is a number; only the values vary, and those are numbers
+    // or one of a few fixed words.
 
     /** How long Xiaomi keeps the back screen lit after the last touch, in ms; "null" if unset. */
     fun rearTimeout() = read(CMD, "settings", "get", "system", REAR_TIMEOUT)
@@ -151,8 +151,19 @@ object RearCommands {
     }
 
     /** Xiaomi's back screen app restarts itself straight away, without its launcher. */
-    fun restartXiaomiRearApp() =
+    private fun restartXiaomiRearApp() =
         run(AM, "force-stop", XIAOMI_REAR_PACKAGE)
+
+    /**
+     * Restarts Xiaomi's back screen app if its launcher is under [frontPackage], which is in front
+     * on [displayId] ([TaskList.xiaomiLauncherUnder]). True if it was restarted. Shell thread.
+     */
+    fun restartXiaomiIfUnder(frontPackage: String, displayId: Int): Boolean {
+        val tasks = taskList() ?: return false
+        if (!TaskList.xiaomiLauncherUnder(tasks, displayId, frontPackage)) return false
+        BackScreen.log("Restart Xiaomi back screen app, without its launcher: ${restartXiaomiRearApp()}")
+        return true
+    }
 
     fun restoreXiaomiRearLauncher(displayId: Int): String {
         var result = ""

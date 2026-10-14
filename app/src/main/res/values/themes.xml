@@ -7,6 +7,8 @@
         <!-- Dark status and navigation bar icons over the light surface, light ones in dark mode. -->
         <item name="android:windowLightStatusBar">?attr/isLightTheme</item>
         <item name="android:windowLightNavigationBar">?attr/isLightTheme</item>
+        <!-- The app's background, behind the bars and every tab; the frame doesn't paint it again. -->
+        <item name="android:windowBackground">?attr/colorSurface</item>
     </style>
 
     <style name="Widget.BackScreen.Card" parent="Widget.Material3.CardView.Filled">

@@ -1,6 +1,5 @@
 package com.backscreen.wallpaper.wallpaper
 
-import android.view.LayoutInflater
 import android.view.View
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.core.BackScreen
@@ -10,6 +9,8 @@ import com.backscreen.wallpaper.core.LitTime
 import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.XiaomiLitTime
 import com.backscreen.wallpaper.ui.SwitchRow
+import com.backscreen.wallpaper.ui.addChoiceChips
+import com.backscreen.wallpaper.ui.setChipsEnabled
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -21,7 +22,7 @@ import kotlin.concurrent.thread
  * Stays lit for is Xiaomi's setting, so it works with the wallpaper off but needs Shizuku; the two
  * switches work while the wallpaper is up, and the card says so while it isn't.
  */
-class DisplayCard(card: View, inflater: LayoutInflater) {
+class DisplayCard(card: View) {
     private val context = card.context
     private val chips: ChipGroup = card.findViewById(R.id.litChips)
     private val shizukuNote: View = card.findViewById(R.id.litShizukuNote)
@@ -33,24 +34,12 @@ class DisplayCard(card: View, inflater: LayoutInflater) {
     private var reading = false
 
     init {
-        val chosen = DisplaySettings.litTime(context)
-        var asSetChip: Chip? = null
-        for (option in LitTime.entries) {
-            val chip = inflater.inflate(R.layout.chip_style, chips, false) as Chip
-            chip.id = View.generateViewId()
-            chip.tag = option
-            chip.setText(option.label)
-            chip.isChecked = option == chosen
-            chips.addView(chip)
-            if (option == LitTime.AS_SET) asSetChip = chip
-        }
-        asSet = asSetChip!!
-        chips.setOnCheckedStateChangeListener { group, ids ->
-            val option = ids.firstOrNull()?.let { group.findViewById<Chip>(it).tag as LitTime } ?: return@setOnCheckedStateChangeListener
+        val litChips = chips.addChoiceChips(LitTime.entries, DisplaySettings.litTime(context), { context.getString(it.label) }) { option ->
             DisplaySettings.setLitTime(context, option)
             BackScreen.log("Stays lit for: ${option.name.lowercase()}")
             XiaomiLitTime.changed(context)
         }
+        asSet = litChips[LitTime.entries.indexOf(LitTime.AS_SET)]
 
         val stayLit = card.findViewById<MaterialSwitch>(R.id.stayLitSwitch)
         SwitchRow.bind(card.findViewById(R.id.stayLitRow), stayLit)
@@ -79,7 +68,7 @@ class DisplayCard(card: View, inflater: LayoutInflater) {
     /** Whether Shizuku is ready for Stays lit for, and the wallpaper for the switches. The tab calls this every second. */
     fun refresh() {
         val ready = RearCommands.isReady()
-        for (i in 0 until chips.childCount) chips.getChildAt(i).isEnabled = ready
+        chips.setChipsEnabled(ready)
         shizukuNote.visibility = if (ready) View.GONE else View.VISIBLE
         wallpaperNote.visibility = if (WallpaperSettings.isEnabled(context)) View.GONE else View.VISIBLE
         if (ready && !read && !reading) readXiaomi()

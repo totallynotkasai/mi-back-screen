@@ -19,7 +19,17 @@ abstract class FeatureSettings(private val file: String) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
     }
 
+    /** Whether this section has asked for permission to post notifications (see AskNotificationsOnce). */
+    fun askedNotifications(context: Context) = prefs(context).getBoolean(KEY_ASKED_NOTIFICATIONS, false)
+
+    fun setAskedNotifications(context: Context) {
+        prefs(context).edit().putBoolean(KEY_ASKED_NOTIFICATIONS, true).apply()
+    }
+
     private companion object {
         const val KEY_ENABLED = "enabled"
+
+        // Mirror's since 2.0, which asked for Camera too.
+        const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
     }
 }

@@ -8,7 +8,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.fragment.app.Fragment
-import com.backscreen.wallpaper.MainActivity
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
@@ -17,17 +16,20 @@ import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.rear.RearHostActivity
+import com.backscreen.wallpaper.ui.DISABLED_ALPHA
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
+import com.backscreen.wallpaper.ui.addChoiceChips
 import com.backscreen.wallpaper.ui.needShizuku
+import com.backscreen.wallpaper.ui.setChipsEnabled
 import com.backscreen.wallpaper.ui.shizukuMissing
+import com.backscreen.wallpaper.ui.snackbar
 import com.backscreen.wallpaper.wallpaper.ClockLayer
-import com.backscreen.wallpaper.wallpaper.OverlayColors
 import com.backscreen.wallpaper.wallpaper.ColorPicker
+import com.backscreen.wallpaper.wallpaper.OverlayColors
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
-import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -128,17 +130,7 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
 
     /** The style chips and the colour row. */
     private fun setUpStyle() {
-        val chosen = BatterySettings.style(ctx)
-        for (option in ChargingStyle.entries) {
-            val chip = layoutInflater.inflate(R.layout.chip_style, styleChips, false) as Chip
-            chip.id = View.generateViewId()
-            chip.tag = option
-            chip.setText(option.label)
-            chip.isChecked = option == chosen
-            styleChips.addView(chip)
-        }
-        styleChips.setOnCheckedStateChangeListener { group, ids ->
-            val style = ids.firstOrNull()?.let { group.findViewById<Chip>(it).tag as ChargingStyle } ?: return@setOnCheckedStateChangeListener
+        styleChips.addChoiceChips(ChargingStyle.entries, BatterySettings.style(ctx), { getString(it.label) }) { style ->
             BatterySettings.setStyle(ctx, style)
             BackScreen.log("Charging style: ${style.name.lowercase()}")
             charging.style = style
@@ -197,7 +189,7 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
         )
         // The style and options are for while it's on.
         for (card in listOf(styleCard, optionsCard)) card.alpha = if (on) 1f else DISABLED_ALPHA
-        for (i in 0 until styleChips.childCount) styleChips.getChildAt(i).isEnabled = on
+        styleChips.setChipsEnabled(on)
         for (v in listOf(colorRow, lightUpRow, lightUpSwitch, overXiaomiRow, overXiaomiSwitch)) v.isEnabled = on
 
         backdrop.refresh()
@@ -237,7 +229,7 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
                 null
             }
         }
-        message?.let { (requireActivity() as MainActivity).snackbar(it, Snackbar.LENGTH_LONG) }
+        message?.let { snackbar(it, Snackbar.LENGTH_LONG) }
     }
 
     private fun onPreviewPlayed() {
@@ -286,7 +278,6 @@ class BatteryFragment : Fragment(R.layout.fragment_battery), Refreshable {
     }
 
     private companion object {
-        const val DISABLED_ALPHA = 0.38f
         const val STILL_AGAIN_MS = 700L
     }
 }

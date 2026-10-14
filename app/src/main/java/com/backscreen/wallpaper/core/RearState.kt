@@ -156,6 +156,10 @@ object RearState {
 
     fun owner(context: Context) = snapshot(context).owner
 
+    /** The lend there now, if it's for [reason]: Quick Switch's app, or Xiaomi Camera. */
+    fun lendFor(context: Context, reason: LendReason): Lend? =
+        (owner(context) as? RearOwner.Lent)?.lend?.takeIf { it.reason == reason }
+
     /** Whether another app has the back screen, from any thread. Doesn't load or change anything. */
     @AnyThread
     fun isLentAnyThread(context: Context): Boolean = if (loaded) lend != null else readLend(context) != null

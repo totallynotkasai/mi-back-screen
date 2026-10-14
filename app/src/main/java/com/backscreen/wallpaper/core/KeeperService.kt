@@ -66,8 +66,7 @@ import kotlin.math.max
  * has been created since Xiaomi's app last started (that's how its code reads, HyperOS 3.0.319).
  * So once the wallpaper is up, if Xiaomi's launcher is underneath, Xiaomi's app is restarted
  * once; it comes straight back without the launcher and leaves the wallpaper alone. If the
- * wallpaper is closed anyway, it's put back. (1.3 restarted Xiaomi's app every time the
- * wallpaper looked covered, which relit the rear every ~10 s; this is once per turn-on.)
+ * wallpaper is closed anyway, it's put back.
  *
  * A pop-over goes over Xiaomi's launcher and Xiaomi's app is left as it is: when the pop-over
  * closes, Xiaomi's launcher is simply underneath. If the rear dims first, Xiaomi closes the
@@ -173,20 +172,13 @@ class KeeperService : Service() {
     private var lightForLendWaitLogged = false
     private val lightForLendAgain = Runnable { tryLightForLend() }
 
+    // Sticky: if Shizuku is connected already, it's called at once, from onCreate.
     private val binderReceived = Shizuku.OnBinderReceivedListener {
         shellRunner.runWaiting()
-        BackScreen.mainHandler.post {
-            applyIfWaiting()
-            putBackTweaksIfIdle()
-            checkLitTime()
-        }
+        BackScreen.mainHandler.post(::onShizukuReady)
     }
     private val permissionResult = Shizuku.OnRequestPermissionResultListener { _, result ->
-        if (result == PackageManager.PERMISSION_GRANTED) BackScreen.mainHandler.post {
-            applyIfWaiting()
-            putBackTweaksIfIdle()
-            checkLitTime()
-        }
+        if (result == PackageManager.PERMISSION_GRANTED) BackScreen.mainHandler.post(::onShizukuReady)
     }
     private val directLaunchTimeout = Runnable { onDirectLaunchFailed() }
     private val checkRear = Runnable { checkRearDisplay() }
@@ -272,7 +264,6 @@ class KeeperService : Service() {
         // Only the system sends it, and it reaches receivers that aren't exported.
         registerReceiver(userPresent, IntentFilter(Intent.ACTION_USER_PRESENT), RECEIVER_NOT_EXPORTED)
         for (uri in NotificationAccess.lockScreenSettings) contentResolver.registerContentObserver(uri, false, lockScreenSettings)
-        getSystemService(NotificationManager::class.java).deleteNotificationChannel(OLD_CHANNEL_ID)
         BackScreen.logRearDisplay(this)
         charging.start()
         val lend = (RearState.owner(this) as? RearOwner.Lent)?.lend
@@ -289,10 +280,14 @@ class KeeperService : Service() {
             }
             camera.resumed()
             updateCover()
-        } else {
-            putBackTweaksIfIdle()
         }
-        checkLitTime()
+        // Shizuku's listener asks for these once it connects (onShizukuReady), and at once if it is
+        // already. If it isn't yet, they're asked for here too: they wait a moment for it, and if it
+        // doesn't come, the notification says they're waiting (puttingBack).
+        if (!Shizuku.pingBinder()) {
+            putBackTweaksIfIdle()
+            checkLitTime()
+        }
         displayOptions.update()
         // Restarted with an app lent on a locked phone: it may be due back, or soon.
         quickSwitch.checkLockReturn()
@@ -422,6 +417,16 @@ class KeeperService : Service() {
         updateNotification()
     }
 
+    /**
+     * Shizuku connected or allowed this app: the wallpaper goes up if it was waiting, and Xiaomi's
+     * settings are put back if anything is owed.
+     */
+    private fun onShizukuReady() {
+        applyIfWaiting()
+        putBackTweaksIfIdle()
+        checkLitTime()
+    }
+
     private fun applyIfWaiting() {
         if (!isWaitingForShizuku || !RearCommands.isReady()) return
         stopWaiting()
@@ -530,21 +535,11 @@ class KeeperService : Service() {
         if (wake) wakes.woke(SystemClock.elapsedRealtime())
         shell(onUnavailable = {}) {
             if (wake) BackScreen.log("Wake back screen: ${RearCommands.wakeDisplay(displayId)}")
-            if (guard) removeXiaomiLauncher(displayId)
+            // Xiaomi's launcher under the wallpaper would close it as the back screen dims. If the
+            // launcher is in front instead, the wallpaper is put back on top first, and this runs again then.
+            if (guard) RearCommands.restartXiaomiIfUnder(packageName, displayId)
         }
         displayOptions.update()
-    }
-
-    /**
-     * Restarts Xiaomi's back screen app if its launcher is under the wallpaper. Not while the
-     * launcher is in front: Android would start it again straight away. The wallpaper is put
-     * back on top first, and this runs again then. Shell thread.
-     */
-    private fun removeXiaomiLauncher(displayId: Int) {
-        val tasks = RearCommands.taskList() ?: return
-        val packages = TaskList.packagesOn(tasks, displayId)
-        if (packages.firstOrNull() != packageName || RearCommands.XIAOMI_REAR_PACKAGE !in packages) return
-        BackScreen.log("Restart Xiaomi back screen app, without its launcher: ${RearCommands.restartXiaomiRearApp()}")
     }
 
     private fun restore() {
@@ -1237,8 +1232,6 @@ class KeeperService : Service() {
         const val KEEPER_CHANNEL_ID = "keeper"
         private const val CHANNEL_LENT_ID = "lent"
 
-        // 1.x's keeper channel, unused since 2.0.
-        private const val OLD_CHANNEL_ID = "backscreen"
         private const val NOTIFICATION_ID = 1
         private const val REQUEST_BRING_BACK = 1
         private const val REQUEST_CLOSE_CAMERA = 2

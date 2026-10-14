@@ -9,12 +9,12 @@ import android.os.SystemClock
 import com.backscreen.wallpaper.core.BackScreen
 
 /**
- * When covering the back counts: covered for [holdMs] without a break. A cover already there
+ * When covering the back counts: covered for [HOLD_MS] without a break. A cover already there
  * when it starts doesn't count until the back has been clear once, so sending an app to the
  * back screen with the phone lying on its back doesn't bring it straight back. Times are from
  * [SystemClock.elapsedRealtime]. Plain Kotlin, so it's unit tested.
  */
-class CoverTimer(private val holdMs: Long = HOLD_MS) {
+class CoverTimer {
     private var armed = false
     private var coveredSince: Long? = null
 
@@ -30,13 +30,13 @@ class CoverTimer(private val holdMs: Long = HOLD_MS) {
         }
         if (!armed || coveredSince != null) return null
         coveredSince = now
-        return now + holdMs
+        return now + HOLD_MS
     }
 
     /** Whether the back has been covered for long enough by [now]. */
     fun isDue(now: Long): Boolean {
         val since = coveredSince ?: return false
-        return armed && now - since >= holdMs
+        return armed && now - since >= HOLD_MS
     }
 
     companion object {
@@ -55,8 +55,6 @@ class BackCover(context: Context, private val onCovered: () -> Unit) : SensorEve
     private var timer = CoverTimer()
     private var running = false
     private val due = Runnable { fireIfDue() }
-
-    val isRunning get() = running
 
     fun start() {
         if (running || sensor == null) return

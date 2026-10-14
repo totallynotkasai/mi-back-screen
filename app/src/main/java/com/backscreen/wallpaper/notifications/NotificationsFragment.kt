@@ -8,7 +8,6 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.fragment.app.Fragment
-import com.backscreen.wallpaper.MainActivity
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
@@ -16,17 +15,20 @@ import com.backscreen.wallpaper.core.RearCommands
 import com.backscreen.wallpaper.core.RearOwner
 import com.backscreen.wallpaper.core.RearState
 import com.backscreen.wallpaper.rear.RearHostActivity
+import com.backscreen.wallpaper.ui.DISABLED_ALPHA
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
+import com.backscreen.wallpaper.ui.addChoiceChips
 import com.backscreen.wallpaper.ui.needShizuku
+import com.backscreen.wallpaper.ui.setChipsEnabled
 import com.backscreen.wallpaper.ui.shizukuMissing
+import com.backscreen.wallpaper.ui.snackbar
 import com.backscreen.wallpaper.wallpaper.ClockLayer
 import com.backscreen.wallpaper.wallpaper.OverlayColors
 import com.backscreen.wallpaper.wallpaper.PreviewBackdrop
 import com.backscreen.wallpaper.wallpaper.WallpaperSettings
 import com.google.android.material.R as MaterialR
-import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -87,18 +89,7 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
         accessButton.setOnClickListener { onAccessButton() }
         tryButton.setOnClickListener { tryIt() }
 
-        val style = NotificationSettings.style(ctx)
-        for (option in NotificationStyle.entries) {
-            val chip = layoutInflater.inflate(R.layout.chip_style, styleChips, false) as Chip
-            chip.id = View.generateViewId()
-            chip.tag = option
-            chip.setText(option.label)
-            chip.isChecked = option == style
-            styleChips.addView(chip)
-        }
-        styleChips.setOnCheckedStateChangeListener { group, ids ->
-            val chosen = ids.firstOrNull()?.let { group.findViewById<Chip>(it).tag as NotificationStyle }
-                ?: return@setOnCheckedStateChangeListener
+        styleChips.addChoiceChips(NotificationStyle.entries, NotificationSettings.style(ctx), { getString(it.label) }) { chosen ->
             NotificationSettings.setStyle(ctx, chosen)
             BackScreen.log("Notification style: ${chosen.name.lowercase()}")
             RearHostActivity.notificationsChanged()
@@ -151,7 +142,7 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
         showAccess(allowed)
         // The style and options are for while it's on.
         for (card in listOf(styleCard, optionsCard)) card.alpha = if (on) 1f else DISABLED_ALPHA
-        for (i in 0 until styleChips.childCount) styleChips.getChildAt(i).isEnabled = on
+        styleChips.setChipsEnabled(on)
         for (v in listOf(swipeDownRow, swipeDownSwitch, lightUpRow, lightUpSwitch)) v.isEnabled = on
         backdrop.refresh()
     }
@@ -216,7 +207,7 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
         change(ctx) { allowed ->
             changingAccess = false
             if (view == null) return@change
-            (requireActivity() as MainActivity).snackbar(result(allowed))
+            snackbar(result(allowed))
             refresh()
         }
     }
@@ -235,7 +226,7 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
                 null
             }
         }
-        message?.let { (requireActivity() as MainActivity).snackbar(it, Snackbar.LENGTH_LONG) }
+        message?.let { snackbar(it, Snackbar.LENGTH_LONG) }
     }
 
     /** The sample in the preview, in the chosen style, and what that style shows. */
@@ -258,9 +249,5 @@ class NotificationsFragment : Fragment(R.layout.fragment_notifications), Refresh
     private fun matchClockColors() {
         val colors = OverlayColors.of(clock.takeIf { backdrop.clockShown })
         notifications.setColors(colors.text, colors.background)
-    }
-
-    private companion object {
-        const val DISABLED_ALPHA = 0.38f
     }
 }

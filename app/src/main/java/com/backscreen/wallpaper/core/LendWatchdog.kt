@@ -11,7 +11,7 @@ import android.os.SystemClock
  * One miss isn't enough: `am stack list` once left out the back screen's task altogether. Two
  * in a row are.
  */
-class LendMisses(private val limit: Int = MISSES_TO_END) {
+class LendMisses {
     private var misses = 0
 
     /**
@@ -26,7 +26,7 @@ class LendMisses(private val limit: Int = MISSES_TO_END) {
             true -> misses = 0
             false -> misses++
         }
-        return misses >= limit || (inFront == false && wallpaperShowing)
+        return misses >= MISSES_TO_END || (inFront == false && wallpaperShowing)
     }
 
     fun reset() {
@@ -34,7 +34,7 @@ class LendMisses(private val limit: Int = MISSES_TO_END) {
     }
 
     companion object {
-        const val MISSES_TO_END = 2
+        private const val MISSES_TO_END = 2
 
         /**
          * Whether [lend]'s app is in front on [rearDisplay] in [output] (`am stack list`): its

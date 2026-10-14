@@ -230,7 +230,7 @@ class RearHostActivity : Activity() {
             onTextChanged = { if (visibility == View.VISIBLE) onShownChanged() }
         }
         val images = WallpaperLayer(this, display).apply {
-            if (WallpaperSettings.avoidCamera(context)) setPadding(camera.left, camera.top, camera.right, camera.bottom)
+            if (WallpaperSettings.avoidCamera(context)) inset = camera
             isLit = { this@RearHostActivity.isLit() }
             onShownChanged = { this@RearHostActivity.onShownChanged() }
             onBackdropChanged = clock::backdropChanged

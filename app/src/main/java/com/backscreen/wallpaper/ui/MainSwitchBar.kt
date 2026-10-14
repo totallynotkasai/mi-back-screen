@@ -77,22 +77,12 @@ class MainSwitchBar @JvmOverloads constructor(
         updateColors(animate = false)
     }
 
-    fun setTitle(text: Int) = title.setText(text)
-
     fun setSummary(text: CharSequence?) {
         summary.text = text
         summary.visibility = if (text.isNullOrEmpty()) GONE else VISIBLE
     }
 
     fun setSummary(text: Int) = setSummary(context.getText(text))
-
-    override fun setEnabled(enabled: Boolean) {
-        super.setEnabled(enabled)
-        toggle.isEnabled = enabled
-        val alpha = if (enabled) 1f else DISABLED_ALPHA
-        title.alpha = alpha
-        summary.alpha = alpha
-    }
 
     // The bar takes every touch, so dragging the switch's thumb can't flip it behind our back.
     override fun onInterceptTouchEvent(event: MotionEvent) = true
@@ -130,7 +120,6 @@ class MainSwitchBar @JvmOverloads constructor(
     private fun color(attr: Int) = MaterialColors.getColor(this, attr)
 
     private companion object {
-        const val DISABLED_ALPHA = 0.38f
         const val COLOR_FADE_MS = 200L
     }
 }

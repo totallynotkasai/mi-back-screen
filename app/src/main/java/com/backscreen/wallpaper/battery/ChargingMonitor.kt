@@ -10,16 +10,16 @@ import com.backscreen.wallpaper.core.BackScreen
 /**
  * Whether a plug-in plays the charging animation. Plugging in and out quickly, or a loose
  * cable, mustn't stack animations or start one every second: a plug-in plays only if the last
- * one played at least [minGapMs] ago, longer than an animation lasts. Times are from
+ * one played at least [MIN_GAP_MS] ago, longer than an animation lasts. Times are from
  * [SystemClock.elapsedRealtime]. Plain Kotlin, so it's unit tested.
  */
-class ChargingGate(private val minGapMs: Long = MIN_GAP_MS) {
+class ChargingGate {
     private var last: Long? = null
 
     /** You plugged in at [now]: whether to play. */
     fun onPlugged(now: Long): Boolean {
         val last = last
-        if (last != null && now - last < minGapMs) return false
+        if (last != null && now - last < MIN_GAP_MS) return false
         this.last = now
         return true
     }

@@ -99,6 +99,16 @@ class WallpaperView @JvmOverloads constructor(
         cropToPadding = true
     }
 
+    /**
+     * Fits the image as the Wallpaper tab's settings say, for one decoded for [scaling] (see
+     * [RearImage]), or pans it if that's on. Before [setImageDrawable], so a new image is planned once.
+     */
+    fun applySettings(scaling: Scaling) {
+        this.scaling = scaling
+        pan = WallpaperSettings.pan(context)
+        minTravel = WallpaperSettings.panMinTravel(context)
+    }
+
     override fun setImageDrawable(drawable: Drawable?) {
         // Called from ImageView's constructor, before this class has set its fields.
         @Suppress("SENSELESS_COMPARISON")

@@ -9,7 +9,6 @@
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.MaterialToolbar
@@ -18,7 +17,7 @@
         android:layout_height="wrap_content"
         android:minHeight="?attr/actionBarSize"
         app:menu="@menu/main"
-        app:title="@string/title" />
+        app:title="@string/app_name" />
 
     <include layout="@layout/view_shizuku_banner" />
 

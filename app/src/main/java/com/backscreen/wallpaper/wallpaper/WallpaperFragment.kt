@@ -23,7 +23,6 @@ import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVis
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
-import com.backscreen.wallpaper.MainActivity
 import com.backscreen.wallpaper.R
 import com.backscreen.wallpaper.core.BackScreen
 import com.backscreen.wallpaper.core.KeeperService
@@ -36,9 +35,11 @@ import com.backscreen.wallpaper.rear.RearHostActivity
 import com.backscreen.wallpaper.ui.MainSwitchBar
 import com.backscreen.wallpaper.ui.Refreshable
 import com.backscreen.wallpaper.ui.SwitchRow
+import com.backscreen.wallpaper.ui.addChoiceChips
 import com.backscreen.wallpaper.ui.needShizuku
+import com.backscreen.wallpaper.ui.setChipsEnabled
+import com.backscreen.wallpaper.ui.snackbar
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -144,7 +145,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         scheduleSetupNote = view.findViewById(R.id.scheduleSetupNote)
         alarmWarning = view.findViewById(R.id.alarmWarning)
         batteryWarning = view.findViewById(R.id.batteryWarning)
-        displayCard = DisplayCard(view.findViewById(R.id.displayCard), layoutInflater)
+        displayCard = DisplayCard(view.findViewById(R.id.displayCard))
         clock = view.findViewById(R.id.clock)
         galleryCard = view.findViewById(R.id.galleryCard)
         gallerySummary = view.findViewById(R.id.gallerySummary)
@@ -207,7 +208,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             }
         }
 
-        addChips(scalingChips, Scaling.entries, Gallery.scaling(ctx), { getString(it.label) }) { scaling ->
+        scalingChips.addChoiceChips(Scaling.entries, Gallery.scaling(ctx), { getString(it.label) }) { scaling ->
             Gallery.setScaling(ctx, scaling)
             loadPreview()
             RearHostActivity.reload()
@@ -609,7 +610,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             WallpaperSettings.setShowClock(ctx, checked)
             clockChanged()
         }
-        addChips(clockStyles, ClockStyle.entries, WallpaperSettings.clockStyle(ctx), { getString(it.label) }) { style ->
+        clockStyles.addChoiceChips(ClockStyle.entries, WallpaperSettings.clockStyle(ctx), { getString(it.label) }) { style ->
             WallpaperSettings.setClockStyle(ctx, style)
             clockChanged()
         }
@@ -714,23 +715,6 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         }
     }
 
-    /** Fills [group] with a choice chip per option, [current] checked; [onChosen] on a change. */
-    private fun <T> addChips(group: ChipGroup, options: List<T>, current: T, label: (T) -> String, onChosen: (T) -> Unit) {
-        for (option in options) {
-            val chip = layoutInflater.inflate(R.layout.chip_style, group, false) as Chip
-            chip.id = View.generateViewId()
-            chip.tag = option
-            chip.text = label(option)
-            chip.isChecked = option == current
-            group.addView(chip)
-        }
-        group.setOnCheckedStateChangeListener { g, ids ->
-            @Suppress("UNCHECKED_CAST")
-            val option = ids.firstOrNull()?.let { g.findViewById<Chip>(it).tag as T } ?: return@setOnCheckedStateChangeListener
-            onChosen(option)
-        }
-    }
-
     /** Matches the preview to the rear display's size and camera cutout. */
     private fun showRearShape() {
         val rear = BackScreen.findRearDisplay(ctx) ?: return
@@ -745,23 +729,15 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         val load = ++previewLoads
         previewLoading = true
         loader.execute {
-            val scaling = WallpaperSettings.scalingInUse(app)
-            val decoded = try {
-                Gallery.decodeCurrent(app, advance = false) { BackScreen.loadImage(app, it, display, scaling) }
-            } catch (e: Throwable) {
-                // Out of memory too: uncaught on this thread, it would take the app down.
-                BackScreen.log("Preview failed: $e")
-                null
-            }
-            val uri = if (decoded != null) decoded.shown.image else Gallery.shown(app)
-            val drawable = decoded?.result
+            val loaded = RearImage.load(app, display, "Preview failed")
+            val uri = if (loaded != null) loaded.shown.image else Gallery.shown(app)
             // As the listing just found it.
             val access = Gallery.access(app)
             BackScreen.mainHandler.post {
                 if (view == null || load != previewLoads) return@post
                 previewLoading = false
                 previewAccess = access
-                showPreview(uri, drawable, scaling)
+                showPreview(uri, loaded?.drawable, loaded?.scaling ?: WallpaperSettings.scalingInUse(app))
             }
         }
     }
@@ -770,9 +746,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         previewUri = uri
         // Black like the rear display, wherever the image doesn't reach, or with no image.
         preview.setBackgroundColor(Color.BLACK)
-        preview.scaling = scaling
-        preview.pan = WallpaperSettings.pan(ctx)
-        preview.minTravel = WallpaperSettings.panMinTravel(ctx)
+        preview.applySettings(scaling)
         preview.setImageDrawable(drawable)
         // The clock's automatic colours follow the image.
         clock.backdropChanged()
@@ -792,7 +766,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             loadPreview()
             RearHostActivity.reload()
         }
-        addChips(panSpeeds, PanSpeed.entries, WallpaperSettings.panSpeed(ctx), { getString(it.label) }) { speed ->
+        panSpeeds.addChoiceChips(PanSpeed.entries, WallpaperSettings.panSpeed(ctx), { getString(it.label) }) { speed ->
             WallpaperSettings.setPanSpeed(ctx, speed)
             // The preview and the back screen carry on from where they are, at the new speed.
             preview.pan = speed
@@ -806,10 +780,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
             BackScreen.log(if (checked) "Skip short pans on" else "Skip short pans off")
             minTravelChanged()
         }
-        addChips(
-            panMinChips, WallpaperSettings.PAN_MIN_CHOICES, WallpaperSettings.panMinPercent(ctx),
-            { getString(R.string.percent, it) },
-        ) { percent ->
+        panMinChips.addChoiceChips(WallpaperSettings.PAN_MIN_CHOICES, WallpaperSettings.panMinPercent(ctx), { getString(R.string.percent, it) }) { percent ->
             WallpaperSettings.setPanMinPercent(ctx, percent)
             BackScreen.log("Skip pans shorter than $percent%")
             minTravelChanged()
@@ -829,7 +800,7 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         panOptions.visibility = if (pan != null) View.VISIBLE else View.GONE
         skipShortOptions.visibility = if (WallpaperSettings.skipShortPans(ctx)) View.VISIBLE else View.GONE
         scalingPanNote.visibility = if (pan != null) View.VISIBLE else View.GONE
-        for (i in 0 until scalingChips.childCount) scalingChips.getChildAt(i).isEnabled = pan == null
+        scalingChips.setChipsEnabled(pan == null)
         val note = pan?.let(::describePan)
         panImageNote.text = note
         panImageNote.visibility = if (note == null) View.GONE else View.VISIBLE
@@ -875,11 +846,6 @@ class WallpaperFragment : Fragment(R.layout.fragment_wallpaper), Refreshable {
         emptyState.visibility = if (empty && !clockOn) View.VISIBLE else View.GONE
         emptyCaption.visibility = if (empty && clockOn) View.VISIBLE else View.GONE
     }
-
-    private fun snackbar(text: Int, length: Int = Snackbar.LENGTH_SHORT, action: Int? = null, onAction: () -> Unit = {}) =
-        (requireActivity() as MainActivity).snackbar(text, length, action, onAction)
-
-    private fun snackbar(text: CharSequence) = (requireActivity() as MainActivity).snackbar(text)
 
     private companion object {
         const val DEFAULT_BG_OPACITY = 50

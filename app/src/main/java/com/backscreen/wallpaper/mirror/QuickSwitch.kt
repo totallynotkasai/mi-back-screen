@@ -64,7 +64,7 @@ class QuickSwitch(private val keeper: KeeperService) {
 
     /** The app Quick Switch has on the back screen, if any. */
     val lend: Lend?
-        get() = (RearState.owner(keeper) as? RearOwner.Lent)?.lend?.takeIf { it.reason == LendReason.QUICK_SWITCH }
+        get() = RearState.lendFor(keeper, LendReason.QUICK_SWITCH)
 
     /** The tile: send the app in front, or bring back the one that's there. */
     fun toggle() {
@@ -107,21 +107,10 @@ class QuickSwitch(private val keeper: KeeperService) {
             return
         }
         applyTweaks(rear)
-        val restarted = restartXiaomiIfUnder(app, rear)
+        // With the wallpaper off, Xiaomi's launcher is under the app, and would remove it the first
+        // time the back screen dims: restarting Xiaomi's app once, as the wallpaper does, stops that.
+        val restarted = RearCommands.restartXiaomiIfUnder(app.packageName, rear)
         BackScreen.mainHandler.post { keeper.lightForLend(settleMs = if (restarted) XIAOMI_SETTLE_MS else 0L) }
-    }
-
-    /**
-     * With the wallpaper off, Xiaomi's launcher is under the app, and once it exists Xiaomi removes
-     * whatever is on top each time the back screen dims. Restarting Xiaomi's app once, with the app
-     * in front, brings it back without its launcher, as the wallpaper does. Not while the launcher
-     * is in front: Android would start it again at once. Shell thread.
-     */
-    private fun restartXiaomiIfUnder(app: TaskList.Task, rear: Int): Boolean {
-        val packages = RearCommands.taskList()?.let { TaskList.packagesOn(it, rear) } ?: return false
-        if (packages.firstOrNull() != app.packageName || RearCommands.XIAOMI_REAR_PACKAGE !in packages) return false
-        BackScreen.log("Restart Xiaomi back screen app, without its launcher: ${RearCommands.restartXiaomiRearApp()}")
-        return true
     }
 
     /**

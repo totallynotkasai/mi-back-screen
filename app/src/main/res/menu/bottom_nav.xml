@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The five sections. A dot on a tab means that section is switched on. -->
+<!-- The five sections, one tab each (see Feature). -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/nav_wallpaper"
