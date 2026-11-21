@@ -15,8 +15,9 @@ data class DisplayCandidate(val id: Int, val width: Int, val height: Int, val is
  */
 object RearDisplayPick {
     private val rearSizes = setOf(
-        976 to 596, // Xiaomi 17 Pro Max
+        904 to 572, // Xiaomi 17 Pro
         912 to 596, // Xiaomi 18 Pro
+        976 to 596, // Xiaomi 17 Pro Max and Xiaomi 18 Pro Max
     )
 
     // Display.DEFAULT_DISPLAY.

@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "com.backscreen.wallpaper"
-        minSdk = 35 // Android 15 and up; the one phone it's for runs Android 16 (HyperOS 3)
+        minSdk = 35 // Android 15 and up
         targetSdk = 36
         versionCode = 10
         versionName = "2.1"

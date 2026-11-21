@@ -25,29 +25,37 @@ class RearDisplayPickTest {
         assertEquals(1, RearDisplayPick.choose(listOf(main, cast, DisplayCandidate(1, 596, 976)), rememberedId = null))
     }
 
-    @Test
-    fun findsThe18ProBackScreenOnFirstRunInEitherOrientation() {
-        val front = DisplayCandidate(0, 1120, 2436)
-        val landscape = DisplayCandidate(1, 912, 596)
-        val portrait = DisplayCandidate(1, 596, 912)
-        for (rear in listOf(landscape, portrait)) {
-            assertEquals(1, RearDisplayPick.choose(listOf(cast, overlay, front, rear), rememberedId = null))
+    private fun assertFoundOnFirstRun(width: Int, height: Int) {
+        val landscape = DisplayCandidate(1, width, height)
+        val portrait = DisplayCandidate(1, height, width)
+        for (panel in listOf(landscape, portrait)) {
+            assertEquals(1, RearDisplayPick.choose(listOf(cast, overlay, main, panel), rememberedId = null))
         }
     }
 
     @Test
-    fun the18ProSizeMustMatchBothSidesOfANonPrivateDisplay() {
-        val wrongWidth = DisplayCandidate(2, 960, 596)
-        val wrongHeight = DisplayCandidate(3, 912, 600)
-        val privateRear = DisplayCandidate(4, 912, 596, isPrivate = true)
-        assertNull(RearDisplayPick.choose(listOf(main, wrongWidth, wrongHeight, privateRear), rememberedId = null))
+    fun findsThe17ProBackScreenInEitherOrientation() = assertFoundOnFirstRun(904, 572)
+
+    @Test
+    fun findsThe18ProBackScreenInEitherOrientation() = assertFoundOnFirstRun(912, 596)
+
+    @Test
+    fun findsThe17ProMaxAnd18ProMaxBackScreenInEitherOrientation() = assertFoundOnFirstRun(976, 596)
+
+    @Test
+    fun dimensionsFromDifferentPanelsCannotBeMixed() {
+        val wrongWidth = DisplayCandidate(2, 904, 596)
+        val wrongHeight = DisplayCandidate(3, 912, 572)
+        assertNull(RearDisplayPick.choose(listOf(main, wrongWidth, wrongHeight), rememberedId = null))
     }
 
     @Test
     fun anAppsPrivateDisplayIsNeverIt() {
-        val private = DisplayCandidate(7, 976, 596, isPrivate = true)
-        assertNull(RearDisplayPick.choose(listOf(main, private), rememberedId = null))
-        assertEquals(1, RearDisplayPick.choose(listOf(main, private, rear), rememberedId = null))
+        for ((width, height) in listOf(904 to 572, 912 to 596, 976 to 596)) {
+            val private = DisplayCandidate(7, width, height, isPrivate = true)
+            assertNull(RearDisplayPick.choose(listOf(main, private), rememberedId = null))
+            assertEquals(1, RearDisplayPick.choose(listOf(main, private, rear), rememberedId = null))
+        }
     }
 
     @Test
