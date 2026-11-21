@@ -26,6 +26,24 @@ class RearDisplayPickTest {
     }
 
     @Test
+    fun findsThe18ProBackScreenOnFirstRunInEitherOrientation() {
+        val front = DisplayCandidate(0, 1120, 2436)
+        val landscape = DisplayCandidate(1, 912, 596)
+        val portrait = DisplayCandidate(1, 596, 912)
+        for (rear in listOf(landscape, portrait)) {
+            assertEquals(1, RearDisplayPick.choose(listOf(cast, overlay, front, rear), rememberedId = null))
+        }
+    }
+
+    @Test
+    fun the18ProSizeMustMatchBothSidesOfANonPrivateDisplay() {
+        val wrongWidth = DisplayCandidate(2, 960, 596)
+        val wrongHeight = DisplayCandidate(3, 912, 600)
+        val privateRear = DisplayCandidate(4, 912, 596, isPrivate = true)
+        assertNull(RearDisplayPick.choose(listOf(main, wrongWidth, wrongHeight, privateRear), rememberedId = null))
+    }
+
+    @Test
     fun anAppsPrivateDisplayIsNeverIt() {
         val private = DisplayCandidate(7, 976, 596, isPrivate = true)
         assertNull(RearDisplayPick.choose(listOf(main, private), rememberedId = null))
