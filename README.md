@@ -1,6 +1,6 @@
 # Mi Back Screen
 
-Your own images, animated GIFs, a clock and your notifications on the **Xiaomi 17 Pro Max** rear display. It can also move the app you're using to the back screen with one tap, and opens Xiaomi Camera there with a swipe.
+Your own images, animated GIFs, a clock and your notifications on the rear display of a [compatible Xiaomi phone](#requirements). It can also move the app you're using to the back screen with one tap, and opens Xiaomi Camera there with a swipe.
 
 **Website:** https://totallynotkasai.github.io/mi-back-screen/
 **Download:** [latest APK](https://github.com/totallynotkasai/mi-back-screen/releases/latest/download/MiBackScreen.apk)
@@ -41,8 +41,18 @@ No internet permission, no storage permission.
 
 ## Requirements
 
-- Xiaomi 17 Pro Max on HyperOS 3 (Android 16)
-- [Shizuku](https://shizuku.rikka.app/), running and authorised for Mi Back Screen
+The display picker in this source recognises these panels in either orientation.
+
+| Phone | Rear display |
+| --- | --- |
+| Xiaomi 17 Pro | 904 × 572 |
+| Xiaomi 17 Pro Max | 976 × 596 |
+| Xiaomi 18 Pro | 912 × 596 |
+| Xiaomi 18 Pro Max | 976 × 596 |
+
+The released **v2.1 APK** recognises only the 976 × 596 size on first use. The original app was tested on a Xiaomi 17 Pro Max running HyperOS 3 (Android 16). On a Xiaomi 18 Pro running HyperOS 4 (Android 17), ADB confirmed the panel dimensions. Unit tests cover display selection for all three sizes.
+
+Start [Shizuku](https://shizuku.rikka.app/) and authorise Mi Back Screen before turning on the wallpaper.
 
 ## Setup
 

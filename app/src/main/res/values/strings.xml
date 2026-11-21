@@ -22,7 +22,7 @@
     <string name="setup_help">Setup help</string>
     <string name="about_title">About</string>
     <string name="about">Mi Back Screen %1$s</string>
-    <string name="about_message">Shows your own images, GIFs, a clock, a charging animation and your notifications on the Xiaomi 17 Pro Max back screen, moves the app you\'re using there with Quick Switch, and opens Xiaomi Camera there with a swipe.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
+    <string name="about_message">Shows your own images, GIFs, a clock, a charging animation and your notifications on your Xiaomi back screen, moves the app you\'re using there with Quick Switch, and opens Xiaomi Camera there with a swipe.\n\nNo internet permission: nothing leaves your phone.\n\nNot affiliated with Xiaomi.</string>
     <string name="website">Website</string>
     <string name="website_url" translatable="false">https://totallynotkasai.github.io/mi-back-screen/</string>
     <string name="close">Close</string>
